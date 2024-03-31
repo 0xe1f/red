@@ -1,0 +1,12 @@
+<html>
+  <head>
+    <link rel="stylesheet" type="text/css" href="static/style.css" />
+  </head>
+  <body>
+    {% for game in games %}
+    <div class="game">
+        <span class="title">{{ game.title }}</span>
+    </div>
+    {% endfor %}
+  </body>
+</html>
