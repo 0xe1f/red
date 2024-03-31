@@ -1,10 +1,12 @@
 <html>
   <head>
     <link rel="stylesheet" type="text/css" href="static/style.css" />
+   	<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+   	<script src="static/main.js"></script>
   </head>
   <body>
     {% for game in games %}
-    <div class="game">
+    <div class="game" data-id="{{ game.id }}">
         <span class="title">{{ game.title }}</span>
     </div>
     {% endfor %}

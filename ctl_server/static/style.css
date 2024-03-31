@@ -1,4 +1,20 @@
 body {
-    font-size: 48pt;
-    color: red;
+    font-family: sans-serif;
+    padding: 2em;
+}
+
+.game {
+    margin: 0.25em 0;
+    border: solid 2px #777777;
+    border-radius: 0.25em;
+    padding: 0.5em 0.5em;
+}
+
+.game:hover {
+    background-color: #eeeeee;
+    cursor: pointer;
+}
+
+.title {
+    font-size: 18pt;
 }
