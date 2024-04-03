@@ -3,9 +3,12 @@ $(function() {
         const item = $(this);
         const payload = { 'id': item.data('id') };
         $.post(
-            "action/launch",
+            "launch",
             JSON.stringify(payload),
-            function() { },
+            function() {
+                $('.game').removeClass('selected');
+                item.addClass('selected');
+            },
             "json",
         );
     });

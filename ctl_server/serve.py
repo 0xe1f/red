@@ -22,52 +22,66 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        logging.info("GET request,\nPath: %s\nHeaders:\n%s\n", str(self.path), str(self.headers))
-
+        logging.info("GET %s", str(self.path))
         path = os.path.normpath(self.path).lstrip('/')
         if path.startswith('static/'):
-            self.serve_static_file(path)
+            self.write_file(path)
         else:
             template = templates.get(path if path else 'index')
-            if not template:
-                self.send_error(http.HTTPStatus.NOT_FOUND, "Not found")
-                return
-
-            content = template.render(
-                games = games
-            )
-            self.write_response_headers()
-            self.wfile.write(content.encode('utf-8'))
+            self.write_template(template, games = games)
 
     def do_POST(self):
+        logging.info("POST %s", str(self.path))
         path = urllib.parse.urlparse(self.path).path.lstrip('/')
-        if path.startswith('action'):
-            self.handle_action(path.rsplit('/', 1)[-1])
+        if path == 'launch':
+            payload = json.loads(self.read_post())
+            self.launch(**payload)
         else:
+            self.send_error(http.HTTPStatus.NOT_FOUND, "Not found")
+
+    def launch(self, **kwargs):
+        id = kwargs.get('id')
+        if not id:
+            self.send_error(http.HTTPStatus.NOT_FOUND, "Not found")
+            return
+
+        logging.info('launch: %s', id)
+        # FIXME
+        self.write_json({ 'status': 'OK'  })
+
+    def read_post(self):
+        content_length = int(self.headers['Content-Length'])
+        return self.rfile.read(content_length).decode('utf-8')
+
+    def write_template(self, template, **kwargs):
+        logging.info("write_template()")
+        if not template:
             self.send_error(http.HTTPStatus.NOT_FOUND, "Not found")
             return
 
         self.write_response_headers()
+        self.wfile.write(template.render(kwargs).encode('utf-8'))
 
-    def serve_static_file(self, path):
-        logging.info("serve_static_file: %s", path)
+    def write_text(self, content):
+        logging.info("write_text()")
+        self.write_response_headers()
+        self.wfile.write(content.encode('utf-8'))
+
+    def write_file(self, path):
+        logging.info("write_file: %s", path)
+        if not os.path.isfile(path):
+            self.send_error(http.HTTPStatus.NOT_FOUND, "Not found")
+            return
+
         mt = mimetypes.guess_type(path)
         self.write_response_headers(type = mt[0])
         with open(path, 'rb') as file:
             self.wfile.write(file.read())
 
-    def handle_action(self, action):
-        logging.info("handle_action: %s", action)
-
-        if action == 'launch':
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length).decode('utf-8')
-            payload = json.loads(post_data)
-
-            self.launch(payload['id'])
-
-    def launch(self, id):
-        logging.info('launch: %s', id)
+    def write_json(self, obj):
+        logging.info("write_json: %s", obj)
+        self.write_response_headers(type = 'application/json')
+        self.wfile.write(json.dumps(obj).encode('utf-8'))
 
 def run(server_class = http.server.HTTPServer, handler_class = Handler, port = 8080):
     logging.basicConfig(level = logging.INFO)

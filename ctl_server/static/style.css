@@ -1,22 +1,32 @@
 body {
-    font-family: sans-serif;
+    font-family: "Play", sans-serif;
+    font-weight: 400;
+    font-style: normal;
     padding: 2em;
 }
 
 .game {
     margin: 0.25em 0;
-    border: solid 2px #777777;
+    border: solid 2px #ddd;
+    color: #777;
     border-radius: 0.25em;
     padding: 0.5em 0.5em;
 }
 
+.game.selected {
+    color: #444;
+    border-color: #777;
+}
+
 .game:hover {
-    background-color: #eeeeee;
+    background-color: #eee;
+    border-color: #777;
+    color: #000;
     cursor: pointer;
 }
 
 .title {
-    font-size: 18pt;
+    font-size: 24pt;
 }
 
 @media (min-width:320px)  { /* smartphones, portrait iPhone, portrait 480x320 phones (Android) */ }
