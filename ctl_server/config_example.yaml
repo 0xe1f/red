@@ -6,7 +6,23 @@ game_clients:
     path: rgbfbneo
     srect: 0,0-320,128
     drect: 0,0-320,128
+    args: >-
+      --led-rows=64
+      --led-cols=64
+      --led-chain=5
+      --led-parallel=2
+      --led-slowdown-gpio=4
+      --led-gpio-mapping=regular
+      --led-pwm-bits=6
   - host: <screen2_host_ip>
     path: rgbfbneo
     srect: 0,128-320,256
     drect: 0,0-320,128
+    args: >-
+      --led-rows=64
+      --led-cols=64
+      --led-chain=5
+      --led-parallel=2
+      --led-slowdown-gpio=4
+      --led-gpio-mapping=regular
+      --led-pwm-bits=6

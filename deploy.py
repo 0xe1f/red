@@ -3,7 +3,7 @@ import subprocess
 import sys
 import yaml
 
-with open('conf.yaml') as fd:
+with open('deploy.yaml') as fd:
     yaml = yaml.safe_load(fd)
     game_server = yaml['game_server']
     game_clients = yaml['game_clients']
