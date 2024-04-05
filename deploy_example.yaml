@@ -1,0 +1,5 @@
+game_server: emulator_host.local
+game_clients:
+  - screen1_host.local
+  - screen2_host.local
+server: launcher_host.local

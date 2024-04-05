@@ -7,12 +7,17 @@ import json
 import logging
 import mimetypes
 import os
+import re
+import subprocess
+import sys
 import urllib.parse
 import yaml
 
 template_path = 'templates'
+game_server = ""
+game_clients = []
 templates = {}
-games = []
+games = {}
 
 class Handler(http.server.BaseHTTPRequestHandler):
 
@@ -28,7 +33,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.write_file(path)
         else:
             template = templates.get(path if path else 'index')
-            self.write_template(template, games = games)
+            self.write_template(template, games = games.values())
 
     def do_POST(self):
         logging.info("POST %s", str(self.path))
@@ -42,10 +47,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def launch(self, **kwargs):
         id = kwargs.get('id')
         if not id:
+            logging.error('Missing id')
+            self.send_error(http.HTTPStatus.NOT_FOUND, "Not found")
+            return
+        game = games[id]
+        if not id:
+            logging.error('Game not found')
             self.send_error(http.HTTPStatus.NOT_FOUND, "Not found")
             return
 
-        logging.info('launch: %s', id)
+        launch(game)
         # FIXME
         self.write_json({ 'status': 'OK'  })
 
@@ -96,8 +107,40 @@ def run(server_class = http.server.HTTPServer, handler_class = Handler, port = 8
     logging.info('Stopping httpd...\n')
 
 class Game:
+
     def __init__(self, **item):
         self.__dict__.update(item)
+
+class Rect:
+
+    def __init__(self, str):
+        m = re.match(r'^([0-9]+),([0-9]+)-([0-9]+),([0-9]+)$', str)
+        if not m:
+            raise Exception(f"{str} is not a valid rect")
+
+        self.x = int(m.group(1))
+        self.y = int(m.group(2))
+        self.w = int(m.group(3))
+        self.h = int(m.group(4))
+
+class GameClient:
+
+    def __init__(self, item):
+        self.host = item['host']
+        self.path = item['path']
+        self.srect = item['srect']
+        self.drect = item['drect']
+
+    def launch_cmd(self, game_host):
+        return f'killall rgbclient 2> /dev/null; cd {self.path}; sleep 2; sudo nohup ./lcli.sh {game_host} -srect {self.srect} -drect {self.drect} >/dev/null 2>&1 &'
+
+class GameServer:
+
+    def __init__(self, **item):
+        self.__dict__.update(item)
+
+    def launch_cmd(self, game_cmd):
+        return f'killall fbneo 2> /dev/null; cd {self.path}; nohup ./{game_cmd} >/dev/null 2>&1 &'
 
 def init_templates():
     global templates
@@ -111,8 +154,44 @@ def init_games():
     global games
     with open("games.yaml") as fd:
         for item in yaml.safe_load(fd):
-            games.append(Game(**item))
+            game = Game(**item)
+            games[game.id] = game
 
+def init_config():
+    global game_server
+    global game_clients
+    with open('conf.yaml') as fd:
+        conf = yaml.safe_load(fd)
+        game_server = GameServer(**conf['game_server'])
+        for item in conf['game_clients']:
+            game_clients.append(GameClient(item))
+
+    if not game_server:
+        sys.exit('Missing game server configuration')
+    if not game_clients:
+        sys.exit('Missing game client configuration')
+
+def launch(game):
+    logging.info(f'Launching server ({game.id})...')
+    subprocess.call([
+        'ssh',
+        '-o',
+        'StrictHostKeyChecking no',
+        game_server.host, # TODO: user too
+        game_server.launch_cmd(game.server_cmd),
+    ])
+    logging.info(f'Launching clients ({len(game_clients)})...')
+    for client in game_clients:
+        subprocess.call([
+            'ssh',
+            '-o',
+            'StrictHostKeyChecking no',
+            client.host, # TODO: user too
+            client.launch_cmd(game_server.host),
+        ])
+    logging.info(f'done!')
+
+init_config()
 init_templates()
 init_games()
 
