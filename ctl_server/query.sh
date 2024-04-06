@@ -3,8 +3,8 @@
 ## Game Host Query
 ## 2024, Akop Karapetyan
 
-HOST=$1
 EMULATOR_EXE="fbneo"
+HOST=$1
 
 if [ -z "${HOST}" ]; then
     echo "Missing game host" >&2

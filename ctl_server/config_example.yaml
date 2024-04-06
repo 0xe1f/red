@@ -1,8 +1,8 @@
 game_server:
-  host: <emulator_host_ip>
+  host: <emulator_host_ip - eth0>
   path: rgbfbneo
 game_clients:
-  - host: <screen1_host_ip>
+  - host: <screen1_host_ip - eth0>
     path: rgbfbneo
     srect: 0,0-320,128
     drect: 0,0-320,128
@@ -14,7 +14,7 @@ game_clients:
       --led-slowdown-gpio=4
       --led-gpio-mapping=regular
       --led-pwm-bits=6
-  - host: <screen2_host_ip>
+  - host: <screen2_host_ip - eth0>
     path: rgbfbneo
     srect: 0,128-320,256
     drect: 0,0-320,128

@@ -31,12 +31,16 @@ function runServer() {
     GS_HOST="$2"
     GS_PATH="$3"
 
+    # SIGINT will allow the emulator to exit gracefully,
+    # though there is a chance that it might not work.
+    # If this becomes a problem, we can consider other options
+    # (such as waiting, then issuing a SIGTERM, just in case).
     echo "Running game server on '${GS_HOST}'..."
     ssh \
         -o "StrictHostKeyChecking no" \
         "${GS_HOST}" \
         \
-        "killall ${EMULATOR_EXE} 2> /dev/null; " \
+        "killall -s SIGINT ${EMULATOR_EXE} 2> /dev/null; " \
         "cd ${GS_PATH}; " \
         "nohup ./${EMULATOR_EXE} " \
             "${G_TITLE} " \
