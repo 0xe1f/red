@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+## Control Server
+## 2024, Akop Karapetyan
+
 import glob
 import http.server
 import http
@@ -13,7 +16,7 @@ import sys
 import urllib.parse
 import yaml
 
-template_path = 'templates'
+TEMPLATE_PATH = 'templates'
 game_server = ""
 game_clients = []
 templates = {}
@@ -31,6 +34,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         path = os.path.normpath(self.path).lstrip('/')
         if path.startswith('static/'):
             self.write_file(path)
+        elif path == 'query':
+            id = self.read_process_output('./query.sh', [ game_server.host ])
+            self.write_json({ 'title': id  })
         else:
             template = templates.get(path if path else 'index')
             self.write_template(template, games = games.values())
@@ -101,6 +107,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.write_response_headers(type = 'application/json')
         self.wfile.write(json.dumps(obj).encode('utf-8'))
 
+    def read_process_output(self, exe, args):
+        result = subprocess.run([exe] + args, stdout=subprocess.PIPE)
+        return result.stdout.decode('utf-8').rstrip()
+
 def run(server_class = http.server.HTTPServer, handler_class = Handler, port = 8080):
     logging.basicConfig(level = logging.INFO)
     server_address = ('', port)
@@ -145,8 +155,8 @@ class GameServer:
 
 def init_templates():
     global templates
-    environment = jinja2.Environment(loader = jinja2.FileSystemLoader(template_path))
-    for file in glob.glob("{}/*.jinja".format(template_path)):
+    environment = jinja2.Environment(loader = jinja2.FileSystemLoader(TEMPLATE_PATH))
+    for file in glob.glob("{}/*.jinja".format(TEMPLATE_PATH)):
         base = os.path.basename(file)
         name = os.path.splitext(base)[0]
         templates[name] = environment.get_template(base)

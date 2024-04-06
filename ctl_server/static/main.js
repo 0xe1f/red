@@ -1,4 +1,12 @@
 $(function() {
+    $.get(
+        "query",
+        function(resp) {
+            if (resp.title) {
+                $('.game[data-id="' + resp.title + '"]').addClass('selected');
+            }
+        },
+    );
     $(".game").on("click", function() {
         const item = $(this);
         const payload = { 'id': item.data('id') };
@@ -6,7 +14,7 @@ $(function() {
             "launch",
             JSON.stringify(payload),
             function() {
-                $('.game').removeClass('selected');
+                $('.game.selected').removeClass('selected');
                 item.addClass('selected');
             },
             "json",
