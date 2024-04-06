@@ -65,7 +65,7 @@ if args.cli or args.all:
         # Copy rgbclient
         subprocess.call([
             'rsync',
-            '-avr',
+            '-vrt',
             '--exclude', '.*',
             f'rgbclient/',
             f'{client.host}:{client.path}',

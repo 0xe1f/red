@@ -99,6 +99,12 @@ static int read_preamble()
         data.bitmap_bpp
     );
 
+    if (data.magic != MAGIC_NUMBER) {
+        fprintf(stderr, "magic number mismatch (0x%x != 0x%x)\n",
+            data.magic,
+            MAGIC_NUMBER
+        );
+    }
     if (data.bitmap_bpp * data.bitmap_width != data.bitmap_pitch) {
         fprintf(stderr, "bitmap pitch does not fempute (%d != %d)\n",
             data.bitmap_bpp * data.bitmap_width,

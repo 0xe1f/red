@@ -6,15 +6,18 @@ extern "C" {
 #endif
 
 struct BufferData {
-    int buffer_size;
-    int bitmap_pitch;
-    int bitmap_width;
-    int bitmap_height;
-    int bitmap_bpp;
+    unsigned int buffer_size;
+    unsigned short bitmap_pitch;
+    unsigned short bitmap_width;
+    unsigned short bitmap_height;
+    unsigned char bitmap_bpp;
+    unsigned int magic;
 };
 
 #ifdef __cplusplus
 } // End of extern "C"
 #endif
+
+#define MAGIC_NUMBER 0xd34db33f
 
 #endif // _STRUCTS
