@@ -13,10 +13,15 @@
     <title>Games</title>
   </head>
   <body>
-    {% for game in games %}
-    <div class="game" data-id="{{ game.id }}">
-      <span class="title">{{ game.title }}</span>
+    <div id="scrim">
+      <img src="static/spinner.gif" />
     </div>
-    {% endfor %}
+    <div id="content">
+      {% for game in games %}
+      <div class="game" data-id="{{ game.id }}">
+        <span class="title">{{ game.title }}</span>
+      </div>
+      {% endfor %}
+    </div>
   </body>
 </html>
