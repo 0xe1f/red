@@ -1,15 +1,10 @@
 - id: mvsc
   title: Marvel vs Capcom
-  server_cmd: fbneo mvsc
 - id: digdug
   title: Dig Dug
-  server_cmd: fbneo digdug
 - id: galaga
   title: Galaga
-  server_cmd: fbneo galaga
 - id: galaxian
   title: Galaxian
-  server_cmd: fbneo galaxian
 - id: pacman
   title: Pacman
-  server_cmd: fbneo pacman

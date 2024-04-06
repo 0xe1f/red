@@ -8,6 +8,9 @@ import subprocess
 import sys
 import yaml
 
+CTL_SERVER_EXE='serve.py'
+CTL_SERVER_PATH='ctl_server'
+
 class GameClient:
 
     def __init__(self, **item):
@@ -26,22 +29,31 @@ with open('deploy.yaml') as fd:
     yaml = yaml.safe_load(fd)
     # game_server = yaml['game_server']
     game_clients = [GameClient(**x) for x in yaml['game_clients']]
-    ctl_server = yaml['ctl_server']
+    ctl_server_host = yaml['ctl_server']
 
 # if not game_server:
 #     sys.exit('Missing game server configuration')
 
 if args.ctl or args.all:
-    if not ctl_server:
+    if not ctl_server_host:
         sys.exit('Missing control server configuration')
 
     print("Deploying control server...")
     subprocess.call([
-        "rsync",
-        "-avr",
-        "--delete",
-        "ctl_server",
-        f"{ctl_server}:"
+        'rsync',
+        '-avr',
+        '--delete',
+        '--exclude', '*_example.yaml',
+        f'{CTL_SERVER_PATH}',
+        f'{ctl_server_host}:'
+    ])
+    subprocess.call([
+        'ssh',
+        '-o',
+        'StrictHostKeyChecking no',
+        f'{ctl_server_host}',
+        f"kill `ps -ef | grep python | grep {CTL_SERVER_EXE} | sort -k2 -n | head -1 | awk '{{print $2}}'` 2> /dev/null; " \
+        f'cd {CTL_SERVER_PATH}; nohup ./{CTL_SERVER_EXE} >log.txt 2>&1 &',
     ])
 
 if args.cli or args.all:

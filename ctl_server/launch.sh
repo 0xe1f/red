@@ -25,7 +25,7 @@ echo "Running server..."
 ssh \
     -o "StrictHostKeyChecking no" \
     "${ARG_MAP[host]}" \
-    "killall fbneo 2> /dev/null; cd ${ARG_MAP[path]}; nohup ./fbneo ${TITLE} >/dev/null 2>&1 &"
+    "killall fbneo 2> /dev/null; cd ${ARG_MAP[path]}; nohup ./fbneo ${TITLE} >log.txt 2>&1 &"
 
 echo "Running clients ($CLIENT_COUNT)..."
 
