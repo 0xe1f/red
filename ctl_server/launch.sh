@@ -39,6 +39,6 @@ for ((I=0;I<CLIENT_COUNT;++I)); do
     ssh \
         -o "StrictHostKeyChecking no" \
         "${ARG_MAP["$HOST_KEY"]}" \
-        "sudo killall rgbclient 2> /dev/null; cd ${ARG_MAP["$PATH_KEY"]}; sleep 2; sudo nohup ./rgbclient ${ARG_MAP[host]} -srect ${ARG_MAP["$SRECT_KEY"]} -drect ${ARG_MAP["$DRECT_KEY"]} ${ARG_MAP["$ARGS_KEY"]} >/dev/null 2>&1 &"
+        "sudo killall rgbclient 2> /dev/null; cd ${ARG_MAP["$PATH_KEY"]}; sleep 2; sudo nohup ./rgbclient ${ARG_MAP[host]} -srect ${ARG_MAP["$SRECT_KEY"]} -drect ${ARG_MAP["$DRECT_KEY"]} ${ARG_MAP["$ARGS_KEY"]} >log.txt 2>&1 &"
 
 done
