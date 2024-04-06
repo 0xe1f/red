@@ -52,7 +52,7 @@ if args.ctl or args.all:
         '-o',
         'StrictHostKeyChecking no',
         f'{ctl_server_host}',
-        f"kill `ps -ef | grep python | grep {CTL_SERVER_EXE} | sort -k2 -n | head -1 | awk '{{print $2}}'` 2> /dev/null; " \
+        f"kill `ps -ef | awk '{{ print $2\"\t\"$8\"\t\"$9 }}' | grep python | grep {CTL_SERVER_EXE} | cut -f 1` 2> /dev/null; " \
         f'cd {CTL_SERVER_PATH}; nohup ./{CTL_SERVER_EXE} >log.txt 2>&1 &',
     ])
 

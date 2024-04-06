@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import glob
 import http.server
 import http

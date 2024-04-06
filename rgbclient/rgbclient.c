@@ -13,10 +13,14 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "led-matrix-c.h"
 #include "structs.h"
+
+#define RETRY_COUNT    10
+#define RETRY_DELAY_MS 500
 
 #define DESTPORT 3500
 
@@ -60,15 +64,23 @@ static int connect_es(const char *server)
     dest_addr.sin_port = htons(DESTPORT);
     dest_addr.sin_addr.s_addr = inet_addr(server);
 
-    if (connect(sockfd,(struct sockaddr*)&dest_addr, sizeof(struct sockaddr)) != 0) {
-        fprintf(stderr, "connect() failed\n");
-        close(sockfd);
-        return 0;
+    struct timespec ts;
+    ts.tv_sec = 0;
+    ts.tv_nsec = RETRY_DELAY_MS * 1000000;
+
+    for (int i = 0; i < RETRY_COUNT; i++) {
+        if (connect(sockfd,(struct sockaddr*)&dest_addr, sizeof(struct sockaddr)) == 0) {
+            fprintf(stderr, "connected!\n");
+            return 1;
+        }
+        nanosleep(&ts, NULL);
+        fprintf(stderr, "retrying...\n");
     }
 
-    fprintf(stderr, "connected!\n");
+    fprintf(stderr, "connect() failed\n");
+    close(sockfd);
 
-    return 1;
+    return 0;
 }
 
 static int read_preamble()
