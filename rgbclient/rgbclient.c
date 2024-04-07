@@ -21,8 +21,10 @@
 
 #define RETRY_COUNT    10
 #define RETRY_DELAY_MS 500
-
 #define DESTPORT 3500
+
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
 
 struct ViewRect {
     unsigned short sx;
@@ -41,6 +43,7 @@ static unsigned char *buffer = NULL;
 static const char *server;
 static int screen_width;
 static int screen_height;
+static int vw_origin = 0;
 
 static struct RGBLedMatrix *matrix = NULL;
 static struct LedCanvas *canvas = NULL;
@@ -116,6 +119,10 @@ static int read_preamble()
         (float)(data.buffer_size * 60) / 1024 / 1024
     );
 
+    if (data.attrs & ATTR_VFLIP) {
+        vw_origin = screen_width - MAX(0, screen_width - data.bitmap_width) - 1;
+    }
+
     return 1;
 }
 
@@ -173,7 +180,11 @@ static void render()
         if (ry >= data.bitmap_height) {
             break; // out of bounds
         }
-        unsigned char *rrow = buffer + ry * data.bitmap_pitch;
+        int rry = ry;
+        if (data.attrs & ATTR_VFLIP) {
+            rry = data.bitmap_height - 1 - ry;
+        }
+        unsigned char *rrow = buffer + rry * data.bitmap_pitch;
         for (int rx = source.sx, xo = 0; rx < source.dx; rx++, xo++) {
             if (rx >= data.bitmap_width) {
                 break; // out of bounds
@@ -182,7 +193,16 @@ static void render()
             int wx = dest.sx + xo;
             unsigned short rcol = *((unsigned short *)rrow + rx);
             if (wx < screen_width && wy < screen_height) {
-                led_canvas_set_pixel(canvas, wx, wy, RED(rcol), GREEN(rcol), BLUE(rcol));
+                led_canvas_set_pixel(
+                    canvas,
+                    (data.attrs & ATTR_VFLIP)
+                        ? vw_origin - wx
+                        : wx,
+                    wy,
+                    RED(rcol),
+                    GREEN(rcol),
+                    BLUE(rcol)
+                );
             }
         }
     }

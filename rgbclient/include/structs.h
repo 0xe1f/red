@@ -11,6 +11,7 @@ struct BufferData {
     unsigned short bitmap_width;
     unsigned short bitmap_height;
     unsigned char bitmap_bpp;
+    unsigned char attrs;
     unsigned int magic;
 };
 
@@ -19,5 +20,7 @@ struct BufferData {
 #endif
 
 #define MAGIC_NUMBER 0xd34db33f
+
+#define ATTR_VFLIP 0x01
 
 #endif // _STRUCTS
