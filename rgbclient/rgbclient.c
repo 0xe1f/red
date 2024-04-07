@@ -94,12 +94,13 @@ static int read_preamble()
         return 0;
     }
 
-    fprintf(stderr, "buffer size: %d\npitch: %d\nwidth: %d\nheight: %d\nbpp: %d\n",
+    fprintf(stderr, "buffer size: %d\npitch: %d\nwidth: %d\nheight: %d\nbpp: %d\nattrs: 0x%x\n",
         data.buffer_size,
         data.bitmap_pitch,
         data.bitmap_width,
         data.bitmap_height,
-        data.bitmap_bpp
+        data.bitmap_bpp,
+        data.attrs
     );
 
     if (data.magic != MAGIC_NUMBER) {
@@ -221,7 +222,7 @@ static inline void log_fps()
     static unsigned long long pms = 0;
     static int frames = 0;
     unsigned long long ms = current_millis();
-    int delta = ms - pms;
+    unsigned long long delta = ms - pms;
     if (delta > 1000L) {
         float fps = (float) frames / (delta / 1000L);
         fprintf(stderr, "\rfps: %.02f", fps);
@@ -320,8 +321,13 @@ int parse_args(int argc, const char **argv)
     server = argv[1];
     const char *srect = NULL;
     const char *drect = NULL;
-    for (int i = 2; i < argc; i++) {
+    fprintf(stderr, "%s \\\n", argv[0]);
+    for (int i = 1; i < argc; i++) {
         const char *arg = argv[i];
+        fprintf(stderr, "\t%s \\\n", arg);
+        if (i == 1) {
+            continue;
+        }
         if (strcmp(arg, "-sfps") == 0) {
             show_server_fps = 1;
         } else if (strcmp(arg, "-lfps") == 0) {
