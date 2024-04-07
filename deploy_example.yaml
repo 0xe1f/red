@@ -1,5 +1,9 @@
-game_server: emulator_host.local
+game_server:
+  host: <game_server_host>
+  path: game_servers
 game_clients:
-  - screen1_host.local
-  - screen2_host.local
-server: launcher_host.local
+  - host: <screen1_host>
+    path: rgbclient
+  - host: <screen2_host>
+    path: rgbclient
+ctl_server: <launcher_host>

@@ -1,0 +1,3 @@
+[submodule "game_servers/fbneo"]
+	path = game_servers/fbneo
+	url = https://github.com/0xe1f/rgbfbneo.git

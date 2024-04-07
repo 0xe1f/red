@@ -1,0 +1,9 @@
+.*
+*.md
+*.o
+*.so.1
+*.a
+*.chm
+*.html
+*.yml
+*.zip

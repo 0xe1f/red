@@ -3,7 +3,7 @@ game_server:
   path: rgbfbneo
 game_clients:
   - host: <screen1_host_ip - eth0>
-    path: rgbfbneo
+    path: <path_to_client - should match deploy.yaml>
     srect: 0,0-320,128
     drect: 0,0-320,128
     args: >-
@@ -15,7 +15,7 @@ game_clients:
       --led-gpio-mapping=regular
       --led-pwm-bits=6
   - host: <screen2_host_ip - eth0>
-    path: rgbfbneo
+    path: <path_to_client - should match deploy.yaml>
     srect: 0,128-320,256
     drect: 0,0-320,128
     args: >-
