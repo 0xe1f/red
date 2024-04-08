@@ -62,14 +62,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_error(http.HTTPStatus.NOT_FOUND, "Not found")
             return
 
-        subprocess.call(
-            [
-                './launch.sh',
-                game.id,
-            ] + \
-                game_server.args() + \
-                [args for ix, client in enumerate(game_clients) for args in client.args(ix)]
-        )
+        args = [ game.id ] + \
+            game_server.args() + \
+            [args for ix, client in enumerate(game_clients) for args in client.args(ix)]
+
+        logging.debug(f'Launching with {args}')
+        subprocess.call([ './launch.sh' ] + args)
 
         self.write_json({ 'status': 'OK'  })
 
@@ -112,7 +110,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return result.stdout.decode('utf-8').rstrip()
 
 def run(server_class = http.server.HTTPServer, handler_class = Handler, port = 8080):
-    logging.basicConfig(level = logging.INFO)
+    logging.basicConfig(level = logging.DEBUG)
     server_address = ('', port)
     httpd = server_class(server_address, handler_class)
     logging.info('Starting httpd...\n')
@@ -151,6 +149,7 @@ class GameServer:
         return [
             f'host={self.host}',
             f'path={self.path}',
+            f'args={self.extra_args}',
         ]
 
 def init_templates():

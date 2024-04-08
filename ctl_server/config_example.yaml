@@ -1,12 +1,14 @@
 game_server:
   host: <emulator_host_ip - eth0>
-  path: rgbfbneo
+  path: game_servers/fbneo
+  extra_args: >-
+    --dims 320x256
 game_clients:
   - host: <screen1_host_ip - eth0>
     path: <path_to_client - should match deploy.yaml>
     srect: 0,0-320,128
     drect: 0,0-320,128
-    args: >-
+    extra_args: >-
       --led-rows=64
       --led-cols=64
       --led-chain=5
@@ -18,7 +20,7 @@ game_clients:
     path: <path_to_client - should match deploy.yaml>
     srect: 0,128-320,256
     drect: 0,0-320,128
-    args: >-
+    extra_args: >-
       --led-rows=64
       --led-cols=64
       --led-chain=5

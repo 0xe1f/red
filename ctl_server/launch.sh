@@ -30,6 +30,7 @@ function runServer() {
     G_TITLE="$1"
     GS_HOST="$2"
     GS_PATH="$3"
+    GS_ARGS="$4"
 
     # SIGINT will allow the emulator to exit gracefully,
     # though there is a chance that it might not work.
@@ -44,6 +45,7 @@ function runServer() {
         "cd ${GS_PATH}; " \
         "nohup ./${EMULATOR_EXE} " \
             "${G_TITLE} " \
+            "${GS_ARGS} " \
             ">log.txt 2>&1 &"
 }
 
@@ -78,7 +80,8 @@ function runClient() {
     runServer \
         "${TITLE}" \
         "${ARG_MAP[host]}" \
-        "${ARG_MAP[path]}"
+        "${ARG_MAP[path]}" \
+        "${ARG_MAP[args]}"
 
     for ((I=0;I<CLIENT_COUNT;++I)); do
         HOST_KEY=host$I
