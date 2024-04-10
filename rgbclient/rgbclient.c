@@ -38,6 +38,12 @@
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 
+struct ARGB {
+    unsigned char r;
+    unsigned char g;
+    unsigned char b;
+};
+
 struct ViewRect {
     unsigned short sx;
     unsigned short sy;
@@ -52,6 +58,7 @@ static unsigned int retry_count = RETRY_COUNT_DEFAULT;
 static unsigned int retry_delay_ms = RETRY_DELAY_DEFAULT_MS;
 static unsigned short port = PORT_DEFAULT;
 static struct BufferData data;
+static unsigned char bitmap_bpp = 0;
 static unsigned char *buffer = NULL;
 
 static const char *server;
@@ -64,9 +71,14 @@ static struct LedCanvas *canvas = NULL;
 static struct ViewRect source;
 static struct ViewRect dest;
 
-#define RED(x) (((x>>11)&0x1f)*255/31)
-#define GREEN(x) (((x>>5)&0x3f)*255/63)
-#define BLUE(x) ((x&0x1f)*255/31)
+// RGB565
+#define RED_RGB565(x) (((x>>11)&0x1f)*255/31)
+#define GREEN_RGB565(x) (((x>>5)&0x3f)*255/63)
+#define BLUE_RGB565(x) ((x&0x1f)*255/31)
+// RGBA8888
+#define RED_RGBA8888(x) ((x>>24)&0xff)
+#define GREEN_RGBA8888(x) ((x>>16)&0xff)
+#define BLUE_RGBA8888(x) ((x>>8)&0xff)
 
 static int connect_es(const char *server)
 {
@@ -103,41 +115,86 @@ static int connect_es(const char *server)
     return 0;
 }
 
+static const char* pixel_format_str(unsigned char pixel_format)
+{
+    switch(pixel_format) {
+        case PIXEL_FORMAT_RGB565:
+            return "RGB565";
+        case PIXEL_FORMAT_RGBA8888:
+            return "RGBA8888";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+static unsigned char bpp(unsigned char pixel_format)
+{
+    switch(pixel_format) {
+        case PIXEL_FORMAT_RGB565:
+            return 2;
+        case PIXEL_FORMAT_RGBA8888:
+            return 4;
+        default:
+            return 0;
+    }
+}
+
+static inline void unpack(struct ARGB *argb, unsigned char *row, int offset)
+{
+    if (data.pixel_format == PIXEL_FORMAT_RGB565) {
+        unsigned short rcol = *((unsigned short *)row + offset);
+        argb->r = RED_RGB565(rcol);
+        argb->g = GREEN_RGB565(rcol);
+        argb->b = BLUE_RGB565(rcol);
+    } else if (data.pixel_format == PIXEL_FORMAT_RGBA8888) {
+        unsigned int rcol = *((unsigned int *)row + offset);
+        argb->r = RED_RGBA8888(rcol);
+        argb->g = GREEN_RGBA8888(rcol);
+        argb->b = BLUE_RGBA8888(rcol);
+    }
+}
+
 static int read_preamble()
 {
     int r = read(sockfd, &data, sizeof(data));
     if (r != sizeof(data)) {
-        fprintf(stderr, "error reading buffer data (read %d bytes)\n", r);
+        fprintf(stderr, "Error reading buffer data (read %d bytes)\n", r);
         return 0;
     }
 
-    fprintf(stderr, "buffer size: %d\npitch: %d\nwidth: %d\nheight: %d\nbpp: %d\nattrs: 0x%x\n",
+    fprintf(stderr, "Buffer size: %d\npitch: %d\nwidth: %d\nheight: %d\npixel format: %s\nattrs: 0x%x\n",
         data.buffer_size,
         data.bitmap_pitch,
         data.bitmap_width,
         data.bitmap_height,
-        data.bitmap_bpp,
+        pixel_format_str(data.pixel_format),
         data.attrs
     );
 
     if (data.magic != MAGIC_NUMBER) {
-        fprintf(stderr, "magic number mismatch (0x%x != 0x%x)\n",
+        fprintf(stderr, "Magic number mismatch (0x%x != 0x%x)\n",
             data.magic,
             MAGIC_NUMBER
         );
     }
-    if (data.bitmap_bpp * data.bitmap_width != data.bitmap_pitch) {
-        fprintf(stderr, "bitmap pitch does not fempute (%d != %d)\n",
-            data.bitmap_bpp * data.bitmap_width,
+    bitmap_bpp = bpp(data.pixel_format);
+    if (bitmap_bpp == 0) {
+        fprintf(stderr, "Unrecognized pixel format\n");
+        return 0;
+    }
+
+    if (bitmap_bpp * data.bitmap_width != data.bitmap_pitch) {
+        fprintf(stderr, "Bitmap pitch does not fempute (%d != %d)\n",
+            bitmap_bpp * data.bitmap_width,
             data.bitmap_pitch
         );
         return 0;
     }
-    fprintf(stderr, "projected Mbps: %.02f\n",
+    fprintf(stderr, "Projected Mbps: %.02f\n",
         (float)(data.buffer_size * 60) / 1024 / 1024
     );
 
-    if (data.attrs & ATTR_VFLIP) {
+    if (data.attrs & ATTR_ROT180) {
         vw_origin = screen_width - MAX(0, screen_width - data.bitmap_width) - 1;
     }
 
@@ -161,7 +218,7 @@ static void clean_up()
         matrix = NULL;
     }
     if (sockfd != -1) {
-        fprintf(stderr, "closing...\n");
+        fprintf(stderr, "Closing...\n");
         close(sockfd);
         sockfd = -1;
     }
@@ -173,11 +230,11 @@ static void clean_up()
 
 static int init_rgb(int argc, char **argv)
 {
-    fprintf(stderr, "initializing LED matrix...\n");
+    fprintf(stderr, "Initializing LED matrix...\n");
     struct RGBLedMatrixOptions options = {};
     matrix = led_matrix_create_from_options(&options, &argc, &argv);
     if (matrix == NULL) {
-        fprintf(stderr, "error initializing matrix\n");
+        fprintf(stderr, "Error initializing matrix\n");
         return 0;
     }
 
@@ -186,19 +243,20 @@ static int init_rgb(int argc, char **argv)
     led_canvas_get_size(canvas, &screen_width, &screen_height);
     led_canvas_set_pixel(canvas, 0, 0, 0, 0, 0);
 
-    fprintf(stderr, "initialized %dx%d canvas...\n", screen_width, screen_height);
+    fprintf(stderr, "Initialized %dx%d canvas...\n", screen_width, screen_height);
     return 1;
 }
 
 static void render()
 {
     // VALIDATE BITMAP!
+    struct ARGB pixel;
     for (int ry = source.sy, yo = 0; ry < source.dy; ry++, yo++) {
         if (ry >= data.bitmap_height) {
             break; // out of bounds
         }
         int rry = ry;
-        if (data.attrs & ATTR_VFLIP) {
+        if (data.attrs & ATTR_ROT180) {
             rry = data.bitmap_height - 1 - ry;
         }
         unsigned char *rrow = buffer + rry * data.bitmap_pitch;
@@ -208,17 +266,17 @@ static void render()
             }
             int wy = dest.sy + yo;
             int wx = dest.sx + xo;
-            unsigned short rcol = *((unsigned short *)rrow + rx);
+            unpack(&pixel, rrow, rx);
             if (wx < screen_width && wy < screen_height) {
                 led_canvas_set_pixel(
                     canvas,
-                    (data.attrs & ATTR_VFLIP)
+                    (data.attrs & ATTR_ROT180)
                         ? vw_origin - wx
                         : wx,
                     wy,
-                    RED(rcol),
-                    GREEN(rcol),
-                    BLUE(rcol)
+                    pixel.r,
+                    pixel.g,
+                    pixel.b
                 );
             }
         }
@@ -332,7 +390,7 @@ static int parse_args(int argc, const char **argv)
         if (i == 1) {
             continue;
         }
-        if (strcmp(arg, "-sfps") == 0) {
+        if (strcmp(arg, "--sfps") == 0) {
             show_server_fps = 1;
         } else if (strstr(arg, "--src-rect=")) {
             const char *post_eq = arg + 11;

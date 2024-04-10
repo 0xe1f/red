@@ -4,10 +4,11 @@ RGBClient is a small program and an accompanying protocol that can be used
 to stream small (~100KiB) chunks of bitmap data to a Raspberry Pi and display
 it on attached LED panels. The protocol is lossless and uncompressed.
 
-Client connects to a server that supports the protocol and renders streamed
-content as soon as a complete frame is available. This behavior ensures
-that the client runs at about the same FPS as the server.
-Size of each frame is provided upon connecting; source and destination geometry are provided via the command line.
+Client connects to a server, obtains basic information about each frame and 
+begins rendering streamed content as soon as a complete frame is available. 
+This behavior ensures that the client runs at about the same FPS as the server.
+Size of each frame is provided upon connecting; source and destination geometry
+are provided via the command line.
 
 Over an ethernet connection, RGBClient is able to sustain a fairly solid
 60 frames per second for bitmaps around 512x224 in size.
@@ -35,7 +36,7 @@ rgbclient host_ip [options]
 | `--dest-rect=l,t-r,b` | Destination rectangle |
 | `--retry-count=xx` | Number of times to retry connecting to server |
 | `--retry-delay=xx` | Delay between reconnection attempts, in milliseconds |
-| `-sfps` | Display server FPS - frequency at which data is received from the server|
+| `--sfps` | Display server FPS - frequency at which data is received from the server|
 
 Rectangles are specified as `left,top-right,bottom`. `left` and `top` are
 inclusive; `right` and `bottom` are exclusive. Source rectangle is given

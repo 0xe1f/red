@@ -72,3 +72,7 @@ At the moment, [FinalBurn Neo](https://github.com/finalburnneo/FBNeo) is the onl
 the game server, combined with information supplied via command-line.
 
 Only one Rendering Client can run on any one unit.
+
+---
+
+![Img](doc/btime.gif)
