@@ -1,6 +1,18 @@
 /*
-** RGBClient
-** 2024, Akop Karapetyan
+   RGBClient
+   Copyright 2024, Akop Karapetyan
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
 */
 
 #include <arpa/inet.h>
@@ -19,9 +31,9 @@
 #include "led-matrix-c.h"
 #include "structs.h"
 
-#define RETRY_COUNT    10
-#define RETRY_DELAY_MS 500
-#define DESTPORT 3500
+#define RETRY_COUNT_DEFAULT    0
+#define RETRY_DELAY_DEFAULT_MS 500
+#define PORT_DEFAULT           3500
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
@@ -33,10 +45,12 @@ struct ViewRect {
     unsigned short dy;
 };
 
-static int show_panel_fps = 0;
 static int show_server_fps = 0;
 static int sockfd = -1;
 static int exit_main_loop = 0;
+static unsigned int retry_count = RETRY_COUNT_DEFAULT;
+static unsigned int retry_delay_ms = RETRY_DELAY_DEFAULT_MS;
+static unsigned short port = PORT_DEFAULT;
 static struct BufferData data;
 static unsigned char *buffer = NULL;
 
@@ -64,14 +78,17 @@ static int connect_es(const char *server)
 
     struct sockaddr_in dest_addr = {};
     dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(DESTPORT);
+    dest_addr.sin_port = htons(port);
     dest_addr.sin_addr.s_addr = inet_addr(server);
 
     struct timespec ts;
     ts.tv_sec = 0;
-    ts.tv_nsec = RETRY_DELAY_MS * 1000000;
+    ts.tv_nsec = retry_delay_ms * 1000000;
 
-    for (int i = 0; i < RETRY_COUNT; i++) {
+    fprintf(stderr, "connecting to '%s' on port %d...\n",
+        server,
+        port);
+    for (int i = 0; i <= retry_count; i++) {
         if (connect(sockfd,(struct sockaddr*)&dest_addr, sizeof(struct sockaddr)) == 0) {
             fprintf(stderr, "connected!\n");
             return 1;
@@ -158,7 +175,6 @@ static int init_rgb(int argc, char **argv)
 {
     fprintf(stderr, "initializing LED matrix...\n");
     struct RGBLedMatrixOptions options = {};
-    options.show_refresh_rate = show_panel_fps;
     matrix = led_matrix_create_from_options(&options, &argc, &argv);
     if (matrix == NULL) {
         fprintf(stderr, "error initializing matrix\n");
@@ -253,33 +269,30 @@ static void main_loop()
     }
 }
 
-void sigint_handler(int s)
+static void sigint_handler(int s)
 {
     fprintf(stderr, "Caught SIGINT, exiting...\n");
     exit_main_loop = 1;
 }
 
-int parse_rect(const char *name, const char *arg, struct ViewRect *rect)
+static int parse_rect(const char *arg, struct ViewRect *rect)
 {
     char temp[128];
     strncpy(temp, arg, 127);
     char *delim = strchr(temp, '-');
     if (delim == NULL) {
-        fprintf(stderr, "%s: Missing '-' delimiter\n", name);
         return 0;
     }
     *delim = '\0';
 
     char *sdelim = strchr(temp, ',');
     if (sdelim == NULL) {
-        fprintf(stderr, "%s: Missing ',' delimiter in source\n", name);
         return 0;
     }
     *sdelim = '\0';
 
     char *ddelim = strchr(delim + 1, ',');
     if (ddelim == NULL) {
-        fprintf(stderr, "%s: Missing ',' delimiter in destination\n", name);
         return 0;
     }
     *ddelim = '\0';
@@ -292,26 +305,17 @@ int parse_rect(const char *name, const char *arg, struct ViewRect *rect)
     return 1;
 }
 
-int validate_rect(const char *name, struct ViewRect rect)
+static int validate_rect(struct ViewRect rect)
 {
-    if (rect.sx > rect.dx) {
-        fprintf(stderr, "%s: sx > dx\n", name);
+    if (rect.sx >= rect.dx) {
         return 0;
-    } else if (rect.sy > rect.dy) {
-        fprintf(stderr, "%s: sx > dx\n", name);
+    } else if (rect.sy >= rect.dy) {
         return 0;
     }
     return 1;
 }
 
-const char * format_rect(struct ViewRect rect)
-{
-    static char temp[128];
-    snprintf(temp, 127, "%d,%d-%d,%d", rect.sx, rect.sy, rect.dx, rect.dy);
-    return temp;
-}
-
-int parse_args(int argc, const char **argv)
+static int parse_args(int argc, const char **argv)
 {
     if (argc < 2) {
         fprintf(stderr, "Missing server IP\n");
@@ -319,8 +323,8 @@ int parse_args(int argc, const char **argv)
     }
 
     server = argv[1];
-    const char *srect = NULL;
-    const char *drect = NULL;
+    unsigned char src_set = 0;
+    unsigned char dest_set = 0;
     fprintf(stderr, "%s \\\n", argv[0]);
     for (int i = 1; i < argc; i++) {
         const char *arg = argv[i];
@@ -330,40 +334,60 @@ int parse_args(int argc, const char **argv)
         }
         if (strcmp(arg, "-sfps") == 0) {
             show_server_fps = 1;
-        } else if (strcmp(arg, "-lfps") == 0) {
-            show_panel_fps = 1;
-        } else if (strcmp(arg, "-srect") == 0) {
-            if (i + 1 < argc) {
-                srect = argv[i + 1];
-            } else {
-                fprintf(stderr, "Missing argument to -srect");
+        } else if (strstr(arg, "--src-rect=")) {
+            const char *post_eq = arg + 11;
+            if (!parse_rect(post_eq, &source)) {
+                fprintf(stderr, "'%s' is not a valid rectangle\n", post_eq);
                 return 0;
             }
-        } else if (strcmp(arg, "-drect") == 0) {
-            if (i + 1 < argc) {
-                drect = argv[i + 1];
-            } else {
-                fprintf(stderr, "Missing argument to -drect");
+            src_set = 1;
+        } else if (strstr(arg, "--dest-rect=")) {
+            const char *post_eq = arg + 12;
+            if (!parse_rect(post_eq, &dest)) {
+                fprintf(stderr, "'%s' is not a valid rectangle\n", post_eq);
                 return 0;
             }
+            dest_set = 1;
+        } else if (strstr(arg, "--port=")) {
+            const char *post_eq = arg + 7;
+            long p = strtol(post_eq, NULL, 10);
+            if (p <= 0 || p > UINT16_MAX) {
+                fprintf(stderr, "'%s' is not a valid port\n", post_eq);
+                return 0;
+            }
+            port = (unsigned short) p;
+        } else if (strstr(arg, "--retry-count=")) {
+            const char *post_eq = arg + 14;
+            long p = strtol(post_eq, NULL, 10);
+            if (p < 0 || p > UINT32_MAX) {
+                fprintf(stderr, "'%s' is not a valid retry count\n", post_eq);
+                return 0;
+            }
+            retry_count = (unsigned int) p;
+        } else if (strstr(arg, "--retry-delay=")) {
+            const char *post_eq = arg + 14;
+            long p = strtol(post_eq, NULL, 10);
+            if (p <= 0 || p > UINT32_MAX) {
+                fprintf(stderr, "'%s' is not a valid retry delay\n", post_eq);
+                return 0;
+            }
+            retry_delay_ms = p;
         }
     }
 
-    if (srect != NULL && !parse_rect("-srect", srect, &source)) {
+    if (!src_set) {
+        fprintf(stderr, "Missing source rectangle\n");
         return 0;
-    } else if (srect == NULL) {
-        fprintf(stderr, "Missing -srect\n");
-        return 0;
-    }
-
-    if (drect != NULL && !parse_rect("-drect", drect, &dest)) {
-        return 0;
-    } else if (drect == NULL) {
-        fprintf(stderr, "Missing -drect\n");
+    } else if (!dest_set) {
+        fprintf(stderr, "Missing destination rectangle\n");
         return 0;
     }
 
-    if (!validate_rect("-srect", source) || !validate_rect("-drect", dest)) {
+    if (!validate_rect(source)) {
+        fprintf(stderr, "Invalid source rectangle\n");
+        return 0;
+    } else if (!validate_rect(dest)) {
+        fprintf(stderr, "Invalid destination rectangle\n");
         return 0;
     }
 

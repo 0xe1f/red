@@ -2,7 +2,8 @@ game_server:
   host: <emulator_host_ip - eth0>
   path: game_servers/fbneo
   extra_args: >-
-    --dims 320x256
+    --output-dims=320x256
+    --scale=shortestxaspect
 game_clients:
   - host: <screen1_host_ip - eth0>
     path: <path_to_client - should match deploy.yaml>

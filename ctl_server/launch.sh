@@ -67,8 +67,8 @@ function runClient() {
         "cd ${C_PATH}; " \
         "sudo nohup ./${CLIENT_EXE} " \
             "${GS_HOST} " \
-            "-srect ${C_SRECT} " \
-            "-drect ${C_DRECT} " \
+            "--src-rect=${C_SRECT} " \
+            "--dest-rect=${C_DRECT} " \
             "${C_ARGS} " \
             ">log.txt 2>&1 &"
 }
