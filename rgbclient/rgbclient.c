@@ -29,7 +29,7 @@
 #include <unistd.h>
 
 #include "led-matrix-c.h"
-#include "structs.h"
+#include "rgbcommon.h"
 
 #define RETRY_COUNT_DEFAULT    0
 #define RETRY_DELAY_DEFAULT_MS 500
@@ -38,7 +38,7 @@
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 
-struct ARGB {
+struct RGB {
     unsigned char r;
     unsigned char g;
     unsigned char b;
@@ -57,7 +57,7 @@ static int exit_main_loop = 0;
 static unsigned int retry_count = RETRY_COUNT_DEFAULT;
 static unsigned int retry_delay_ms = RETRY_DELAY_DEFAULT_MS;
 static unsigned short port = PORT_DEFAULT;
-static struct BufferData data;
+static struct FrameGeometry data;
 static unsigned char bitmap_bpp = 0;
 static unsigned char *buffer = NULL;
 
@@ -139,18 +139,18 @@ static unsigned char bpp(unsigned char pixel_format)
     }
 }
 
-static inline void unpack(struct ARGB *argb, unsigned char *row, int offset)
+static inline void unpack(struct RGB *dest, unsigned char *src, int offset)
 {
     if (data.pixel_format == PIXEL_FORMAT_RGB565) {
-        unsigned short rcol = *((unsigned short *)row + offset);
-        argb->r = RED_RGB565(rcol);
-        argb->g = GREEN_RGB565(rcol);
-        argb->b = BLUE_RGB565(rcol);
+        unsigned short rcol = *((unsigned short *)src + offset);
+        dest->r = RED_RGB565(rcol);
+        dest->g = GREEN_RGB565(rcol);
+        dest->b = BLUE_RGB565(rcol);
     } else if (data.pixel_format == PIXEL_FORMAT_RGBA8888) {
-        unsigned int rcol = *((unsigned int *)row + offset);
-        argb->r = RED_RGBA8888(rcol);
-        argb->g = GREEN_RGBA8888(rcol);
-        argb->b = BLUE_RGBA8888(rcol);
+        unsigned int rcol = *((unsigned int *)src + offset);
+        dest->r = RED_RGBA8888(rcol);
+        dest->g = GREEN_RGBA8888(rcol);
+        dest->b = BLUE_RGBA8888(rcol);
     }
 }
 
@@ -249,8 +249,7 @@ static int init_rgb(int argc, char **argv)
 
 static void render()
 {
-    // VALIDATE BITMAP!
-    struct ARGB pixel;
+    struct RGB pixel = { 255, 255, 255 };
     for (int ry = source.sy, yo = 0; ry < source.dy; ry++, yo++) {
         if (ry >= data.bitmap_height) {
             break; // out of bounds
@@ -266,8 +265,8 @@ static void render()
             }
             int wy = dest.sy + yo;
             int wx = dest.sx + xo;
-            unpack(&pixel, rrow, rx);
             if (wx < screen_width && wy < screen_height) {
+                unpack(&pixel, rrow, rx);
                 led_canvas_set_pixel(
                     canvas,
                     (data.attrs & ATTR_ROT180)
