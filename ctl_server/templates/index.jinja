@@ -16,6 +16,10 @@
     <div id="scrim">
       <img src="static/spinner.gif" />
     </div>
+    <div id="running">
+      <span class="tooltip">Currently running:</span>
+      <span class="title" />
+    </div>
     <div id="content">
       {% for game in games %}
       <div class="game" data-id="{{ game.id }}">

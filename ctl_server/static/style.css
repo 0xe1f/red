@@ -7,7 +7,7 @@ body {
 }
 
 #content {
-    padding: 2em;
+    padding: 0 2em 2em 2em;
 }
 
 .game {
@@ -30,8 +30,31 @@ body {
     cursor: pointer;
 }
 
-.title {
+.game .title {
     font-size: 24pt;
+}
+
+#running {
+    display: none;
+    position: sticky;
+    top: 0;
+    background-color: #fff;
+    padding: 0.5em 2.5em;
+}
+
+#running span {
+    display: block;
+}
+
+#running .tooltip {
+    font-size: 12pt;
+}
+
+#running .title {
+    font-size: 24pt;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 #scrim {
