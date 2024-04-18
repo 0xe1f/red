@@ -1,5 +1,6 @@
 game_server:
   host: <emulator_host_ip - eth0>
+  home: game_servers
   path: game_servers/fbneo
   extra_args: >-
     --output-dims=320x256

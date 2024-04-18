@@ -13,14 +13,44 @@ $(function() {
             $('#running').show();
         }
     };
-    $.get(
-        "query",
-        function(resp) {
-            if (resp.title) {
-                updateSelection(resp.title);
-            }
-        },
-    );
+    const setVolume = function(vol) {
+        $.post(
+            "volume",
+            JSON.stringify({ 'volume': vol }),
+            function() { },
+            "json",
+        );
+    };
+    const updateVolume = function(value) {
+        $('#volume')
+            .val(value)
+            .trigger('change');
+    };
+    const initialize = function() {
+        // init volume control
+        $('#volume')
+            .knob({
+                'fgColor': '#66CC66',
+                'angleOffset': -125,
+                'angleArc': 250,
+                'fgColor': '#66CC66',
+                'width': 50,
+                'height': 50,
+                'change' : function (v) { setVolume(~~v); }
+            });
+        updateVolume(0);
+        // set current selection
+        $.get(
+            "query",
+            function(resp) {
+                if (resp.title) {
+                    updateSelection(resp.title);
+                }
+                updateVolume(resp.volume || 0);
+            },
+        );
+    };
+    initialize();
     $(".game").on("click", function() {
         const item = $(this);
         const itemId = item.data('id');

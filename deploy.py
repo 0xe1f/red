@@ -66,7 +66,7 @@ if args.svr or args.all:
     print("Deploying to server...")
     subprocess.call([
         'rsync',
-        '-vrt',
+        '-vrtp',
         '--exclude', '*.exclude',
         '--exclude-from', 'game_servers/common.exclude',
         '--exclude-from', 'game_servers/fbneo.exclude',

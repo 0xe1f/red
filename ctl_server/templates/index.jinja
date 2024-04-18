@@ -9,6 +9,7 @@
     <link rel="stylesheet" type="text/css" href="static/style.css" />
     <link rel="icon" type="image/x-icon" href="static/favicon.png" />
     <script src="static/jquery-3.7.1.min.js"></script>
+    <script src="static/jquery.knob.min.js"></script>
     <script src="static/main.js"></script>
     <title>Games</title>
   </head>
@@ -17,6 +18,9 @@
       <img src="static/spinner.gif" />
     </div>
     <div id="running">
+      <div class="volume-container">
+        <input id="volume" type="text" />
+      </div>
       <span class="tooltip">Currently running:</span>
       <span class="title" />
     </div>
@@ -24,6 +28,9 @@
       {% for game in games %}
       <div class="game" data-id="{{ game.id }}">
         <span class="title">{{ game.title }}</span>
+        <span class="year">{{ game.year }}</span>
+        <span class="company">{{ game.company }}</span>
+        <span class="system">{{ game.system }}</span>
       </div>
       {% endfor %}
     </div>

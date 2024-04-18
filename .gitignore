@@ -1,1 +1,5 @@
 *.blend1
+.*
+deploy.yaml
+ctl_server/config.yaml
+ctl_server/games.yaml

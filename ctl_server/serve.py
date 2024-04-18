@@ -35,8 +35,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path.startswith('static/'):
             self.write_file(path)
         elif path == 'query':
-            id = self.read_process_output('./query.sh', [ game_server.host ])
-            self.write_json({ 'title': id  })
+            result = self.read_process_output(
+                'ssh',
+                [
+                    game_server.host,
+                    f'{game_server.home}/query.sh',
+                ]
+            )
+            title, vol = result.split(' ', 1)
+            self.write_json({
+                'title': title,
+                'volume': vol,
+            })
         else:
             template = templates.get(path if path else 'index')
             self.write_template(template, games = games.values())
@@ -47,8 +57,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == 'launch':
             payload = json.loads(self.read_post())
             self.launch(**payload)
+        elif path == 'volume':
+            payload = json.loads(self.read_post())
+            self.set_volume(**payload)
         else:
             self.send_error(http.HTTPStatus.NOT_FOUND, "Not found")
+
+    def set_volume(self, **kwargs):
+        volume = kwargs.get('volume')
+        if not 0 <= volume <= 100:
+            self.send_error(http.HTTPStatus.FORBIDDEN, "Value not valid")
+        subprocess.call([
+            'ssh',
+            game_server.host,
+            f'{game_server.home}/set_volume.sh {volume}',
+        ])
+        self.write_json({ 'status': 'OK'  })
 
     def launch(self, **kwargs):
         id = kwargs.get('id')

@@ -10,6 +10,10 @@ body {
     padding: 0 2em 2em 2em;
 }
 
+.volume-container {
+    float: right;
+}
+
 .game {
     margin: 0.25em 0;
     border: solid 2px #ddd;
@@ -34,8 +38,23 @@ body {
     font-size: 24pt;
 }
 
-#running {
+.game .year {
+    display: block;
+    font-size: 14pt;
+    color: #000;
+}
+
+.game .company {
+    display: block;
+    font-size: 14pt;
+}
+
+.game .system {
     display: none;
+}
+
+#running {
+    /* display: none; */
     position: sticky;
     top: 0;
     background-color: #fff;
