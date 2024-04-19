@@ -28,6 +28,7 @@ $(function() {
     };
     const initialize = function() {
         // init volume control
+        var volumeReady = false;
         $('#volume')
             .knob({
                 'fgColor': '#66CC66',
@@ -36,7 +37,10 @@ $(function() {
                 'fgColor': '#66CC66',
                 'width': 50,
                 'height': 50,
-                'change' : function (v) { setVolume(~~v); }
+                'change': function(v) { volumeReady = true; },
+                'release' : function (v) {
+                    if (volumeReady) { setVolume(~~v); }
+                },
             });
         updateVolume(0);
         // set current selection

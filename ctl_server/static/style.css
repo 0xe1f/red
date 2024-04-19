@@ -10,10 +10,6 @@ body {
     padding: 0 2em 2em 2em;
 }
 
-.volume-container {
-    float: right;
-}
-
 .game {
     margin: 0.25em 0;
     border: solid 2px #ddd;
@@ -56,17 +52,24 @@ body {
 #running {
     /* display: none; */
     position: sticky;
+    display: grid;
+    grid-template-columns: 1fr 50px;
+    grid-template-rows: 1fr 1fr;
     top: 0;
     background-color: #fff;
     padding: 0.5em 2.5em;
+    align-items: center;
 }
 
-#running span {
-    display: block;
+div:has(> #volume) {
+    grid-column: 2/3;
+    grid-row: 1/3;
 }
 
 #running .tooltip {
     font-size: 12pt;
+    grid-column: 1/2;
+    grid-row: 1/2;
 }
 
 #running .title {
@@ -74,6 +77,8 @@ body {
     text-overflow: ellipsis;
     white-space: nowrap;
     overflow: hidden;
+    grid-column: 1/2;
+    grid-row: 2/3;
 }
 
 #scrim {

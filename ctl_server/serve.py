@@ -42,7 +42,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     f'{game_server.home}/query.sh',
                 ]
             )
-            title, vol = result.split(' ', 1)
+            title, vol, *_ = result.split(' ', 1) + [None] * 2
             self.write_json({
                 'title': title,
                 'volume': vol,
