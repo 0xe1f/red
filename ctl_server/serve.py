@@ -133,9 +133,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         result = subprocess.run([exe] + args, stdout=subprocess.PIPE)
         return result.stdout.decode('utf-8').rstrip()
 
-def run(server_class = http.server.HTTPServer, handler_class = Handler, port = 8080):
+def run(server_class = http.server.ThreadingHTTPServer, handler_class = Handler, port = 8080):
     logging.basicConfig(level = logging.DEBUG)
-    server_address = ('', port)
+    server_address = ('0.0.0.0', port)
     httpd = server_class(server_address, handler_class)
     logging.info('Starting httpd...\n')
     try:
