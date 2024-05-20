@@ -95,8 +95,19 @@ $(function() {
             "json",
         );
     });
-    $(".filter").on("click", function() {
+    $(".multi .filter").on("click", function() {
         const $item = $(this);
+        $item.toggleClass('selected');
+        syncFiltering();
+    });
+    $(".mutex .filter").on("click", function() {
+        const $item = $(this);
+        if (!$item.hasClass('selected')) {
+            $item
+                .parent()
+                .find('.filter')
+                .removeClass('selected');
+        }
         $item.toggleClass('selected');
         syncFiltering();
     });

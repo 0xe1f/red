@@ -6,6 +6,7 @@
 import glob
 import http.server
 import http
+import itertools
 import jinja2
 import json
 import logging
@@ -23,6 +24,7 @@ templates = {}
 games = {}
 tags = set()
 genres = set()
+orientations = set()
 
 class Handler(http.server.BaseHTTPRequestHandler):
 
@@ -56,6 +58,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 games = games.values(),
                 tags = tags,
                 genres = genres,
+                orientations = orientations,
             )
 
     def do_POST(self):
@@ -157,7 +160,13 @@ class Game:
             self.tags = []
         if 'genres' not in item:
             self.genres = []
-        self.filters = self.tags + self.genres
+        if 'orientation' not in item:
+            self.orientation = 'landscape'
+        self.filters = itertools.chain(
+            map(lambda f: f"t:{f}", self.tags),
+            map(lambda f: f"g:{f}", self.genres),
+            [ f"o:{self.orientation}" ],
+        )
 
 class GameClient:
 
@@ -203,6 +212,7 @@ def init_games():
             games[game.id] = game
             tags.update(game.tags)
             genres.update(game.genres)
+            orientations.add(game.orientation)
 
 def init_config():
     global game_server
