@@ -39,7 +39,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 'ssh',
                 [
                     game_server.host,
-                    f'{game_server.home}/query.sh',
+                    f'{game_server.path}/query.sh',
                 ]
             )
             title, vol, *_ = result.split(' ', 1) + [None] * 2
@@ -70,7 +70,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         subprocess.call([
             'ssh',
             game_server.host,
-            f'{game_server.home}/set_volume.sh {volume}',
+            f'{game_server.path}/set_volume.sh {volume}',
         ])
         self.write_json({ 'status': 'OK'  })
 
@@ -86,12 +86,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_error(http.HTTPStatus.NOT_FOUND, "Not found")
             return
 
-        args = [ game.id ] + \
-            game_server.args() + \
-            [args for ix, client in enumerate(game_clients) for args in client.args(ix)]
-
-        logging.debug(f'Launching with {args}')
-        subprocess.call([ './launch.sh' ] + args)
+        game_server.launch(game)
+        for client in game_clients:
+            client.launch(game_server.host)
 
         self.write_json({ 'status': 'OK'  })
 
@@ -155,26 +152,28 @@ class GameClient:
     def __init__(self, **item):
         self.__dict__.update(item)
 
-    def args(self, index):
-        return [
-            f'host{index}={self.host}',
-            f'path{index}={self.path}',
-            f'srect{index}={self.srect}',
-            f'drect{index}={self.drect}',
-            f'args{index}={self.extra_args}',
-        ]
+    def launch(self, game_server_host):
+        logging.debug(f'Launching client on {self.host}')
+        subprocess.call([
+            'ssh',
+            self.host,
+            f'sudo killall {self.exe} 2> /dev/null;' + \
+                f'cd {self.path}; ' + \
+                f'sudo nohup ./{self.exe} {game_server_host} --src-rect={self.srect} --dest-rect={self.drect} {self.extra_args} >log.txt 2>&1 &'
+        ])
 
 class GameServer:
 
     def __init__(self, **item):
         self.__dict__.update(item)
 
-    def args(self):
-        return [
-            f'host={self.host}',
-            f'path={self.path}',
-            f'args={self.extra_args}',
-        ]
+    def launch(self, game):
+        logging.debug(f'Launching with {game.id} on {self.host}')
+        subprocess.call([
+            'ssh',
+            self.host,
+            f'{self.path}/launch.sh {game.id} {self.extra_args}',
+        ])
 
 def init_templates():
     global templates
