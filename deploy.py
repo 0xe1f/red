@@ -46,6 +46,7 @@ if args.ctl or args.all:
         'rsync',
         '-avr',
         '--delete',
+        '--exclude', '.*',
         '--exclude', '*_example.yaml',
         f'{CTL_SERVER_PATH}',
         f'{ctl_server_host}:'

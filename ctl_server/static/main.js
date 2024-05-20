@@ -13,6 +13,31 @@ $(function() {
             $('#running').show();
         }
     };
+    const syncFiltering = function() {
+        const $selectedFilters = $('.filter.selected');
+        if (!$selectedFilters.length) {
+            $('.game').show();
+            return;
+        }
+        const matchMap = new Map();
+        $('.game').hide();
+        $selectedFilters
+            .each(function(i, obj) {
+                const filter = $(obj).data('id');
+                $(`.game[data-filters~="${filter}"]`)
+                    .toArray()
+                    .forEach(element => {
+                        matchMap.set(element, (matchMap.get(element) ?? 0) + 1);
+                    });
+                });
+        matchMap
+            .forEach((v, k) => {
+                if (v == $selectedFilters.length) {
+                    // Only show complete matches
+                    $(k).show();
+                }
+            });
+};
     const setVolume = function(vol) {
         $.post(
             "volume",
@@ -69,5 +94,10 @@ $(function() {
             },
             "json",
         );
+    });
+    $(".filter").on("click", function() {
+        const $item = $(this);
+        $item.toggleClass('selected');
+        syncFiltering();
     });
 });

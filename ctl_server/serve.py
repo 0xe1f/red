@@ -21,6 +21,8 @@ game_server = ""
 game_clients = []
 templates = {}
 games = {}
+tags = set()
+genres = set()
 
 class Handler(http.server.BaseHTTPRequestHandler):
 
@@ -49,7 +51,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             })
         else:
             template = templates.get(path if path else 'index')
-            self.write_template(template, games = games.values())
+            self.write_template(
+                template,
+                games = games.values(),
+                tags = tags,
+                genres = genres,
+            )
 
     def do_POST(self):
         logging.info("POST %s", str(self.path))
@@ -146,6 +153,11 @@ class Game:
 
     def __init__(self, **item):
         self.__dict__.update(item)
+        if 'tags' not in item:
+            self.tags = []
+        if 'genres' not in item:
+            self.genres = []
+        self.filters = self.tags + self.genres
 
 class GameClient:
 
@@ -189,6 +201,8 @@ def init_games():
         for item in yaml.safe_load(fd):
             game = Game(**item)
             games[game.id] = game
+            tags.update(game.tags)
+            genres.update(game.genres)
 
 def init_config():
     global game_server

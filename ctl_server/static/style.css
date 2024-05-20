@@ -1,5 +1,5 @@
 body {
-    font-family: "Play", sans-serif;
+    font-family: "Lato", sans-serif;
     font-weight: 400;
     font-style: normal;
     margin: 0;
@@ -8,6 +8,25 @@ body {
 
 #content {
     padding: 0 2em 2em 2em;
+}
+
+.filters {
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+.filter {
+    cursor: pointer;
+    border: none 2px;
+    border-radius: 25px;
+    padding: 0.25em 0.75em;
+    margin: 0.5em 0.25em;
+    display: inline-block;
+}
+
+.filter.selected {
+    background: #ccc;
+    color: #fff
 }
 
 .game {

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Play:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="static/style.css" />
     <link rel="icon" type="image/x-icon" href="static/favicon.png" />
     <script src="static/jquery-3.7.1.min.js"></script>
@@ -23,8 +23,24 @@
       <span class="title" />
     </div>
     <div id="content">
-      {% for game in games %}
-      <div class="game" data-id="{{ game.id }}">
+      {% if genres | length > 0 %}
+        <div id="genres" class="filters">
+          <span class="label">Genres:</span>
+          {% for genre in genres | sort %}
+            <span class="genre filter" data-id="{{ genre }}">{{ genre }}</span>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% if tags | length > 0 %}
+        <div id="tags" class="filters">
+          <span class="label">Tags:</span>
+          {% for tag in tags | sort %}
+            <span class="tag filter" data-id="{{ tag }}">{{ tag }}</span>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% for game in games | sort(attribute='title') %}
+      <div class="game" data-id="{{ game.id }}" data-filters="{{ game.filters | join(' ') }}">
         <span class="title">{{ game.title }}</span>
         <span class="year">{{ game.year }}</span>
         <span class="company">{{ game.company }}</span>
