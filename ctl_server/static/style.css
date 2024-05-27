@@ -11,6 +11,14 @@ body {
 }
 
 .filters {
+    display: flex;
+    width: 100%;
+    align-items: center;
+}
+
+.filters .scroller {
+    flex: 1;
+    margin: 0 0.5em;
     overflow-x: auto;
     white-space: nowrap;
 }
@@ -22,6 +30,20 @@ body {
     padding: 0.25em 0.75em;
     margin: 0.5em 0.25em;
     display: inline-block;
+    white-space: nowrap;
+}
+
+.filter .count {
+    display: inline-block;
+    min-width: 13px;
+    min-height: 13px;
+    text-align: center;
+    margin-left: 0.5em;
+    background-color: red;
+    color: #fff;
+    border-radius: 25px;
+    font-size: 8pt;
+    padding: 2px;
 }
 
 .filter.selected {

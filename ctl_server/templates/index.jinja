@@ -25,24 +25,30 @@
     <div id="content">
       <div id="orientation" class="filters mutex">
         <span class="label">Orientation:</span>
-        {% for orientation in orientations | sort %}
-          <span class="genre filter" data-id="o:{{ orientation }}">{{ orientation }}</span>
-        {% endfor %}
+        <div class="scroller">
+          {% for orientation in orientations | sort %}
+            <span class="genre filter" data-id="o:{{ orientation }}">{{ orientation }}<span class="count"></span></span>
+          {% endfor %}
+        </div>
       </div>
       {% if genres | length > 0 %}
         <div id="genres" class="filters mutex">
           <span class="label">Genres:</span>
-          {% for genre in genres | sort %}
-            <span class="genre filter" data-id="g:{{ genre }}">{{ genre }}</span>
-          {% endfor %}
+          <div class="scroller">
+            {% for genre in genres | sort %}
+              <span class="genre filter" data-id="g:{{ genre }}">{{ genre }}<span class="count"></span></span>
+            {% endfor %}
+          </div>
         </div>
       {% endif %}
       {% if tags | length > 0 %}
         <div id="tags" class="filters multi">
           <span class="label">Tags:</span>
-          {% for tag in tags | sort %}
-            <span class="tag filter" data-id="t:{{ tag }}">{{ tag }}</span>
-          {% endfor %}
+          <div class="scroller">
+            {% for tag in tags | sort %}
+              <span class="tag filter" data-id="t:{{ tag }}">{{ tag }}<span class="count"></span></span>
+            {% endfor %}
+          </div>
         </div>
       {% endif %}
       {% for game in games | sort(attribute='title') %}

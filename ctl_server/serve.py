@@ -162,10 +162,12 @@ class Game:
             self.genres = []
         if 'orientation' not in item:
             self.orientation = 'landscape'
-        self.filters = itertools.chain(
-            map(lambda f: f"t:{f}", self.tags),
-            map(lambda f: f"g:{f}", self.genres),
-            [ f"o:{self.orientation}" ],
+        self.filters = list(
+            itertools.chain(
+                map(lambda f: f"t:{f}", self.tags),
+                map(lambda f: f"g:{f}", self.genres),
+                [ f"o:{self.orientation}" ],
+            )
         )
 
 class GameClient:

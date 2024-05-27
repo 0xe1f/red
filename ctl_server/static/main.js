@@ -37,7 +37,7 @@ $(function() {
                     $(k).show();
                 }
             });
-};
+    };
     const setVolume = function(vol) {
         $.post(
             "volume",
@@ -78,6 +78,19 @@ $(function() {
                 updateVolume(resp.volume || 0);
             },
         );
+        // filter counts
+        $('.filter')
+            .each(function() {
+                const $el = $(this);
+                const matches = $(`.game[data-filters~="${$el.data('id')}"]`)
+                    .length;
+                const matchText = (matches > 99)
+                    ? `++`
+                    : `${matches}`;
+                $el
+                    .find('.count')
+                    .text(matchText);
+            });
     };
     initialize();
     $(".game").on("click", function() {
@@ -95,8 +108,14 @@ $(function() {
             "json",
         );
     });
-    $(".multi .filter").on("click", function() {
+    $(".multi .filter").on("click", function(e) {
         const $item = $(this);
+        if (!e.shiftKey && !$item.hasClass('selected')) {
+            $item
+                .parent()
+                .find('.filter')
+                .removeClass('selected');
+        }
         $item.toggleClass('selected');
         syncFiltering();
     });
