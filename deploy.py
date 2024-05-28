@@ -8,7 +8,7 @@ import subprocess
 import sys
 import yaml
 
-CTL_SERVER_EXE='serve.py'
+CTL_SERVER_EXE='serve.sh'
 CTL_SERVER_PATH='ctl_server'
 
 class GameServer:
@@ -48,6 +48,7 @@ if args.ctl or args.all:
         '--delete',
         '--exclude', '.*',
         '--exclude', '*_example.yaml',
+        '--exclude', '__pycache__',
         f'{CTL_SERVER_PATH}',
         f'{ctl_server_host}:'
     ])
@@ -56,7 +57,6 @@ if args.ctl or args.all:
         '-o',
         'StrictHostKeyChecking no',
         f'{ctl_server_host}',
-        f"kill `ps -ef | awk '{{ print $2\"\t\"$8\"\t\"$9 }}' | grep python | grep {CTL_SERVER_EXE} | cut -f 1` 2> /dev/null; " \
         f'cd {CTL_SERVER_PATH}; nohup ./{CTL_SERVER_EXE} >log.txt 2>&1 &',
     ])
 

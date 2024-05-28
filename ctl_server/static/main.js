@@ -1,4 +1,17 @@
 $(function() {
+    const hashMap = function() {
+        return location.hash
+            .replace(/^#+/, '')
+            .split('&')
+            .map((arg) => {
+                const pair = arg.split('=', 2);
+                return { k: pair[0], v: pair[1] };
+            })
+            .reduce(function(map, obj) {
+                map[obj.k] = obj.v;
+                return map;
+            }, {});
+    };
     const updateSelection = function(id) {
         $('.game.selected').removeClass('selected');
         if (!id) {
@@ -17,19 +30,23 @@ $(function() {
         const $selectedFilters = $('.filter.selected');
         if (!$selectedFilters.length) {
             $('.game').show();
+            location.hash = '';
             return;
         }
+        var appliedSymbols = [];
         const matchMap = new Map();
         $('.game').hide();
         $selectedFilters
             .each(function(i, obj) {
                 const filter = $(obj).data('id');
+                appliedSymbols.push(filter);
                 $(`.game[data-filters~="${filter}"]`)
                     .toArray()
                     .forEach(element => {
                         matchMap.set(element, (matchMap.get(element) ?? 0) + 1);
                     });
                 });
+        location.hash = `filters=${appliedSymbols.join(',')}`;
         matchMap
             .forEach((v, k) => {
                 if (v == $selectedFilters.length) {
@@ -38,13 +55,43 @@ $(function() {
                 }
             });
     };
+    const initFilters = function() {
+        // Update filter counts
+        $('.filter')
+            .each(function() {
+                const $el = $(this);
+                const matches = $(`.game[data-filters~="${$el.data('id')}"]`)
+                    .length;
+                const matchText = (matches > 99)
+                    ? `++`
+                    : `${matches}`;
+                $el
+                    .find('.count')
+                    .text(matchText);
+            });
+        // Restore filter from hash
+        const map = hashMap();
+        if (map.filters) {
+            map.filters
+                .split(',')
+                .forEach((f) => {
+                    $(`.filter[data-id~="${f}"`)
+                        .addClass('selected');
+                })
+            syncFiltering();
+        }
+    };
     const setVolume = function(vol) {
-        $.post(
-            "volume",
-            JSON.stringify({ 'volume': vol }),
-            function() { },
-            "json",
-        );
+        $.ajax({
+            url: "volume",
+            type: "POST",
+            data: JSON.stringify({ 'volume': vol }),
+            contentType: "application/json; charset=utf-8",
+            dataType: "json",
+            success: function(){
+                // TODO
+            }
+        });
     };
     const updateVolume = function(value) {
         $('#volume')
@@ -78,19 +125,7 @@ $(function() {
                 updateVolume(resp.volume || 0);
             },
         );
-        // filter counts
-        $('.filter')
-            .each(function() {
-                const $el = $(this);
-                const matches = $(`.game[data-filters~="${$el.data('id')}"]`)
-                    .length;
-                const matchText = (matches > 99)
-                    ? `++`
-                    : `${matches}`;
-                $el
-                    .find('.count')
-                    .text(matchText);
-            });
+        initFilters();
     };
     initialize();
     $(".game").on("click", function() {
@@ -98,15 +133,17 @@ $(function() {
         const itemId = item.data('id');
         const payload = { 'id': itemId };
         $('#scrim').show();
-        $.post(
-            "launch",
-            JSON.stringify(payload),
-            function() {
+        $.ajax({
+            url: "launch",
+            type: "POST",
+            data: JSON.stringify(payload),
+            contentType: "application/json; charset=utf-8",
+            dataType: "json",
+            success: function(){
                 $('#scrim').hide();
                 updateSelection(itemId);
-            },
-            "json",
-        );
+            }
+        });
     });
     $(".multi .filter").on("click", function(e) {
         const $item = $(this);
