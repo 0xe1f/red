@@ -58,7 +58,7 @@ class GameClient:
             self.host,
             f'sudo killall {self.exe} 2> /dev/null;' + \
                 f'cd {self.path}; ' + \
-                f'sudo nohup ./{self.exe} {game_server_host} --src-rect={self.srect} --dest-rect={self.drect} {self.extra_args} >log.txt 2>&1 &'
+                f'sudo nohup ./{self.exe} {game_server_host} {self.extra_args} >log.txt 2>&1 &'
         ])
 
 class GameServer:

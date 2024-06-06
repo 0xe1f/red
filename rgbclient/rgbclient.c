@@ -45,10 +45,10 @@ struct RGB {
 };
 
 struct ViewRect {
-    unsigned short sx;
-    unsigned short sy;
-    unsigned short dx;
-    unsigned short dy;
+    short sx;
+    short sy;
+    short dx;
+    short dy;
 };
 
 static int show_server_fps = 0;
@@ -68,6 +68,7 @@ static int vw_origin = 0;
 
 static struct RGBLedMatrix *matrix = NULL;
 static struct LedCanvas *canvas = NULL;
+static struct ViewRect content;
 static struct ViewRect source;
 static struct ViewRect dest;
 
@@ -194,8 +195,33 @@ static int read_preamble()
         (float)(data.buffer_size * 60) / 1024 / 1024
     );
 
+    // Center content
+    int xdelta = (content.dx - data.bitmap_width) / 2;
+    if (source.dx - xdelta < 0) {
+        xdelta -= source.dx - xdelta;
+    }
+    int ydelta = (content.dy - data.bitmap_height) / 2;
+    if (source.dy - ydelta < 0) {
+        ydelta -= source.dy - ydelta;
+    }
+
+    if (source.sx == 0) {
+        dest.sx += xdelta;
+        source.dx -= xdelta;
+    } else {
+        dest.dx += xdelta;
+        source.sx -= xdelta;
+    }
+    if (source.sy == 0) {
+        dest.sy += ydelta;
+        source.dy -= ydelta;
+    } else {
+        dest.dy += ydelta;
+        source.sy -= ydelta;
+    }
+
     if (data.attrs & ATTR_ROT180) {
-        vw_origin = screen_width - MAX(0, screen_width - data.bitmap_width) - 1;
+        vw_origin = dest.dx;
     }
 
     return 1;
@@ -382,6 +408,7 @@ static int parse_args(int argc, const char **argv)
     server = argv[1];
     unsigned char src_set = 0;
     unsigned char dest_set = 0;
+    unsigned char content_set = 0;
     fprintf(stderr, "%s \\\n", argv[0]);
     for (int i = 1; i < argc; i++) {
         const char *arg = argv[i];
@@ -405,6 +432,13 @@ static int parse_args(int argc, const char **argv)
                 return 0;
             }
             dest_set = 1;
+        } else if (strstr(arg, "--content-rect=")) {
+            const char *post_eq = arg + 15;
+            if (!parse_rect(post_eq, &content)) {
+                fprintf(stderr, "'%s' is not a valid rectangle\n", post_eq);
+                return 0;
+            }
+            content_set = 1;
         } else if (strstr(arg, "--port=")) {
             const char *post_eq = arg + 7;
             long p = strtol(post_eq, NULL, 10);
@@ -438,6 +472,9 @@ static int parse_args(int argc, const char **argv)
     } else if (!dest_set) {
         fprintf(stderr, "Missing destination rectangle\n");
         return 0;
+    }  else if (!content_set) {
+        fprintf(stderr, "Missing content rectangle\n");
+        return 0;
     }
 
     if (!validate_rect(source)) {
@@ -445,6 +482,9 @@ static int parse_args(int argc, const char **argv)
         return 0;
     } else if (!validate_rect(dest)) {
         fprintf(stderr, "Invalid destination rectangle\n");
+        return 0;
+    } else if (!validate_rect(content)) {
+        fprintf(stderr, "Invalid content rectangle\n");
         return 0;
     }
 

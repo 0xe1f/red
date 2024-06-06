@@ -62,12 +62,14 @@ $(function() {
                 const $el = $(this);
                 const matches = $(`.game[data-filters~="${$el.data('id')}"]`)
                     .length;
+                const countText = `${matches}`;
                 const matchText = (matches > 99)
                     ? `++`
-                    : `${matches}`;
+                    : countText;
                 $el
                     .find('.count')
-                    .text(matchText);
+                    .text(matchText)
+                    .attr('title', countText);
             });
         // Restore filter from hash
         const map = hashMap();
