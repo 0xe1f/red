@@ -49,6 +49,11 @@ def volume():
     ])
     return { 'status': 'OK' }
 
+@app.route('/stop', methods=['POST'])
+def stop():
+    config.game_server.stop()
+    return { 'status': 'OK' }
+
 @app.route('/launch', methods=['POST'])
 def launch():
     dict = request.json

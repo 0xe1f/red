@@ -6,6 +6,10 @@ body {
     padding: 0;
 }
 
+a {
+    color: #0273c0;
+}
+
 #content {
     padding: 0 2em 2em 2em;
 }
@@ -25,7 +29,7 @@ body {
 
 .filter {
     cursor: pointer;
-    border: none 2px;
+    border: solid 1px #0000;
     border-radius: 25px;
     padding: 0.25em 0.75em;
     margin: 0.5em 0.25em;
@@ -49,6 +53,10 @@ body {
 .filter.selected {
     background: #ccc;
     color: #fff
+}
+
+.filter:hover {
+    border-color: #ccc;
 }
 
 .game {
@@ -119,6 +127,11 @@ div:has(> #volume) {
     overflow: hidden;
     grid-column: 1/2;
     grid-row: 2/3;
+    color: #777;
+}
+
+#running .title.valid {
+    color: #000;
 }
 
 #scrim {

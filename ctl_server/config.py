@@ -73,6 +73,13 @@ class GameServer:
             f'{self.path}/launch.sh {game.id} {self.extra_args}',
         ])
 
+    def stop(self):
+        subprocess.call([
+            'ssh',
+            self.host,
+            f'{self.path}/launch.sh --stop',
+        ])
+
 class Game:
 
     def __init__(self, **item):

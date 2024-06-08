@@ -14,16 +14,19 @@ $(function() {
     };
     const updateSelection = function(id) {
         $('.game.selected').removeClass('selected');
+        $('#running .title').toggleClass('valid', !!id);
         if (!id) {
+            $('#title_label').css('visibility', 'hidden');
+            $('#running .title').text('No Game Selected');
             return;
         }
         const $item = $(`.game[data-id="${id}"]`);
+        $('#title_label').css('visibility', 'visible');
         if ($item.length) {
             $item.addClass('selected');
             $('#running .title').text(
                 $item.children('.title').text()
             );
-            $('#running').show();
         }
     };
     const syncFiltering = function() {
@@ -95,6 +98,32 @@ $(function() {
             }
         });
     };
+    const launch = function(id) {
+        $.ajax({
+            url: "launch",
+            type: "POST",
+            data: JSON.stringify({ 'id': id }),
+            contentType: "application/json; charset=utf-8",
+            dataType: "json",
+            success: function(){
+                $('#scrim').hide();
+                updateSelection(id);
+            }
+        });
+    };
+    const stop = function() {
+        $.ajax({
+            url: "stop",
+            type: "POST",
+            data: JSON.stringify({}),
+            contentType: "application/json; charset=utf-8",
+            dataType: "json",
+            success: function(){
+                $('#scrim').hide();
+                updateSelection();
+            }
+        });
+    };
     const updateVolume = function(value) {
         $('#volume')
             .val(value)
@@ -121,31 +150,23 @@ $(function() {
         $.get(
             "query",
             function(resp) {
-                if (resp.title) {
-                    updateSelection(resp.title);
-                }
+                updateSelection(resp.title);
                 updateVolume(resp.volume || 0);
             },
         );
+        updateSelection();
         initFilters();
     };
     initialize();
     $(".game").on("click", function() {
         const item = $(this);
         const itemId = item.data('id');
-        const payload = { 'id': itemId };
         $('#scrim').show();
-        $.ajax({
-            url: "launch",
-            type: "POST",
-            data: JSON.stringify(payload),
-            contentType: "application/json; charset=utf-8",
-            dataType: "json",
-            success: function(){
-                $('#scrim').hide();
-                updateSelection(itemId);
-            }
-        });
+        launch(itemId);
+    });
+    $("#stop").on("click", function() {
+        $('#scrim').show();
+        stop();
     });
     $(".multi .filter").on("click", function(e) {
         const $item = $(this);
