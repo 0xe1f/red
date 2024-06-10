@@ -43,15 +43,25 @@ a {
     min-height: 13px;
     text-align: center;
     margin-left: 0.5em;
-    background-color: red;
+    background-color: #666;
     color: #fff;
     border-radius: 25px;
     font-size: 8pt;
     padding: 2px;
 }
 
-.filter.selected {
-    background: #ccc;
+.orientation.filter.selected {
+    background: #85c1e9;
+    color: #fff
+}
+
+.genre.filter.selected {
+    background: #cd6155;
+    color: #fff
+}
+
+.tag.filter.selected {
+    background: #7dcea0;
     color: #fff
 }
 

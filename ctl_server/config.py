@@ -38,14 +38,36 @@ class Config:
                 self.tags.update(game.tags)
                 self.genres.update(game.genres)
                 self.orientations.add(game.orientation)
-    
+
     def template_args(self):
         return {
             'games': self.games.values(),
-            'tags': self.tags,
-            'genres': self.genres,
-            'orientations': self.orientations,
+            'filters': [
+                Filter(
+                    id='orientation',
+                    label='Orientation',
+                    options=self.orientations,
+                    prefix='o',
+                ),
+                Filter(
+                    id='genre',
+                    label='Genres',
+                    options=self.genres,
+                    prefix='g',
+                ),
+                Filter(
+                    id='tag',
+                    label='Tags',
+                    options=self.tags,
+                    prefix='t',
+                    type='multi',
+                ),
+            ],
         }
+
+class Filter:
+    def __init__(self, **item):
+        self.__dict__.update(item)
 
 class GameClient:
 

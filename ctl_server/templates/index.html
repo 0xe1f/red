@@ -23,41 +23,25 @@
       <span class="title" />
     </div>
     <div id="content">
-      <div id="orientation" class="filters mutex">
-        <span class="label">Orientation:</span>
-        <div class="scroller">
-          {% for orientation in orientations | sort %}
-            <span class="genre filter" data-id="o:{{ orientation }}">{{ orientation }}<span class="count"></span></span>
-          {% endfor %}
-        </div>
-      </div>
-      {% if genres | length > 0 %}
-        <div id="genres" class="filters mutex">
-          <span class="label">Genres:</span>
-          <div class="scroller">
-            {% for genre in genres | sort %}
-              <span class="genre filter" data-id="g:{{ genre }}">{{ genre }}<span class="count"></span></span>
-            {% endfor %}
+      {% for filter in filters %}
+        {% if filter.options | length > 0 %}
+          <div id="{{ filter.id }}" class="filters {{ filter.type }}">
+            <span class="label">{{ filter.label }}:</span>
+            <div class="scroller">
+              {% for option in filter.options | sort %}
+                <span class="{{ filter.id }} filter" data-id="{{ filter.prefix }}:{{ option }}">{{ option }}<span class="count"></span></span>
+              {% endfor %}
+            </div>
           </div>
-        </div>
-      {% endif %}
-      {% if tags | length > 0 %}
-        <div id="tags" class="filters multi">
-          <span class="label">Tags:</span>
-          <div class="scroller">
-            {% for tag in tags | sort %}
-              <span class="tag filter" data-id="t:{{ tag }}">{{ tag }}<span class="count"></span></span>
-            {% endfor %}
-          </div>
-        </div>
-      {% endif %}
+        {% endif %}
+      {% endfor %}
       {% for game in games | sort(attribute='title') %}
-      <div class="game" data-id="{{ game.id }}" data-filters="{{ game.filters | join(' ') }}">
-        <span class="title">{{ game.title }}</span>
-        <span class="year">{{ game.year }}</span>
-        <span class="company">{{ game.company }}</span>
-        <span class="system">{{ game.system }}</span>
-      </div>
+        <div class="game" data-id="{{ game.id }}" data-filters="{{ game.filters | join(' ') }}">
+          <span class="title">{{ game.title }}</span>
+          <span class="year">{{ game.year }}</span>
+          <span class="company">{{ game.company }}</span>
+          <span class="system">{{ game.system }}</span>
+        </div>
       {% endfor %}
     </div>
   </body>

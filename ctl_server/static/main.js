@@ -156,6 +156,10 @@ $(function() {
         );
         updateSelection();
         initFilters();
+        // prevent shift-select - interferes with tag multiselect
+        document.onselectstart = function() {
+            return false;
+        }
     };
     initialize();
     $(".game").on("click", function() {
@@ -168,22 +172,13 @@ $(function() {
         $('#scrim').show();
         stop();
     });
-    $(".multi .filter").on("click", function(e) {
+    $(".filter").on("click", function(e) {
         const $item = $(this);
-        if (!e.shiftKey && !$item.hasClass('selected')) {
-            $item
-                .parent()
-                .find('.filter')
-                .removeClass('selected');
-        }
-        $item.toggleClass('selected');
-        syncFiltering();
-    });
-    $(".mutex .filter").on("click", function() {
-        const $item = $(this);
-        if (!$item.hasClass('selected')) {
-            $item
-                .parent()
+        const $filters = $item
+            .closest('.filters');
+        const bewl = !$filters.hasClass('multi') || !e.shiftKey;
+        if (bewl && !$item.hasClass('selected')) {
+            $filters
                 .find('.filter')
                 .removeClass('selected');
         }
