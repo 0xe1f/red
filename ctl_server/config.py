@@ -89,10 +89,11 @@ class GameServer:
         self.__dict__.update(item)
 
     def launch(self, game):
+        # TODO: game.extra_args duplicates args. eliminate duping
         subprocess.call([
             'ssh',
             self.host,
-            f'{self.path}/launch.sh {game.id} {self.extra_args}',
+            f'{self.path}/launch.sh {game.id} {self.extra_args} {game.extra_args}',
         ])
 
     def stop(self):
@@ -112,6 +113,8 @@ class Game:
             self.genres = []
         if 'orientation' not in item:
             self.orientation = 'landscape'
+        if 'extra_args' not in item:
+            self.extra_args = ""
         self.filters = list(
             itertools.chain(
                 map(lambda f: f"t:{f}", self.tags),
