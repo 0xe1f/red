@@ -14,6 +14,7 @@ class Config:
         self.tags = set()
         self.genres = set()
         self.orientations = set()
+        self.series = set()
 
         self.read_config(config_path)
         self.read_games(games_path)
@@ -38,6 +39,7 @@ class Config:
                 self.tags.update(game.tags)
                 self.genres.update(game.genres)
                 self.orientations.add(game.orientation)
+                self.series.update(game.series)
 
     def template_args(self):
         return {
@@ -61,6 +63,12 @@ class Config:
                     options=self.tags,
                     prefix='t',
                     type='multi',
+                ),
+                Filter(
+                    id='series',
+                    label='Series',
+                    options=self.series,
+                    prefix='s',
                 ),
             ],
         }
@@ -113,12 +121,15 @@ class Game:
             self.genres = []
         if 'orientation' not in item:
             self.orientation = 'landscape'
+        if 'series' not in item:
+            self.series = []
         if 'extra_args' not in item:
             self.extra_args = ""
         self.filters = list(
             itertools.chain(
                 map(lambda f: f"t:{f}", self.tags),
                 map(lambda f: f"g:{f}", self.genres),
+                map(lambda f: f"s:{f}", self.series),
                 [ f"o:{self.orientation}" ],
             )
         )

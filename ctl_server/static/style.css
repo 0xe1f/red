@@ -50,6 +50,11 @@ a {
     padding: 2px;
 }
 
+.filter.selected {
+    background: #f55;
+    color: #fff
+}
+
 .orientation.filter.selected {
     background: #85c1e9;
     color: #fff
