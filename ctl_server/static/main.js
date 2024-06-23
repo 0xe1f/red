@@ -80,8 +80,12 @@ $(function() {
             map.filters
                 .split(',')
                 .forEach((f) => {
-                    $(`.filter[data-id~="${f}"`)
+                    const $filter = $(`.filter[data-id~="${f}"`);
+                    $filter
                         .addClass('selected');
+                    $filter
+                        .closest('.filters')
+                        .addClass('active');
                 })
             syncFiltering();
         }
@@ -183,6 +187,24 @@ $(function() {
                 .removeClass('selected');
         }
         $item.toggleClass('selected');
+        $filters
+            .toggleClass('active', $filters.find('.selected').length > 0);
+        syncFiltering();
+    });
+    $(".filters .label").on("click", function(e) {
+        const $item = $(this);
+        const $filters = $item
+            .closest('.filters');
+        if (!$filters.hasClass('active')) {
+            return;
+        }
+
+        $filters
+            .find('.filter')
+            .removeClass('selected');
+        $filters
+            .removeClass('active');
+
         syncFiltering();
     });
 });

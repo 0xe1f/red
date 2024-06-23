@@ -20,6 +20,11 @@ a {
     align-items: center;
 }
 
+.filters.active .label {
+    font-weight: bold;
+    cursor: pointer;
+}
+
 .filters .scroller {
     flex: 1;
     margin: 0 0.5em;
@@ -116,7 +121,7 @@ a {
     /* display: none; */
     position: sticky;
     display: grid;
-    grid-template-columns: 1fr 50px;
+    grid-template-columns: 1fr auto;
     grid-template-rows: 1fr 1fr;
     top: 0;
     background-color: #fff;
