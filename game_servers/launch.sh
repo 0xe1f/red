@@ -11,4 +11,5 @@ if [ "$1" == "--stop" ]; then
 fi
 
 cd ${EMULATOR_DIR}
-nohup ./${EMULATOR_EXE} $@ >log.txt 2>&1 &
+set -o pipefail
+./${EMULATOR_EXE} $@ 2>&1 | tee -a log.txt

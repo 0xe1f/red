@@ -74,11 +74,19 @@ def launch():
             'message': 'Game not found',
         }, http.HTTPStatus.NOT_FOUND
 
-    config.game_server.launch(game)
-    for client in config.game_clients:
-        client.launch(config.game_server.host)
-
-    return { 'status': 'OK'  }
+    (code, stdout) = config.game_server.launch(game)
+    if code == 0:
+        for client in config.game_clients:
+            client.launch(config.game_server.host)
+        return {
+            'status': 'OK',
+        }
+    else:
+        return {
+            'status': 'ERR',
+            'message': 'Failed to launch',
+            'detail': stdout,
+        }, http.HTTPStatus.BAD_REQUEST
 
 def read_process_output(exe, args):
     result = subprocess.run([exe] + args, stdout=subprocess.PIPE)

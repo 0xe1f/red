@@ -83,13 +83,15 @@ class GameClient:
         self.__dict__.update(item)
 
     def launch(self, game_server_host):
-        subprocess.call([
-            'ssh',
-            self.host,
-            f'sudo killall {self.exe} 2> /dev/null;' + \
-                f'cd {self.path}; ' + \
-                f'sudo nohup ./{self.exe} {game_server_host} {self.extra_args} >log.txt 2>&1 &'
-        ])
+        subprocess.call(
+            args=[
+                'ssh',
+                self.host,
+                f'sudo killall {self.exe} 2> /dev/null;' + \
+                    f'cd {self.path}; ' + \
+                    f'sudo nohup ./{self.exe} {game_server_host} {self.extra_args} >log.txt 2>&1 &'
+            ],
+        )
 
 class GameServer:
 
@@ -98,18 +100,26 @@ class GameServer:
 
     def launch(self, game):
         # TODO: game.extra_args duplicates args. eliminate duping
-        subprocess.call([
-            'ssh',
-            self.host,
-            f'{self.path}/launch.sh {game.id} {self.extra_args} {game.extra_args}',
-        ])
+        proc = subprocess.run(
+            args=[
+                'ssh',
+                self.host,
+                f'{self.path}/launch.sh {game.id} {self.extra_args} {game.extra_args}',
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        return proc.returncode, proc.stdout
 
     def stop(self):
-        subprocess.call([
-            'ssh',
-            self.host,
-            f'{self.path}/launch.sh --stop',
-        ])
+        subprocess.call(
+            args=[
+                'ssh',
+                self.host,
+                f'{self.path}/launch.sh --stop',
+            ]
+        )
 
 class Game:
 
