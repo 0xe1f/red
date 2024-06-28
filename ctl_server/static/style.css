@@ -4,19 +4,52 @@ body {
     font-style: normal;
     margin: 0;
     padding: 0;
+    display: grid;
+    grid-template-columns: 1fr; /* 3fr; */
+    grid-template-rows: auto 1fr;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
 }
 
 a {
     color: #0273c0;
 }
 
+#status {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: 1fr 1fr;
+    background-color: #fff;
+    padding: 0.5em 2.5em;
+    align-items: center;
+    grid-column: 1/1;
+    grid-row: 1/2;
+}
+
 #content {
-    padding: 0 2em 2em 2em;
+    padding: 0 25px 25px 25px;
+    overflow-y: auto;
+    grid-column: 1/1;
+    grid-row: 2/2;
+}
+
+#drop_target {
+    grid-column: 1/1;
+    grid-row: 2/2;
+    visibility: hidden;
+}
+
+#footer {
+    padding: 1em 2em;
+}
+
+#drop_target.hovering {
+    visibility: visible;
 }
 
 .filters {
     display: flex;
-    width: 100%;
     align-items: center;
 }
 
@@ -117,30 +150,18 @@ a {
     display: none;
 }
 
-#running {
-    /* display: none; */
-    position: sticky;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-rows: 1fr 1fr;
-    top: 0;
-    background-color: #fff;
-    padding: 0.5em 2.5em;
-    align-items: center;
-}
-
 div:has(> #volume) {
     grid-column: 2/3;
     grid-row: 1/3;
 }
 
-#running .tooltip {
+#status .tooltip {
     font-size: 12pt;
     grid-column: 1/2;
     grid-row: 1/2;
 }
 
-#running .title {
+#status .title {
     font-size: 24pt;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -150,7 +171,7 @@ div:has(> #volume) {
     color: #777;
 }
 
-#running .title.valid {
+#status .title.valid {
     color: #000;
 }
 
@@ -160,6 +181,7 @@ div:has(> #volume) {
     height: 100vh;
     width: 100vw;
     background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(10px);
 }
 
 #scrim img {
@@ -168,6 +190,21 @@ div:has(> #volume) {
     position: fixed;
     margin-left: -128px;
     margin-top: -128px;
+}
+
+#drop_target span {
+    display: block;
+    margin: 0 25px 25px 25px;
+    border: dotted 5px #777;
+    border-radius: 25px;
+    background-color: #7777;
+    pointer-events: none;
+    color: #fff;
+    align-content: center;
+    text-align: center;
+    font-size: 96pt;
+    backdrop-filter: blur(10px);
+    height: 100%;
 }
 
 @media (min-width:320px)  { /* smartphones, portrait iPhone, portrait 480x320 phones (Android) */ }

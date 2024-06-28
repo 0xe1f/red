@@ -4,9 +4,18 @@ import config
 from flask import Flask, render_template, request
 import http
 import logging
+import os
+import re
 import subprocess
+import tempfile
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 128 * 1000 * 1000
+
+ROM_UPLOAD_FILENAME_REGEX = r'^[A-Za-z0-9]+\.[A-Za-z0-9]{1,7}$'
+ROM_UPLOAD_ALLOWED_TYPES = [ '.zip', '.7z' ]
+ROM_UPLOAD_MAX_FILES = 5
 
 @app.route('/')
 def index():
@@ -87,6 +96,67 @@ def launch():
             'message': 'Failed to launch',
             'detail': stdout,
         }, http.HTTPStatus.BAD_REQUEST
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    # Basic checks
+    if len(request.files) < 1:
+        return {
+            'status': 'ERR',
+            'message': 'No files uploaded',
+        }, http.HTTPStatus.BAD_REQUEST
+
+    if len(request.files) > ROM_UPLOAD_MAX_FILES:
+        return {
+            'status': 'ERR',
+            'message': 'Too many files',
+        }, http.HTTPStatus.BAD_REQUEST
+
+    # Check individual files
+    files = []
+    for i in range(len(request.files)):
+        if f'files[{i}]' not in request.files:
+            return {
+                'status': 'ERR',
+                'message': 'Missing file upload',
+            }, http.HTTPStatus.BAD_REQUEST
+
+        file = request.files[f'files[{i}]']
+        filename = file.filename
+        if not re.fullmatch(ROM_UPLOAD_FILENAME_REGEX, filename):
+            return {
+                'status': 'ERR',
+                'message': f'Bad file name: {filename}',
+            }, http.HTTPStatus.BAD_REQUEST
+
+        _, ext = os.path.splitext(filename)
+        if ext not in ROM_UPLOAD_ALLOWED_TYPES:
+            return {
+                'status': 'ERR',
+                'message': f'Bad file type: {filename}',
+            }, http.HTTPStatus.BAD_REQUEST
+
+        files.append(file)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Save each file in a temp directory
+        local_files = []
+        for file in files:
+            filename = secure_filename(file.filename)
+            full_path = os.path.join(temp_dir, filename)
+
+            file.save(full_path)
+            local_files.append(full_path)
+
+        # Copy temp files to remote
+        args = [
+            'scp',
+            *local_files,
+            f'{config.game_server.host}:{config.game_server.rom_path}',
+        ]
+        subprocess.call(args)
+
+    return { 'status': 'OK' }
 
 def read_process_output(exe, args):
     result = subprocess.run([exe] + args, stdout=subprocess.PIPE)

@@ -44,6 +44,7 @@ class Config:
     def template_args(self):
         return {
             'games': self.games.values(),
+            'uploads_supported': hasattr(self.game_server, 'rom_path'),
             'filters': [
                 Filter(
                     id='orientation',

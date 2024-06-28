@@ -17,7 +17,7 @@
     <div id="scrim">
       <img src="static/spinner.gif" />
     </div>
-    <div id="running">
+    <div id="status">
       <input id="volume" type="text" />
       <span id="title_label" class="label">Currently running (<a id="stop" href="#stop">stop</a>):</span>
       <span class="title" />
@@ -44,5 +44,13 @@
         </div>
       {% endfor %}
     </div>
+    <div id="footer">
+      0xe1f/<a href="https://github.com/0xe1f/red">red</a>, 2024
+    </div>
+    {% if uploads_supported %}
+      <div id="drop_target">
+        <span>Drop Here</span>
+      </div>
+    {% endif %}
   </body>
 </html>

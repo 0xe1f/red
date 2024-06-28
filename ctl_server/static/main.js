@@ -14,17 +14,17 @@ $(function() {
     };
     const updateSelection = function(id) {
         $('.game.selected').removeClass('selected');
-        $('#running .title').toggleClass('valid', !!id);
+        $('#status .title').toggleClass('valid', !!id);
         if (!id) {
             $('#title_label').css('visibility', 'hidden');
-            $('#running .title').text('No Game Selected');
+            $('#status .title').text('No Game Selected');
             return;
         }
         const $item = $(`.game[data-id="${id}"]`);
         $('#title_label').css('visibility', 'visible');
         if ($item.length) {
             $item.addClass('selected');
-            $('#running .title').text(
+            $('#status .title').text(
                 $item.children('.title').text()
             );
         }
@@ -165,6 +165,31 @@ $(function() {
             return false;
         }
     };
+    const upload = function(files) {
+        if (files.length == 0) {
+            return;
+        }
+
+        $('#scrim').show();
+
+        var form = new FormData();
+        for (var i = 0; i < files.length; i++) {
+            form.append(`files[${i}]`, files[i]);
+        }
+
+        $.ajax({
+            url: "upload",
+            type: "POST",
+            cache: false,
+            contentType: false,
+            processData: false,
+            data: form,
+            success: function(){
+                // TODO
+                $('#scrim').hide();
+            }
+        });
+    };
     initialize();
     $(".game").on("click", function() {
         const item = $(this);
@@ -206,5 +231,29 @@ $(function() {
             .removeClass('active');
 
         syncFiltering();
+    });
+    $('#content')
+        .on('dragenter', function(e) {
+            $('#drop_target').addClass('hovering');
+            e.preventDefault();
+            e.stopPropagation();
+        });
+    $('#drop_target')
+        .on('dragover', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        })
+        .on('dragleave', function(e) {
+            $(this).removeClass('hovering');
+            e.preventDefault();
+            e.stopPropagation();
+        })
+        .on('drop', function(e) {
+            $(this).removeClass('hovering');
+            if (e.originalEvent.dataTransfer) {
+                upload(e.originalEvent.dataTransfer.files);
+            }
+            e.preventDefault();
+            e.stopPropagation();
     });
 });
