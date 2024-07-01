@@ -44,7 +44,7 @@ if args.ctl or args.all:
     print("Deploying control server...")
     subprocess.call([
         'rsync',
-        '-avr',
+        '-avrL',
         '--delete',
         '--exclude', '.*',
         '--exclude', '*_example.yaml',
