@@ -1,16 +1,17 @@
 game_server:
-  host: <emulator_host_ip - eth0>
-  home: game_servers
-  path: game_servers/fbneo
+  host: <game_server_eth0_ip>
+  path: game_servers
   extra_args: >-
+    -background
     --output-dims=320x256
-    --scale=shortestxaspect
+    --scale-mode=shortestxaspect
 game_clients:
-  - host: <screen1_host_ip - eth0>
-    path: <path_to_client - should match deploy.yaml>
-    srect: 0,0-320,128
-    drect: 0,0-320,128
+  - host: <game_client_1_eth0_ip>
+    path: rgbclient/
+    exe: rgbclient
     extra_args: >-
+      --retry-count=10
+      --retry-delay=500
       --led-rows=64
       --led-cols=64
       --led-chain=5
@@ -18,11 +19,15 @@ game_clients:
       --led-slowdown-gpio=4
       --led-gpio-mapping=regular
       --led-pwm-bits=6
-  - host: <screen2_host_ip - eth0>
-    path: <path_to_client - should match deploy.yaml>
-    srect: 0,128-320,256
-    drect: 0,0-320,128
+      --src-rect=0,0-320,128
+      --dest-rect=0,0-320,128
+      --content-rect=0,0-320,256
+  - host: <game_client_2_eth0_ip>
+    path: rgbclient/
+    exe: rgbclient
     extra_args: >-
+      --retry-count=10
+      --retry-delay=500
       --led-rows=64
       --led-cols=64
       --led-chain=5
@@ -30,3 +35,6 @@ game_clients:
       --led-slowdown-gpio=4
       --led-gpio-mapping=regular
       --led-pwm-bits=6
+      --src-rect=0,128-320,256
+      --dest-rect=0,0-320,128
+      --content-rect=0,0-320,256

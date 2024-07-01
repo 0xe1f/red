@@ -1,9 +1,11 @@
 game_server:
-  host: <game_server_host>
+  host: <game_server_hostname_or_ip>
   path: game_servers
 game_clients:
-  - host: <screen1_host>
+  - host: <game_client_1_hostname_or_ip>
     path: rgbclient
-  - host: <screen2_host>
+  - host: game_client_2_hostname_or_ip
     path: rgbclient
-ctl_server: <launcher_host>
+control_server:
+  host: <control_server_hostname_or_ip>
+  path: ctl_server

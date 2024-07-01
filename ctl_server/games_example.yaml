@@ -1,10 +1,25 @@
-- id: mvsc
-  title: Marvel vs Capcom
-- id: digdug
-  title: Dig Dug
+- id: mvscu
+  title: "Marvel Vs. Capcom: Clash of Super Heroes"
+  genres:
+    - head-to-head
+  tags:
+    - cps2
+  series:
+    - marvel
+- id: digdug2
+  title: "Dig Dug 2"
+  orientation: portrait
 - id: galaga
-  title: Galaga
-- id: galaxian
-  title: Galaxian
+  title: "Galaga"
+  year: "1981"
+  company: "Namco"
+  system: "Miscellaneous"
+  genres:
+    - shooter
+  orientation: portrait
 - id: pacman
-  title: Pacman
+  title: "Pac-Man"
+  year: "1980"
+  company: "Namco"
+  system: "Pac-man"
+  orientation: portrait

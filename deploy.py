@@ -9,7 +9,6 @@ import sys
 import yaml
 
 CTL_SERVER_EXE='serve.sh'
-CTL_SERVER_PATH='ctl_server'
 
 class GameServer:
 
@@ -17,6 +16,11 @@ class GameServer:
         self.__dict__.update(item)
 
 class GameClient:
+
+    def __init__(self, **item):
+        self.__dict__.update(item)
+
+class ControlServer:
 
     def __init__(self, **item):
         self.__dict__.update(item)
@@ -35,10 +39,10 @@ with open('deploy.yaml') as fd:
     yaml = yaml.safe_load(fd)
     game_server = GameServer(**yaml['game_server'])
     game_clients = [GameClient(**x) for x in yaml['game_clients']]
-    ctl_server_host = yaml['ctl_server']
+    ctl_server = ControlServer(**yaml['control_server'])
 
 if args.ctl or args.all:
-    if not ctl_server_host:
+    if not ctl_server:
         sys.exit('Missing control server configuration')
 
     print("Deploying control server...")
@@ -49,15 +53,15 @@ if args.ctl or args.all:
         '--exclude', '.*',
         '--exclude', '*_example.yaml',
         '--exclude', '__pycache__',
-        f'{CTL_SERVER_PATH}',
-        f'{ctl_server_host}:'
+        f'{ctl_server.path}',
+        f'{ctl_server.host}:'
     ])
     subprocess.call([
         'ssh',
         '-o',
         'StrictHostKeyChecking no',
-        f'{ctl_server_host}',
-        f'cd {CTL_SERVER_PATH}; nohup ./{CTL_SERVER_EXE} >log.txt 2>&1 &',
+        f'{ctl_server.host}',
+        f'cd {ctl_server.path}; nohup ./{CTL_SERVER_EXE} >log.txt 2>&1 &',
     ])
 
 if args.svr or args.all:
