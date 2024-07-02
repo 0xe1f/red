@@ -2,36 +2,17 @@
 
 import itertools
 import subprocess
-import sys
 import yaml
 
-class Config:
+class GameConfig:
 
-    def __init__(self, config_path, games_path):
-        self.game_server = {}
-        self.game_clients = []
+    def __init__(self, path):
         self.games = {}
         self.tags = set()
         self.genres = set()
         self.orientations = set()
         self.series = set()
 
-        self.read_config(config_path)
-        self.read_games(games_path)
-
-    def read_config(self, path):
-        with open(path) as fd:
-            conf = yaml.safe_load(fd)
-            self.game_server = GameServer(**conf['game_server'])
-            for item in conf['game_clients']:
-                self.game_clients.append(GameClient(**item))
-
-        if not self.game_server:
-            sys.exit('Missing game server configuration')
-        if not self.game_clients:
-            sys.exit('Missing game client configuration')
-
-    def read_games(self, path):
         with open(path) as fd:
             for item in yaml.safe_load(fd):
                 game = Game(**item)
@@ -44,7 +25,7 @@ class Config:
     def template_args(self):
         return {
             'games': self.games.values(),
-            'uploads_supported': hasattr(self.game_server, 'rom_path'),
+            'uploads_supported': False,
             'filters': [
                 Filter(
                     id='orientation',
@@ -74,7 +55,44 @@ class Config:
             ],
         }
 
+class Config:
+
+    def __init__(self, path):
+        self.game_server = {}
+        self.game_clients = []
+        self.games = {}
+        self.tags = set()
+        self.genres = set()
+        self.orientations = set()
+        self.series = set()
+
+        with open(path, 'r') as fd:
+            conf = yaml.safe_load(fd)
+            if 'game_server' in conf:
+                self.game_server = GameServer(**conf['game_server'])
+            if 'game_clients' in conf:
+                for item in conf['game_clients']:
+                    self.game_clients.append(GameClient(**item))
+            if 'control_server' in conf:
+                self.control_server = ControlServer(**conf['control_server'])
+
+    def write_control_server_config(self, path):
+        game_server = self.game_server.to_dict('host')
+        game_clients = list(
+            map(lambda client: client.to_dict('host'), self.game_clients)
+        )
+
+        with open(path, 'w') as fd:
+            yaml.safe_dump(
+                {
+                    'game_server': game_server,
+                    'game_clients': game_clients,
+                },
+                stream=fd,
+            )
+
 class Filter:
+
     def __init__(self, **item):
         self.__dict__.update(item)
 
@@ -83,11 +101,17 @@ class GameClient:
     def __init__(self, **item):
         self.__dict__.update(item)
 
+    def to_dict(self, *remove):
+        obj = self.__dict__
+        for prop in remove:
+            del obj[prop]
+        return obj
+
     def launch(self, game_server_host):
         subprocess.call(
             args=[
                 'ssh',
-                self.host,
+                self.eth_host,
                 f'sudo killall {self.exe} 2> /dev/null;' + \
                     f'cd {self.path}; ' + \
                     f'sudo nohup ./{self.exe} {game_server_host} {self.extra_args} >log.txt 2>&1 &'
@@ -99,12 +123,18 @@ class GameServer:
     def __init__(self, **item):
         self.__dict__.update(item)
 
+    def to_dict(self, *remove):
+        obj = self.__dict__
+        for prop in remove:
+            del obj[prop]
+        return obj
+
     def launch(self, game):
         # TODO: game.extra_args duplicates args. eliminate duping
         proc = subprocess.run(
             args=[
                 'ssh',
-                self.host,
+                self.eth_host,
                 f'{self.path}/launch.sh {game.id} {self.extra_args} {game.extra_args}',
             ],
             capture_output=True,
@@ -117,10 +147,15 @@ class GameServer:
         subprocess.call(
             args=[
                 'ssh',
-                self.host,
+                self.eth_host,
                 f'{self.path}/launch.sh --stop',
             ]
         )
+
+class ControlServer:
+
+    def __init__(self, **item):
+        self.__dict__.update(item)
 
 class Game:
 

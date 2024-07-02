@@ -21,7 +21,7 @@ ROM_UPLOAD_MAX_FILES = 5
 def index():
     return render_template(
         'index.html',
-        **config.template_args(),
+        **game_konfig.template_args(),
     )
 
 @app.route('/query')
@@ -29,8 +29,8 @@ def query():
     result = read_process_output(
         'ssh',
         [
-            config.game_server.host,
-            f'{config.game_server.path}/query.sh',
+            konfig.game_server.eth_host,
+            f'{konfig.game_server.path}/query.sh',
         ]
     )
     title, vol, *_ = result.split(' ', 1) + [None] * 2
@@ -53,14 +53,14 @@ def volume():
 
     subprocess.call([
         'ssh',
-        config.game_server.host,
-        f'{config.game_server.path}/set_volume.sh {volume}',
+        konfig.game_server.eth_host,
+        f'{konfig.game_server.path}/set_volume.sh {volume}',
     ])
     return { 'status': 'OK' }
 
 @app.route('/stop', methods=['POST'])
 def stop():
-    config.game_server.stop()
+    konfig.game_server.stop()
     return { 'status': 'OK' }
 
 @app.route('/launch', methods=['POST'])
@@ -75,7 +75,7 @@ def launch():
             'message': 'Game id missing',
         }, http.HTTPStatus.BAD_REQUEST
 
-    game = config.games.get(id)
+    game = game_konfig.games.get(id)
     if not game:
         logging.error('Game not found')
         return {
@@ -83,10 +83,10 @@ def launch():
             'message': 'Game not found',
         }, http.HTTPStatus.NOT_FOUND
 
-    (code, stdout) = config.game_server.launch(game)
+    (code, stdout) = konfig.game_server.launch(game)
     if code == 0:
-        for client in config.game_clients:
-            client.launch(config.game_server.host)
+        for client in konfig.game_clients:
+            client.launch(konfig.game_server.eth_host)
         return {
             'status': 'OK',
         }
@@ -152,7 +152,7 @@ def upload():
         args = [
             'scp',
             *local_files,
-            f'{config.game_server.host}:{config.game_server.rom_path}',
+            f'{konfig.game_server.eth_host}:{konfig.game_server.rom_path}',
         ]
         subprocess.call(args)
 
@@ -164,5 +164,6 @@ def read_process_output(exe, args):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-    config = config.Config('config.yaml', 'games.yaml')
+    konfig = config.Config('config.yaml')
+    game_konfig = config.GameConfig('games.yaml')
     app.run(host='0.0.0.0', port='8080', debug=False)
