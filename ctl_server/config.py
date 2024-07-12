@@ -108,13 +108,17 @@ class GameClient:
         return obj
 
     def launch(self, game_server_host):
+        if game_server_host == self.eth_host:
+            server_ip = '127.0.0.1'
+        else:
+            server_ip = game_server_host
         subprocess.call(
             args=[
                 'ssh',
                 self.eth_host,
                 f'sudo killall {self.exe} 2> /dev/null;' + \
                     f'cd {self.path}; ' + \
-                    f'sudo nohup ./{self.exe} {game_server_host} {self.extra_args} >log.txt 2>&1 &'
+                    f'sudo nohup ./{self.exe} {server_ip} {self.extra_args} >log.txt 2>&1 &'
             ],
         )
 
