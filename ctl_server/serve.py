@@ -166,4 +166,4 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     konfig = config.Config('config.yaml')
     game_konfig = config.GameConfig('games.yaml')
-    app.run(host='0.0.0.0', port='8080', debug=False)
+    app.run(host='0.0.0.0', port='8080', debug=True)

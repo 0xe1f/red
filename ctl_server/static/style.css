@@ -75,6 +75,14 @@ a {
     white-space: nowrap;
 }
 
+.filters input[type=text] {
+    padding: 0.25em 0.75em;
+    margin: 0.5em 0.25em;
+    white-space: nowrap;
+    border: none;
+    border-bottom: solid 1px #000;
+}
+
 .filter .count {
     display: inline-block;
     min-width: 13px;

@@ -29,6 +29,20 @@ $(function() {
             );
         }
     };
+    const updateSearch = function() {
+        const keyword = $('#search_keyword')
+            .val()
+            .toLowerCase();
+        $('.game').each(function(_, obj) {
+            const $item = $(obj);
+            const title = $item
+                .find('.title')
+                .text()
+                .toLowerCase();
+            const matches = title.includes(keyword);
+            $item.toggleClass('no-match', !matches);
+        });
+    };
     const syncFiltering = function() {
         const $selectedFilters = $('.filter.selected');
         if (!$selectedFilters.length) {
@@ -191,6 +205,9 @@ $(function() {
         });
     };
     initialize();
+    $("#search_keyword").on("input", function() {
+        updateSearch();
+    });
     $(".game").on("click", function() {
         const item = $(this);
         const itemId = item.data('id');
