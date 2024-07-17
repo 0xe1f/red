@@ -1,4 +1,5 @@
 body {
+    background-color: #fff;
     font-family: "Lato", sans-serif;
     font-weight: 400;
     font-style: normal;
@@ -28,10 +29,26 @@ a {
 }
 
 #content {
-    padding: 0 25px 25px 25px;
-    overflow-y: auto;
+    padding: 0 25px;
     grid-column: 1/1;
     grid-row: 2/2;
+    display: grid;
+    grid-template-columns: 250px auto;
+    grid-template-rows: 1fr;
+    column-gap: 1em;
+    overflow: hidden;
+}
+
+#filters {
+    grid-column: 1/2;
+    grid-row: 1/1;
+    overflow-y: auto;
+}
+
+#games {
+    grid-column: 2/2;
+    grid-row: 1/1;
+    overflow-y: auto;
 }
 
 #drop_target {
@@ -48,21 +65,21 @@ a {
     visibility: visible;
 }
 
-.filters {
-    display: flex;
-    align-items: center;
+.filters .label {
+    background-color: #fff;
+    position: sticky;
+    top: 0;
+    padding: 0.5em 0;
+    display: block;
+    font-weight: bold;
+}
+
+.scrimmed .filters .label {
+    position: inherit;
 }
 
 .filters.active .label {
-    font-weight: bold;
     cursor: pointer;
-}
-
-.filters .scroller {
-    flex: 1;
-    margin: 0 0.5em;
-    overflow-x: auto;
-    white-space: nowrap;
 }
 
 .filter {
@@ -70,8 +87,7 @@ a {
     border: solid 1px #0000;
     border-radius: 25px;
     padding: 0.25em 0.75em;
-    margin: 0.5em 0.25em;
-    display: inline-block;
+    display: block;
     white-space: nowrap;
 }
 
@@ -97,23 +113,7 @@ a {
 }
 
 .filter.selected {
-    background: #f55;
-    color: #fff
-}
-
-.orientation.filter.selected {
-    background: #85c1e9;
-    color: #fff
-}
-
-.genre.filter.selected {
-    background: #cd6155;
-    color: #fff
-}
-
-.tag.filter.selected {
-    background: #7dcea0;
-    color: #fff
+    background: #cedefa;
 }
 
 .filter:hover {
@@ -121,37 +121,29 @@ a {
 }
 
 .game {
-    margin: 0.25em 0;
-    border: solid 2px #ddd;
-    color: #777;
-    border-radius: 0.25em;
+    border-bottom: solid 1px #ddd;
+    color: #000;
     padding: 0.5em 0.5em;
 }
 
 .game.selected {
-    color: #444;
-    border-color: #777;
+    font-weight: bold;
 }
 
 .game:hover {
     background-color: #eee;
-    border-color: #777;
-    color: #000;
     cursor: pointer;
 }
 
 .game .title {
-    font-size: 24pt;
+    font-size: 14pt;
 }
 
+.game .company,
 .game .year {
     display: block;
-    font-size: 14pt;
-}
-
-.game .company {
-    display: block;
-    font-size: 14pt;
+    color: #999;
+    font-size: 10pt;
 }
 
 .game .system {
@@ -192,16 +184,16 @@ div:has(> #volume) {
     backdrop-filter: blur(10px);
 }
 
-.scrimmed #scrim {
-    display: block;
-}
-
 #scrim img {
     left: 50%;
     top: 50%;
     position: fixed;
     margin-left: -128px;
     margin-top: -128px;
+}
+
+.scrimmed #scrim {
+    display: block;
 }
 
 #drop_target span {

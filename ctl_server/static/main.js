@@ -124,7 +124,7 @@ $(function() {
             contentType: "application/json; charset=utf-8",
             dataType: "json",
             success: function(){
-                $('#scrim').hide();
+                toggleScrim(false);
                 updateSelection(id);
             }
         });
@@ -137,7 +137,7 @@ $(function() {
             contentType: "application/json; charset=utf-8",
             dataType: "json",
             success: function(){
-                $('#scrim').hide();
+                toggleScrim(false);
                 updateSelection();
             }
         });
@@ -184,7 +184,7 @@ $(function() {
             return;
         }
 
-        $('#scrim').show();
+        toggleScrim(true);
 
         var form = new FormData();
         for (var i = 0; i < files.length; i++) {
@@ -200,9 +200,12 @@ $(function() {
             data: form,
             success: function(){
                 // TODO
-                $('#scrim').hide();
+                toggleScrim(false);
             }
         });
+    };
+    const toggleScrim = function(show) {
+        $('body').toggleClass('scrimmed', show);
     };
     initialize();
     $("#search_keyword").on("input", function() {
@@ -211,11 +214,11 @@ $(function() {
     $(".game").on("click", function() {
         const item = $(this);
         const itemId = item.data('id');
-        $('#scrim').show();
+        toggleScrim(true);
         launch(itemId);
     });
     $("#stop").on("click", function() {
-        $('#scrim').show();
+        toggleScrim(true);
         stop();
     });
     $(".filter").on("click", function(e) {
