@@ -44,6 +44,9 @@ $(function() {
         });
     };
     const syncFiltering = function() {
+        const $activeFilters = $('.active-filters');
+        $activeFilters.empty();
+
         const $selectedFilters = $('.filter.selected');
         if (!$selectedFilters.length) {
             $('.game').show();
@@ -55,7 +58,11 @@ $(function() {
         $('.game').hide();
         $selectedFilters
             .each(function(i, obj) {
-                const filter = $(obj).data('id');
+                const $obj = $(obj);
+                $activeFilters.append(
+                    $obj.clone(true)
+                );
+                const filter = $obj.data('id');
                 appliedSymbols.push(filter);
                 $(`.game[data-filters~="${filter}"]`)
                     .toArray()
@@ -222,7 +229,7 @@ $(function() {
         stop();
     });
     $(".filter").on("click", function(e) {
-        const $item = $(this);
+        const $item = $(`#filters .filter[data-id="${$(this).data("id")}"]`);
         const $filters = $item
             .closest('.filters');
         const bewl = !$filters.hasClass('multi') || !e.shiftKey;
@@ -234,22 +241,6 @@ $(function() {
         $item.toggleClass('selected');
         $filters
             .toggleClass('active', $filters.find('.selected').length > 0);
-        syncFiltering();
-    });
-    $(".filters .label").on("click", function(e) {
-        const $item = $(this);
-        const $filters = $item
-            .closest('.filters');
-        if (!$filters.hasClass('active')) {
-            return;
-        }
-
-        $filters
-            .find('.filter')
-            .removeClass('selected');
-        $filters
-            .removeClass('active');
-
         syncFiltering();
     });
     $('#content')

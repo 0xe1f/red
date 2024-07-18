@@ -155,12 +155,6 @@ div:has(> #volume) {
     grid-row: 1/3;
 }
 
-#status .tooltip {
-    font-size: 12pt;
-    grid-column: 1/2;
-    grid-row: 1/2;
-}
-
 #status .title {
     font-size: 24pt;
     text-overflow: ellipsis;
@@ -169,6 +163,24 @@ div:has(> #volume) {
     grid-column: 1/2;
     grid-row: 2/3;
     color: #777;
+}
+
+#status .active-filters {
+    grid-column: 1/2;
+    padding: 0.5em 0;
+}
+
+#status .filter {
+    display: inline-block;
+    margin-right: 0.5em;
+}
+
+#status .filter.placeholder {
+    visibility: hidden;
+}
+
+#status .filter .count {
+    display: none;
 }
 
 #status .title.valid {
