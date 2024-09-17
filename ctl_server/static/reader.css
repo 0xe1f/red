@@ -130,6 +130,10 @@ a {
     font-weight: bold;
 }
 
+.game.active {
+    background-color: #ffffcc;
+}
+
 .game:hover {
     background-color: #eee;
     cursor: pointer;
@@ -223,9 +227,34 @@ div:has(> #volume) {
     height: 100%;
 }
 
+input[type=text] {
+    display: none;
+    position: sticky;
+    padding: 0.5em 1.5em;
+    border: solid 1px #999;
+    border-radius: 3px;
+    margin: 8px 0px;
+    font-size: 16pt;
+    text-shadow: 0px -1px 1px #888;
+    color: #444;
+}
+
+.scrimmed input {
+    display: none !important;
+}
+
 @media (min-width:320px)  { /* smartphones, portrait iPhone, portrait 480x320 phones (Android) */ }
 @media (min-width:480px)  { /* smartphones, Android phones, landscape iPhone */ }
 @media (min-width:600px)  { /* portrait tablets, portrait iPad, e-readers (Nook/Kindle), landscape 800x480 phones (Android) */ }
 @media (min-width:801px)  { /* tablet, landscape iPad, lo-res laptops ands desktops */ }
 @media (min-width:1025px) { /* big landscape tablets, laptops, and desktops */ }
 @media (min-width:1281px) { /* hi-res laptops and desktops */ }
+
+@media only screen and (max-width: 660px) {
+    #filters {
+        display: none;
+    }
+    #games {
+        grid-area: 1 / 1 / span 1 / span 2;
+    }
+}

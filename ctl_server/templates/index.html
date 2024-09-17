@@ -39,6 +39,7 @@
         {% endfor %}
       </div>
       <div id="games">
+        <input id="search" type="text" autocomplete="off" />
         {% for game in games | sort(attribute='title') %}
           <div class="game" data-id="{{ game.id }}" data-filters="{{ game.filters | join(' ') }}">
             <span class="title">{{ game.title }}</span>

@@ -33,10 +33,10 @@ if args.ctl or args.all:
     subprocess.call([
         'rsync',
         '-avrL',
-        '--delete',
         '--exclude', '.*',
         '--exclude', '*_example.yaml',
         '--exclude', '__pycache__',
+        '--exclude', 'venv/',
         f'{config.control_server.path}',
         f'{config.control_server.host}:'
     ])

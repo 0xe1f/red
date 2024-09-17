@@ -29,39 +29,20 @@ $(function() {
             );
         }
     };
-    const updateSearch = function() {
-        const keyword = $('#search_keyword')
-            .val()
-            .toLowerCase();
-        $('.game').each(function(_, obj) {
-            const $item = $(obj);
-            const title = $item
-                .find('.title')
-                .text()
-                .toLowerCase();
-            const matches = title.includes(keyword);
-            $item.toggleClass('no-match', !matches);
-        });
-    };
     const syncFiltering = function() {
-        const $activeFilters = $('.active-filters');
-        $activeFilters.empty();
-
         const $selectedFilters = $('.filter.selected');
+        const searchTerm = $("#search:visible").val() || "";
+        $('.game').hide();
         if (!$selectedFilters.length) {
-            $('.game').show();
+            syncSearch(searchTerm, $(".game"));
             location.hash = '';
             return;
         }
         var appliedSymbols = [];
         const matchMap = new Map();
-        $('.game').hide();
         $selectedFilters
             .each(function(i, obj) {
                 const $obj = $(obj);
-                $activeFilters.append(
-                    $obj.clone(true)
-                );
                 const filter = $obj.data('id');
                 appliedSymbols.push(filter);
                 $(`.game[data-filters~="${filter}"]`)
@@ -75,9 +56,45 @@ $(function() {
             .forEach((v, k) => {
                 if (v == $selectedFilters.length) {
                     // Only show complete matches
-                    $(k).show();
+                    syncSearch(searchTerm, $(k));
                 }
             });
+    };
+    const syncSearch = function(searchTerm, $match) {
+        if (!searchTerm) {
+            $match.show();
+        } else {
+            $match.each(
+                function() {
+                    const title = $(this)
+                        .find(".title")
+                        .text()
+                        .toLowerCase();
+                    if (title.startsWith(searchTerm)) {
+                        $(this).show()
+                    }
+                }
+            );
+        }
+    };
+    const select = function(which) {
+        const $selected = $(".active:visible");
+        $(".active").removeClass("active");
+        if (which == 0) {
+            return;
+        }
+        const $next = (!$selected.length)
+            ? (which > 0 ? $(".game:visible:first") : $(".game:visible:last"))
+            : (which < 0 ? $selected.prev() : $selected.next());
+        $next.addClass("active");
+        if ($next.length) {
+            $next[0].scrollIntoView();
+        }
+    };
+    const closeSearch = function() {
+        $("#search").hide();
+        select(0);
+        syncFiltering();
     };
     const initFilters = function() {
         // Update filter counts
@@ -215,9 +232,6 @@ $(function() {
         $('body').toggleClass('scrimmed', show);
     };
     initialize();
-    $("#search_keyword").on("input", function() {
-        updateSearch();
-    });
     $(".game").on("click", function() {
         const item = $(this);
         const itemId = item.data('id');
@@ -266,5 +280,38 @@ $(function() {
             }
             e.preventDefault();
             e.stopPropagation();
+    });
+    $(document).on("keyup", function(e) {
+        const $search = $("#search");
+        if ($search.is(":visible")) {
+            if (e.keyCode == 27) {
+                // esc
+                closeSearch();
+            } else if (e.keyCode == 38) {
+                // up
+                select(-1);
+            } else if (e.keyCode == 40) {
+                // down
+                select(1);
+            } else if (e.keyCode == 13) {
+                // return
+                const $active = $(".game.active");
+                if ($active.length) {
+                    launch($active.data("id"));
+                    closeSearch();
+                    $active[0].scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+            }
+            return;
+        }
+        if (e.keyCode == 84 || e.keyCode == 116) {
+            $search.val("");
+            $search.show();
+            $search.focus();
+            syncFiltering();
+        }
+    });
+    $("#search").on("input", function(e) {
+        syncFiltering();
     });
 });

@@ -4,3 +4,4 @@ deploy.yaml
 ctl_server/config.yaml
 ctl_server/games.yaml
 ctl_server/__pycache__
+ctl_server/venv/
