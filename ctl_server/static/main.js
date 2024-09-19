@@ -16,12 +16,12 @@ $(function() {
         $('.game.selected').removeClass('selected');
         $('#status .title').toggleClass('valid', !!id);
         if (!id) {
-            $('#title_label').css('visibility', 'hidden');
+            $('#stop').hide();
             $('#status .title').text('No Game Selected');
             return;
         }
         const $item = $(`.game[data-id="${id}"]`);
-        $('#title_label').css('visibility', 'visible');
+        $('#stop').show();
         if ($item.length) {
             $item.addClass('selected');
             $('#status .title').text(
@@ -31,7 +31,7 @@ $(function() {
     };
     const syncFiltering = function() {
         const $selectedFilters = $('.filter.selected');
-        const searchTerm = $("#search:visible").val() || "";
+        const searchTerm = $("#search:focus").val() || "";
         $('.game').hide();
         if (!$selectedFilters.length) {
             syncSearch(searchTerm, $(".game"));
@@ -64,13 +64,14 @@ $(function() {
         if (!searchTerm) {
             $match.show();
         } else {
+            const termLocase = searchTerm.toLowerCase();
             $match.each(
                 function() {
                     const title = $(this)
                         .find(".title")
                         .text()
                         .toLowerCase();
-                    if (title.startsWith(searchTerm)) {
+                    if (title.startsWith(termLocase)) {
                         $(this).show()
                     }
                 }
@@ -88,11 +89,12 @@ $(function() {
             : (which < 0 ? $selected.prev() : $selected.next());
         $next.addClass("active");
         if ($next.length) {
-            $next[0].scrollIntoView();
+            $next[0].scrollIntoView({ behavior: "smooth", block: "center" });
         }
     };
     const closeSearch = function() {
-        $("#search").hide();
+        $("#search").trigger("blur");
+        $("#search").val("");
         select(0);
         syncFiltering();
     };
@@ -283,7 +285,7 @@ $(function() {
     });
     $(document).on("keyup", function(e) {
         const $search = $("#search");
-        if ($search.is(":visible")) {
+        if ($search.is(":focus")) {
             if (e.keyCode == 27) {
                 // esc
                 closeSearch();
@@ -305,8 +307,6 @@ $(function() {
             return;
         }
         if (e.keyCode == 84 || e.keyCode == 116) {
-            $search.val("");
-            $search.show();
             $search.focus();
             syncFiltering();
         }

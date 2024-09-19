@@ -18,10 +18,14 @@
       <img src="static/spinner.gif">
     </div>
     <div id="status">
-      <input id="volume" type="text">
-      <span id="title_label" class="label">Currently running (<a id="stop" href="#stop">stop</a>):</span>
+      <span class="app-name">RED</span>
       <span class="title"></span>
-      <div class="active-filters"></div>
+      <svg id="stop" viewBox="0 -960 960 960" fill="#5f6368">
+        <title>Stop</title>
+        <path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/>
+      </svg>
+      <input id="search" type="text" autocomplete="off" />
+      <input id="volume" type="text">
     </div>
     <div id="content">
       <div id="filters">
@@ -39,7 +43,6 @@
         {% endfor %}
       </div>
       <div id="games">
-        <input id="search" type="text" autocomplete="off" />
         {% for game in games | sort(attribute='title') %}
           <div class="game" data-id="{{ game.id }}" data-filters="{{ game.filters | join(' ') }}">
             <span class="title">{{ game.title }}</span>
