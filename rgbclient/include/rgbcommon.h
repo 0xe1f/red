@@ -24,6 +24,7 @@ struct FrameGeometry {
 #define PIXEL_FORMAT_UNKNOWN  0
 #define PIXEL_FORMAT_RGB565   1
 #define PIXEL_FORMAT_RGBA8888 2
+#define PIXEL_FORMAT_RGBA5551 3
 
 #define ATTR_ROT180 0x01
 

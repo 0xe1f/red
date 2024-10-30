@@ -18,13 +18,13 @@
       <img src="static/spinner.gif">
     </div>
     <div id="status">
-      <span class="app-name">RED</span>
+      <a class="app-name" href="https://github.com/0xe1f/red" target="_blank">RED</a>
       <span class="title"></span>
       <svg id="stop" viewBox="0 -960 960 960" fill="#5f6368">
         <title>Stop</title>
         <path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/>
       </svg>
-      <input id="search" type="text" autocomplete="off" />
+      <input id="search" type="text" autocomplete="off" placeholder="Search" />
       <input id="volume" type="text">
     </div>
     <div id="content">
@@ -52,9 +52,6 @@
           </div>
         {% endfor %}
       </div>
-    </div>
-    <div id="footer">
-      0xe1f/<a href="https://github.com/0xe1f/red">red</a>, 2024
     </div>
     {% if uploads_supported %}
       <div id="drop_target">
