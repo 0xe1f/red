@@ -80,6 +80,10 @@ static struct ViewRect dest;
 #define RED_RGBA8888(x) ((x>>24)&0xff)
 #define GREEN_RGBA8888(x) ((x>>16)&0xff)
 #define BLUE_RGBA8888(x) ((x>>8)&0xff)
+// ARGB8888
+#define RED_ARGB8888(x) ((x>>16)&0xff)
+#define GREEN_ARGB8888(x) ((x>>8)&0xff)
+#define BLUE_ARGB8888(x) ((x)&0xff)
 // RGBA5551
 #define RED_RGBA5551(x) (((x>>11)&0x1f)*255/31)
 #define GREEN_RGBA5551(x) (((x>>6)&0x1f)*255/31)
@@ -127,6 +131,8 @@ static const char* pixel_format_str(unsigned char pixel_format)
             return "RGB565";
         case PIXEL_FORMAT_RGBA8888:
             return "RGBA8888";
+        case PIXEL_FORMAT_ARGB8888:
+            return "ARGB8888";
         case PIXEL_FORMAT_RGBA5551:
             return "RGBA5551";
         default:
@@ -137,10 +143,10 @@ static const char* pixel_format_str(unsigned char pixel_format)
 static unsigned char bpp(unsigned char pixel_format)
 {
     switch(pixel_format) {
-        case PIXEL_FORMAT_RGB565:
-            return 2;
         case PIXEL_FORMAT_RGBA8888:
+        case PIXEL_FORMAT_ARGB8888:
             return 4;
+        case PIXEL_FORMAT_RGB565:
         case PIXEL_FORMAT_RGBA5551:
             return 2;
         default:
@@ -160,6 +166,11 @@ static inline void unpack(struct RGB *dest, unsigned char *src, int offset)
         dest->r = RED_RGBA8888(rcol);
         dest->g = GREEN_RGBA8888(rcol);
         dest->b = BLUE_RGBA8888(rcol);
+    } else if (data.pixel_format == PIXEL_FORMAT_ARGB8888) {
+        unsigned int rcol = *((unsigned int *)src + offset);
+        dest->r = RED_ARGB8888(rcol);
+        dest->g = GREEN_ARGB8888(rcol);
+        dest->b = BLUE_ARGB8888(rcol);
     } else if (data.pixel_format == PIXEL_FORMAT_RGBA5551) {
         unsigned short rcol = *((unsigned short *)src + offset);
         dest->r = RED_RGBA5551(rcol);
