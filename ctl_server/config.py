@@ -107,18 +107,14 @@ class GameClient:
             del obj[prop]
         return obj
 
-    def launch(self, game_server_host):
-        if game_server_host == self.eth_host:
-            server_ip = '127.0.0.1'
-        else:
-            server_ip = game_server_host
+    def launch(self):
         subprocess.call(
             args=[
                 'ssh',
-                self.eth_host,
+                self.client_ip,
                 f'sudo killall {self.exe} 2> /dev/null;' + \
                     f'cd {self.path}; ' + \
-                    f'sudo nohup ./{self.exe} {server_ip} {self.extra_args} >log.txt 2>&1 &'
+                    f'sudo nohup ./{self.exe} {self.server_ip} {self.extra_args} >log.txt 2>&1 &'
             ],
         )
 
@@ -138,7 +134,7 @@ class GameServer:
         proc = subprocess.run(
             args=[
                 'ssh',
-                self.eth_host,
+                self.ip,
                 f'{self.path}/launch.sh {game.id} {self.extra_args} {game.extra_args}',
             ],
             capture_output=True,
@@ -151,7 +147,7 @@ class GameServer:
         subprocess.call(
             args=[
                 'ssh',
-                self.eth_host,
+                self.ip,
                 f'{self.path}/launch.sh --stop',
             ]
         )

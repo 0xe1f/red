@@ -29,7 +29,7 @@ def query():
     result = read_process_output(
         'ssh',
         [
-            konfig.game_server.eth_host,
+            konfig.game_server.ip,
             f'{konfig.game_server.path}/query.sh',
         ]
     )
@@ -53,7 +53,7 @@ def volume():
 
     subprocess.call([
         'ssh',
-        konfig.game_server.eth_host,
+        konfig.game_server.ip,
         f'{konfig.game_server.path}/set_volume.sh {volume}',
     ])
     return { 'status': 'OK' }
@@ -86,7 +86,7 @@ def launch():
     (code, stdout) = konfig.game_server.launch(game)
     if code == 0:
         for client in konfig.game_clients:
-            client.launch(konfig.game_server.eth_host)
+            client.launch()
         return {
             'status': 'OK',
         }
@@ -152,7 +152,7 @@ def upload():
         args = [
             'scp',
             *local_files,
-            f'{konfig.game_server.eth_host}:{konfig.game_server.rom_path}',
+            f'{konfig.game_server.ip}:{konfig.game_server.rom_path}',
         ]
         subprocess.call(args)
 
