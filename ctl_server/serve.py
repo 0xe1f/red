@@ -19,10 +19,15 @@ ROM_UPLOAD_MAX_FILES = 5
 
 @app.route('/')
 def index():
-    return render_template(
-        'index.html',
-        **game_konfig.template_args(),
-    )
+    return render_template('index.html')
+
+@app.route('/filters')
+def filters():
+    return game_konfig.filters()
+
+@app.route('/games')
+def games():
+    return game_konfig.games()
 
 @app.route('/query')
 def query():
@@ -75,7 +80,7 @@ def launch():
             'message': 'Game id missing',
         }, http.HTTPStatus.BAD_REQUEST
 
-    game = game_konfig.games.get(id)
+    game = game_konfig.game_map.get(id)
     if not game:
         logging.error('Game not found')
         return {

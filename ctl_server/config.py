@@ -7,7 +7,7 @@ import yaml
 class GameConfig:
 
     def __init__(self, path):
-        self.games = {}
+        self.game_map = {}
         self.tags = set()
         self.genres = set()
         self.orientations = set()
@@ -16,44 +16,43 @@ class GameConfig:
         with open(path) as fd:
             for item in yaml.safe_load(fd):
                 game = Game(**item)
-                self.games[game.id] = game
+                self.game_map[game.id] = game
                 self.tags.update(game.tags)
                 self.genres.update(game.genres)
                 self.orientations.add(game.orientation)
                 self.series.update(game.series)
 
-    def template_args(self):
-        return {
-            'games': self.games.values(),
-            'uploads_supported': False,
-            'filters': [
-                Filter(
-                    id='orientation',
-                    label='Orientation',
-                    options=self.orientations,
-                    prefix='o',
-                ),
-                Filter(
-                    id='genre',
-                    label='Genres',
-                    options=self.genres,
-                    prefix='g',
-                ),
-                Filter(
-                    id='tag',
-                    label='Tags',
-                    options=self.tags,
-                    prefix='t',
-                    type='multi',
-                ),
-                Filter(
-                    id='series',
-                    label='Series',
-                    options=self.series,
-                    prefix='s',
-                ),
-            ],
-        }
+    def filters(self):
+        return [
+            {
+                "id": 'orientation',
+                "label": 'Orientation',
+                "options": list(self.orientations),
+                "prefix": 'o',
+            },
+            {
+                "id": 'genre',
+                "label": 'Genres',
+                "options": list(self.genres),
+                "prefix": 'g',
+            },
+            {
+                "id": 'tag',
+                "label": 'Tags',
+                "options": list(self.tags),
+                "prefix": 't',
+                "type": 'multi',
+            },
+            {
+                "id": 'series',
+                "label": 'Series',
+                "options": list(self.series),
+                "prefix": 's',
+            },
+        ]
+
+    def games(self):
+        return [ game.as_dict() for game in self.game_map.values() ]
 
 class Config:
 
@@ -90,11 +89,6 @@ class Config:
                 },
                 stream=fd,
             )
-
-class Filter:
-
-    def __init__(self, **item):
-        self.__dict__.update(item)
 
 class GameClient:
 
@@ -179,3 +173,6 @@ class Game:
                 [ f"o:{self.orientation}" ],
             )
         )
+
+    def as_dict(self):
+        return { k: v for k, v in self.__dict__.items() if v }

@@ -98,8 +98,7 @@ $(function() {
         select(0);
         syncFiltering();
     };
-    const initFilters = function() {
-        // Update filter counts
+    const updateFilterCounts = function() {
         $('.filter')
             .each(function() {
                 const $el = $(this);
@@ -113,6 +112,27 @@ $(function() {
                     .find('.count')
                     .text(matchText)
                     .attr('title', countText);
+            });
+    };
+    const initFilters = function() {
+        // Update filter counts
+        updateFilterCounts();
+        // Set up filter click handlers
+        $('.filter')
+            .on("click", function(e) {
+                const $item = $(`#filters .filter[data-id="${$(this).data("id")}"]`);
+                const $filters = $item
+                    .closest('.filters');
+                const bewl = !$filters.hasClass('multi') || !e.shiftKey;
+                if (bewl && !$item.hasClass('selected')) {
+                    $filters
+                        .find('.filter')
+                        .removeClass('selected');
+                }
+                $item.toggleClass('selected');
+                $filters
+                    .toggleClass('active', $filters.find('.selected').length > 0);
+                syncFiltering();
             });
         // Restore filter from hash
         const map = hashMap();
@@ -129,6 +149,14 @@ $(function() {
                 })
             syncFiltering();
         }
+    };
+    const initGames = function() {
+        $(".game").on("click", function() {
+            const item = $(this);
+            const itemId = item.data('id');
+            toggleScrim(true);
+            launch(itemId);
+        });
     };
     const setVolume = function(vol) {
         $.ajax({
@@ -173,6 +201,80 @@ $(function() {
             .val(value)
             .trigger('change');
     };
+    const fetchFilters = function() {
+        $.ajax({
+            url: "filters",
+            contentType: "application/json; charset=utf-8",
+            dataType: "json",
+            success: function(response) {
+                const $filtersContainer = $("#filters");
+                $filtersContainer.empty();
+                $.each(response, function(_, entry) {
+                    $filtersContainer
+                        .append(
+                            $("<div />", { "id": entry.id, "class": `filters ${entry.type}` })
+                                .append(
+                                    $("<span />", { "class": "label", text: entry.label })
+                                )
+                                .append(
+                                    $("<div />", { "class": "scroller" })
+                                        .append(
+                                            $.map(
+                                                entry.options.sort(),
+                                                function(option) {
+                                                    return $("<span />", {
+                                                        "class": `${entry.id} filter`,
+                                                        "data-id": `${entry.prefix}:${option}`,
+                                                        text: option,
+                                                    }).append(
+                                                        $("<span />", { "class": "count" })
+                                                    );
+                                                }
+                                            )
+                                        )
+                                )
+                        );
+                });
+                initFilters();
+            }
+        });
+    };
+    const fetchGames = function() {
+        $.ajax({
+            url: "games",
+            contentType: "application/json; charset=utf-8",
+            dataType: "json",
+            success: function(response) {
+                const $gamesContainer = $("#games");
+                $gamesContainer.empty();
+                $.each(response, function(_, entry) {
+                    $gamesContainer
+                        .append(
+                            $("<div />", {
+                                "class": "game",
+                                "data-id": entry.id,
+                                "data-filters": entry.filters.join(' '),
+                            })
+                                .append(
+                                    $("<span />", { "class": "title", text: entry.title })
+                                )
+                                .append(
+                                    $("<span />", { "class": "year", text: entry.year })
+                                )
+                                .append(
+                                    $("<span />", { "class": "company", text: entry.company })
+                                )
+                                .append(
+                                    $("<span />", { "class": "system", text: entry.system })
+                                )
+                        );
+                });
+                initGames();
+                updateFilterCounts();
+                syncFiltering();
+            }
+        });
+    };
     const initialize = function() {
         // init volume control
         var volumeReady = false;
@@ -199,7 +301,8 @@ $(function() {
             },
         );
         updateSelection();
-        initFilters();
+        fetchFilters();
+        fetchGames();
         // prevent shift-select - interferes with tag multiselect
         document.onselectstart = function() {
             return false;
@@ -234,30 +337,9 @@ $(function() {
         $('body').toggleClass('scrimmed', show);
     };
     initialize();
-    $(".game").on("click", function() {
-        const item = $(this);
-        const itemId = item.data('id');
-        toggleScrim(true);
-        launch(itemId);
-    });
     $("#stop").on("click", function() {
         toggleScrim(true);
         stop();
-    });
-    $(".filter").on("click", function(e) {
-        const $item = $(`#filters .filter[data-id="${$(this).data("id")}"]`);
-        const $filters = $item
-            .closest('.filters');
-        const bewl = !$filters.hasClass('multi') || !e.shiftKey;
-        if (bewl && !$item.hasClass('selected')) {
-            $filters
-                .find('.filter')
-                .removeClass('selected');
-        }
-        $item.toggleClass('selected');
-        $filters
-            .toggleClass('active', $filters.find('.selected').length > 0);
-        syncFiltering();
     });
     $('#content')
         .on('dragenter', function(e) {
