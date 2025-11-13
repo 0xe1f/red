@@ -98,25 +98,7 @@ $(function() {
         select(0);
         syncFiltering();
     };
-    const updateFilterCounts = function() {
-        $('.filter')
-            .each(function() {
-                const $el = $(this);
-                const matches = $(`.game[data-filters~="${$el.data('id')}"]`)
-                    .length;
-                const countText = `${matches}`;
-                const matchText = (matches > 99)
-                    ? `++`
-                    : countText;
-                $el
-                    .find('.count')
-                    .text(matchText)
-                    .attr('title', countText);
-            });
-    };
     const initFilters = function() {
-        // Update filter counts
-        updateFilterCounts();
         // Set up filter click handlers
         $('.filter')
             .on("click", function(e) {
@@ -220,15 +202,23 @@ $(function() {
                                     $("<div />", { "class": "scroller" })
                                         .append(
                                             $.map(
-                                                entry.options.sort(),
+                                                entry.options,
                                                 function(option) {
+                                                    const countText = `${option.count}`;
+                                                    const matchText = (option.count > 99)
+                                                        ? `++`
+                                                        : countText;
+
                                                     return $("<span />", {
                                                         "class": `${entry.id} filter`,
-                                                        "data-id": `${entry.prefix}:${option}`,
-                                                        text: option,
-                                                    }).append(
-                                                        $("<span />", { "class": "count" })
-                                                    );
+                                                        "data-id": `${entry.prefix}:${option.name}`
+                                                    })
+                                                        .text(option.name)
+                                                        .append(
+                                                            $("<span />", { "class": "count" })
+                                                                .text(matchText)
+                                                                .attr("title", countText)
+                                                        );
                                                 }
                                             )
                                         )
@@ -270,7 +260,6 @@ $(function() {
                         );
                 });
                 initGames();
-                updateFilterCounts();
                 syncFiltering();
             }
         });

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from collections import defaultdict
 import itertools
 import subprocess
 import yaml
@@ -8,51 +9,70 @@ class GameConfig:
 
     def __init__(self, path):
         self.game_map = {}
-        self.tags = set()
-        self.genres = set()
-        self.orientations = set()
-        self.series = set()
+        self.tags = defaultdict(list)
+        self.genres = defaultdict(list)
+        self.orientations = defaultdict(list)
+        self.series = defaultdict(list)
 
         with open(path) as fd:
             for item in yaml.safe_load(fd):
                 game = Game(**item)
                 self.game_map[game.id] = game
-                self.tags.update(game.tags)
-                self.genres.update(game.genres)
-                self.orientations.add(game.orientation)
-                self.series.update(game.series)
+                for o in game.tags:
+                    self.tags[o].append(game.id)
+                for o in game.genres:
+                    self.genres[o].append(game.id)
+                self.orientations[game.orientation].append(game.id)
+                for o in game.series:
+                    self.series[o].append(game.id)
 
     def filters(self):
         return [
             {
                 "id": 'orientation',
                 "label": 'Orientation',
-                "options": list(self.orientations),
+                "options": sorted([
+                    {
+                        "name": k,
+                        "count": len(v),
+                    } for k, v in self.orientations.items()], key=lambda x: x['name']),
                 "prefix": 'o',
             },
             {
                 "id": 'genre',
                 "label": 'Genres',
-                "options": list(self.genres),
+                "options": sorted([
+                    {
+                        "name": k,
+                        "count": len(v),
+                    } for k, v in self.genres.items()], key=lambda x: x['name']),
                 "prefix": 'g',
             },
             {
                 "id": 'tag',
                 "label": 'Tags',
-                "options": list(self.tags),
+                "options": sorted([
+                    {
+                        "name": k,
+                        "count": len(v),
+                    } for k, v in self.tags.items()], key=lambda x: x['name']),
                 "prefix": 't',
                 "type": 'multi',
             },
             {
                 "id": 'series',
                 "label": 'Series',
-                "options": list(self.series),
+                "options": sorted([
+                    {
+                        "name": k,
+                        "count": len(v),
+                    } for k, v in self.series.items()], key=lambda x: x['name']),
                 "prefix": 's',
             },
         ]
 
     def games(self):
-        return [ game.as_dict() for game in self.game_map.values() ]
+        return sorted([ game.as_dict() for game in self.game_map.values() ], key=lambda x: x['title'])
 
 class Config:
 
