@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import config
+from collections import defaultdict
 from flask import Flask, render_template, request
 import http
 import logging
@@ -27,7 +28,14 @@ def filters():
 
 @app.route('/games')
 def games():
-    return game_konfig.games()
+    search = request.args.get("search", "")
+    filters = request.args.get("filters", "")
+    filter_map = defaultdict(list)
+    if filters:
+        for (k, v) in [ filter.split(":") for filter in filters.split(',') ]:
+            filter_map[k].append(v)
+
+    return game_konfig.games(search=search, filter_map=filter_map)
 
 @app.route('/query')
 def query():

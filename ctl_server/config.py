@@ -71,8 +71,33 @@ class GameConfig:
             },
         ]
 
-    def games(self):
-        return sorted([ game.as_dict() for game in self.game_map.values() ], key=lambda x: x['title'])
+    def games(self, search="", filter_map={}):
+        all_games = self.game_map.values()
+        if not (search or filter_map):
+            return sorted([ game.as_dict() for game in all_games ], key=lambda x: x['title'])
+
+        filtered_games = []
+        for game in all_games:
+            if search and search.lower() not in game.title.lower():
+                continue
+            filter_match = True
+            for (k, v_list) in filter_map.items():
+                if k == 't' and set(v_list) != set(game.tags):
+                    filter_match = False
+                    break
+                elif k == 'o' and set(v_list) != { game.orientation }:
+                    filter_match = False
+                    break
+                elif k == 'g' and set(v_list) != set(game.genres):
+                    filter_match = False
+                    break
+                elif k == 's' and set(v_list) != set(game.series):
+                    filter_match = False
+                    break
+            if filter_match:
+                filtered_games.append(game)
+
+        return sorted([ game.as_dict() for game in filtered_games ], key=lambda x: x['title'])
 
 class Config:
 

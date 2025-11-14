@@ -29,36 +29,13 @@ $(function() {
             );
         }
     };
-    const syncFiltering = function() {
-        const $selectedFilters = $('.filter.selected');
+    const syncGames = function() {
         const searchTerm = $("#search:focus").val() || "";
-        $('.game').hide();
-        if (!$selectedFilters.length) {
-            syncSearch(searchTerm, $(".game"));
-            location.hash = '';
-            return;
-        }
-        var appliedSymbols = [];
-        const matchMap = new Map();
-        $selectedFilters
-            .each(function(i, obj) {
-                const $obj = $(obj);
-                const filter = $obj.data('id');
-                appliedSymbols.push(filter);
-                $(`.game[data-filters~="${filter}"]`)
-                    .toArray()
-                    .forEach(element => {
-                        matchMap.set(element, (matchMap.get(element) ?? 0) + 1);
-                    });
-                });
-        location.hash = `filters=${appliedSymbols.join(',')}`;
-        matchMap
-            .forEach((v, k) => {
-                if (v == $selectedFilters.length) {
-                    // Only show complete matches
-                    syncSearch(searchTerm, $(k));
-                }
-            });
+        const filters = $('.filter.selected')
+            .map(function() { return $(this).data('id'); })
+            .toArray();
+        fetchGames(searchTerm, filters);
+        location.hash = `filters=${filters.join(',')}`;
     };
     const syncSearch = function(searchTerm, $match) {
         if (!searchTerm) {
@@ -96,7 +73,7 @@ $(function() {
         $("#search").trigger("blur");
         $("#search").val("");
         select(0);
-        syncFiltering();
+        syncGames();
     };
     const initFilters = function() {
         // Set up filter click handlers
@@ -114,7 +91,7 @@ $(function() {
                 $item.toggleClass('selected');
                 $filters
                     .toggleClass('active', $filters.find('.selected').length > 0);
-                syncFiltering();
+                syncGames();
             });
         // Restore filter from hash
         const map = hashMap();
@@ -129,7 +106,7 @@ $(function() {
                         .closest('.filters')
                         .addClass('active');
                 })
-            syncFiltering();
+            syncGames();
         }
     };
     const initGames = function() {
@@ -229,11 +206,15 @@ $(function() {
             }
         });
     };
-    const fetchGames = function() {
+    const fetchGames = function(searchTerm = "", filters = []) {
         $.ajax({
             url: "games",
             contentType: "application/json; charset=utf-8",
             dataType: "json",
+            data: {
+                "search": searchTerm,
+                "filters": filters.join(','),
+            },
             success: function(response) {
                 const $gamesContainer = $("#games");
                 $gamesContainer.empty();
@@ -260,7 +241,6 @@ $(function() {
                         );
                 });
                 initGames();
-                syncFiltering();
             }
         });
     };
@@ -275,7 +255,7 @@ $(function() {
                 'fgColor': '#66CC66',
                 'width': 50,
                 'height': 50,
-                'change': function(v) { volumeReady = true; },
+                'change': function(_) { volumeReady = true; },
                 'release' : function (v) {
                     if (volumeReady) { setVolume(~~v); }
                 },
@@ -291,7 +271,6 @@ $(function() {
         );
         updateSelection();
         fetchFilters();
-        fetchGames();
         // prevent shift-select - interferes with tag multiselect
         document.onselectstart = function() {
             return false;
@@ -379,10 +358,9 @@ $(function() {
         }
         if (e.keyCode == 84 || e.keyCode == 116) {
             $search.focus();
-            syncFiltering();
         }
     });
     $("#search").on("input", function(e) {
-        syncFiltering();
+        syncGames();
     });
 });
