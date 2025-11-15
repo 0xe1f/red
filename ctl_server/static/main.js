@@ -12,21 +12,19 @@ $(function() {
                 return map;
             }, {});
     };
-    const updateSelection = function(id) {
+    const updateSelection = function(game) {
         $('.game.selected').removeClass('selected');
-        $('#status .title').toggleClass('valid', !!id);
-        if (!id) {
+        $('#status .title').toggleClass('valid', !!game);
+        if (!game) {
             $('#stop').hide();
-            $('#status .title').text('No Game Selected');
-            return;
-        }
-        const $item = $(`.game[data-id="${id}"]`);
-        $('#stop').show();
-        if ($item.length) {
-            $item.addClass('selected');
-            $('#status .title').text(
-                $item.children('.title').text()
-            );
+            $('#status .title')
+                .text('No Game Selected');
+        } else {
+            $('#stop').show();
+            $('#status .title')
+                .text(game.title);
+            $(`.game[data-id="${game.id}"]`)
+                .addClass('selected');
         }
     };
     const syncGames = function() {
@@ -36,24 +34,6 @@ $(function() {
             .toArray();
         fetchGames(searchTerm, filters);
         location.hash = `filters=${filters.join(',')}`;
-    };
-    const syncSearch = function(searchTerm, $match) {
-        if (!searchTerm) {
-            $match.show();
-        } else {
-            const termLocase = searchTerm.toLowerCase();
-            $match.each(
-                function() {
-                    const title = $(this)
-                        .find(".title")
-                        .text()
-                        .toLowerCase();
-                    if (title.startsWith(termLocase)) {
-                        $(this).show()
-                    }
-                }
-            );
-        }
     };
     const select = function(which) {
         const $selected = $(".active:visible");
@@ -136,9 +116,9 @@ $(function() {
             data: JSON.stringify({ 'id': id }),
             contentType: "application/json; charset=utf-8",
             dataType: "json",
-            success: function(){
+            success: function(resp){
                 toggleScrim(false);
-                updateSelection(id);
+                updateSelection(resp.game);
             }
         });
     };
@@ -259,7 +239,7 @@ $(function() {
         $.get(
             "query",
             function(resp) {
-                updateSelection(resp.title);
+                updateSelection(resp.game);
                 updateVolume(resp.volume || 0);
             },
         );

@@ -48,7 +48,7 @@ def query():
     )
     title, vol, *_ = result.split(' ', 1) + [None] * 2
     return {
-        'title': title,
+        'game': game_konfig.game_map[title].as_dict(),
         'volume': vol,
     }
 
@@ -102,6 +102,7 @@ def launch():
             client.launch()
         return {
             'status': 'OK',
+            'game': game.as_dict(),
         }
     else:
         return {
