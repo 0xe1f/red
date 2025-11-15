@@ -226,6 +226,95 @@ $(function() {
             }
         });
     };
+    const onKeyPressed = function(e) {
+        const $search = $("#search");
+        var handled = false;
+        if ($search.is(":focus")) {
+            if (e.keyCode == 27) {
+                // esc
+                closeSearch();
+                handled = true;
+            } else if (e.keyCode == 38) {
+                // up
+                select(-1);
+                handled = true;
+            } else if (e.keyCode == 40) {
+                // down
+                select(1);
+                handled = true;
+            } else if (e.keyCode == 13) {
+                // return
+                const $active = $(".game.active");
+                if ($active.length) {
+                    launch($active.data("id"));
+                    closeSearch();
+                    $active[0].scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+                handled = true;
+            }
+        } else {
+            if (e.keyCode == 84 || e.keyCode == 191) {
+                // 't' or 'T'
+                $search.focus();
+                handled = true;
+            } else if (e.keyCode == 173) {
+                // volume down
+                const vol = uiVolume();
+                const newVol = e.shiftKey
+                    ? Math.max(0, vol - 10)
+                    : Math.max(0, vol - 2);
+                if (vol != newVol) {
+                    setVolume(newVol);
+                }
+                handled = true;
+            } else if (e.keyCode == 61) {
+                // volume up
+                const vol = parseInt($('#volume').val(), 10) || 0;
+                const newVol = e.shiftKey
+                    ? Math.min(100, vol + 10)
+                    : Math.min(100, vol + 2);
+                if (vol != newVol) {
+                    setVolume(newVol);
+                }
+                handled = true;
+            } else if (e.keyCode == 77) {
+                // mute
+                const vol = parseInt($('#volume').val(), 10) || 0;
+                if (vol > 0) {
+                    cookies.set('pre_mute_vol', vol);
+                    setVolume(0, false);
+                } else {
+                    const preMute = cookies.get('pre_mute_vol');
+                    if (preMute) {
+                        const newVol = parseInt(preMute, 10);
+                        setVolume(newVol);
+                    }
+                }
+                handled = true;
+            } else if (e.keyCode == 80) {
+                // 'p', previous
+                select(-1);
+                handled = true;
+            } else if (e.keyCode == 78) {
+                // 'n', next
+                select(1);
+                handled = true;
+            } else if (e.keyCode == 13 || e.keyCode == 79) {
+                // return or 'o', launch
+                const $active = $(".game.active");
+                if ($active.length) {
+                    launch($active.data("id"));
+                    select(0);
+                }
+                handled = true;
+            } else if (e.keyCode == 27) {
+                // esc, clear selection
+                select(0);
+                handled = true;
+            }
+        }
+        return !handled;
+    };
     const initialize = function() {
         // init volume control
         var volumeReady = false;
@@ -262,75 +351,7 @@ $(function() {
             syncGames();
         });
         // set up keyboard handler
-        $(document).on("keyup", function(e) {
-            const $search = $("#search");
-            var handled = false;
-            if ($search.is(":focus")) {
-                if (e.keyCode == 27) {
-                    // esc
-                    closeSearch();
-                    handled = true;
-                } else if (e.keyCode == 38) {
-                    // up
-                    select(-1);
-                    handled = true;
-                } else if (e.keyCode == 40) {
-                    // down
-                    select(1);
-                    handled = true;
-                } else if (e.keyCode == 13) {
-                    // return
-                    const $active = $(".game.active");
-                    if ($active.length) {
-                        launch($active.data("id"));
-                        closeSearch();
-                        $active[0].scrollIntoView({ behavior: "smooth", block: "center" });
-                    }
-                    handled = true;
-                }
-            } else {
-                if (e.keyCode == 84 || e.keyCode == 191) {
-                    // 't' or 'T'
-                    $search.focus();
-                    handled = true;
-                } else if (e.keyCode == 173) {
-                    // volume down
-                    const vol = uiVolume();
-                    const newVol = e.shiftKey
-                        ? Math.max(0, vol - 10)
-                        : Math.max(0, vol - 1);
-                    if (vol != newVol) {
-                        setVolume(newVol);
-                    }
-                    handled = true;
-                } else if (e.keyCode == 61) {
-                    // volume up
-                    const vol = parseInt($('#volume').val(), 10) || 0;
-                    const newVol = e.shiftKey
-                        ? Math.min(100, vol + 10)
-                        : Math.min(100, vol + 1);
-                    if (vol != newVol) {
-                        setVolume(newVol);
-                    }
-                    handled = true;
-                } else if (e.keyCode == 77) {
-                    // mute
-                    const vol = parseInt($('#volume').val(), 10) || 0;
-                    if (vol > 0) {
-                        cookies.set('pre_mute_vol', vol);
-                        setVolume(0, false);
-                    } else {
-                        const preMute = cookies.get('pre_mute_vol');
-                        if (preMute) {
-                            const newVol = parseInt(preMute, 10);
-                            setVolume(newVol);
-                        }
-                    }
-                    handled = true;
-                }
-            }
-            return !handled;
-        });
+        $(document).on("keyup", onKeyPressed);
         // set up drag-and-drop upload handlers
         $('#content')
             .on('dragenter', function(e) {
