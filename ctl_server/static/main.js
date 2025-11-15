@@ -106,8 +106,8 @@ $(function() {
                         .closest('.filters')
                         .addClass('active');
                 })
-            syncGames();
         }
+        syncGames();
     };
     const initGames = function() {
         $(".game").on("click", function() {
@@ -181,11 +181,6 @@ $(function() {
                                             $.map(
                                                 entry.options,
                                                 function(option) {
-                                                    const countText = `${option.count}`;
-                                                    const matchText = (option.count > 99)
-                                                        ? `++`
-                                                        : countText;
-
                                                     return $("<span />", {
                                                         "class": `${entry.id} filter`,
                                                         "data-id": `${entry.prefix}:${option.name}`
@@ -193,8 +188,7 @@ $(function() {
                                                         .text(option.name)
                                                         .append(
                                                             $("<span />", { "class": "count" })
-                                                                .text(matchText)
-                                                                .attr("title", countText)
+                                                                .text(`(${option.count})`)
                                                         );
                                                 }
                                             )

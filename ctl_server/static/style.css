@@ -1,4 +1,5 @@
 body {
+    background-color: #fff;
     font-family: "Lato", sans-serif;
     font-weight: 400;
     font-style: normal;
@@ -17,21 +18,99 @@ a {
 }
 
 #status {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-rows: 1fr 1fr;
+    width: 100vw;
+    box-sizing: border-box;
+    display: flex;
+    align-items: baseline;
     background-color: #fff;
-    padding: 0.5em 2.5em;
+    padding: 8px 16px;
     align-items: center;
     grid-column: 1/1;
     grid-row: 1/2;
+    /* background-color: #f6f8fc; */
+    border-bottom: solid 1px #dadce0;
+}
+
+.app-name {
+    color: #f94a37;
+    font-size: 20pt;
+    width: 250px;
+    font-weight: bold;
+    text-decoration: none;
+}
+
+.app-name:hover {
+    text-decoration: underline;
+}
+
+#status .title {
+    margin-left: 16px;
+    margin-right: auto;
+    font-size: 20pt;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    color: #999;
+}
+
+#status .title.valid {
+    color: #000;
+}
+
+#search {
+    width: 250px;
+    box-sizing: border-box;
+    padding: 0.25em 1em;
+    border: solid 1px #999;
+    border-radius: 25px;
+    margin: 0px 8px;
+    font-size: 14pt;
+    color: #000;
+}
+
+#stop {
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    padding: 8px;
+    margin: 0px 8px;
+    border-radius: 25px;
+}
+
+#stop:hover {
+    background-color: #efefef;
+}
+
+#stop:disabled {
+    opacity: 50%;
+}
+
+div:has(> #volume) {
+    margin: 0 0 0 8px;
 }
 
 #content {
-    padding: 0 25px 25px 25px;
-    overflow-y: auto;
     grid-column: 1/1;
     grid-row: 2/2;
+    display: grid;
+    grid-template-columns: 250px auto;
+    grid-template-rows: 1fr;
+    column-gap: 1em;
+    overflow: hidden;
+}
+
+#filters {
+    padding-left: 16px;
+    grid-column: 1/2;
+    grid-row: 1/1;
+    overflow-y: auto;
+}
+
+#games {
+    grid-column: 2/2;
+    grid-row: 1/1;
+    overflow-y: auto;
+    padding: 0 16px;
 }
 
 #drop_target {
@@ -41,28 +120,28 @@ a {
 }
 
 #footer {
-    padding: 1em 2em;
+    padding: 10px 16px;
 }
 
 #drop_target.hovering {
     visibility: visible;
 }
 
-.filters {
-    display: flex;
-    align-items: center;
+.filters .label {
+    background-color: #fff;
+    position: sticky;
+    top: 0;
+    padding: 0.5em 0;
+    display: block;
+    font-weight: bold;
+}
+
+.scrimmed .filters .label {
+    position: inherit;
 }
 
 .filters.active .label {
-    font-weight: bold;
     cursor: pointer;
-}
-
-.filters .scroller {
-    flex: 1;
-    margin: 0 0.5em;
-    overflow-x: auto;
-    white-space: nowrap;
 }
 
 .filter {
@@ -70,8 +149,7 @@ a {
     border: solid 1px #0000;
     border-radius: 25px;
     padding: 0.25em 0.75em;
-    margin: 0.5em 0.25em;
-    display: inline-block;
+    display: block;
     white-space: nowrap;
 }
 
@@ -85,35 +163,20 @@ a {
 
 .filter .count {
     display: inline-block;
-    min-width: 13px;
-    min-height: 13px;
     text-align: center;
     margin-left: 0.5em;
-    background-color: #666;
-    color: #fff;
+    color: #999;
     border-radius: 25px;
-    font-size: 8pt;
     padding: 2px;
 }
 
+.filter.selected .count {
+    color: #ddd;
+}
+
 .filter.selected {
-    background: #f55;
-    color: #fff
-}
-
-.orientation.filter.selected {
-    background: #85c1e9;
-    color: #fff
-}
-
-.genre.filter.selected {
-    background: #cd6155;
-    color: #fff
-}
-
-.tag.filter.selected {
-    background: #7dcea0;
-    color: #fff
+    background: #f94a37;
+    color: #fff;
 }
 
 .filter:hover {
@@ -121,66 +184,38 @@ a {
 }
 
 .game {
-    margin: 0.25em 0;
-    border: solid 2px #ddd;
-    color: #777;
-    border-radius: 0.25em;
+    border-bottom: solid 1px #ddd;
+    color: #000;
     padding: 0.5em 0.5em;
 }
 
 .game.selected {
-    color: #444;
-    border-color: #777;
+    color: #f94a37;
+    font-weight: bold;
+}
+
+.game.active {
+    background-color: #ffffcc;
 }
 
 .game:hover {
     background-color: #eee;
-    border-color: #777;
-    color: #000;
     cursor: pointer;
 }
 
 .game .title {
-    font-size: 24pt;
+    font-size: 14pt;
 }
 
+.game .company,
 .game .year {
     display: block;
-    font-size: 14pt;
-}
-
-.game .company {
-    display: block;
-    font-size: 14pt;
+    color: #999;
+    font-size: 10pt;
 }
 
 .game .system {
     display: none;
-}
-
-div:has(> #volume) {
-    grid-column: 2/3;
-    grid-row: 1/3;
-}
-
-#status .tooltip {
-    font-size: 12pt;
-    grid-column: 1/2;
-    grid-row: 1/2;
-}
-
-#status .title {
-    font-size: 24pt;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    overflow: hidden;
-    grid-column: 1/2;
-    grid-row: 2/3;
-    color: #777;
-}
-
-#status .title.valid {
-    color: #000;
 }
 
 #scrim {
@@ -192,16 +227,16 @@ div:has(> #volume) {
     backdrop-filter: blur(10px);
 }
 
-.scrimmed #scrim {
-    display: block;
-}
-
 #scrim img {
     left: 50%;
     top: 50%;
     position: fixed;
     margin-left: -128px;
     margin-top: -128px;
+}
+
+.scrimmed #scrim {
+    display: block;
 }
 
 #drop_target span {
@@ -219,9 +254,48 @@ div:has(> #volume) {
     height: 100%;
 }
 
+.scrimmed input {
+    display: none !important;
+}
+
 @media (min-width:320px)  { /* smartphones, portrait iPhone, portrait 480x320 phones (Android) */ }
 @media (min-width:480px)  { /* smartphones, Android phones, landscape iPhone */ }
 @media (min-width:600px)  { /* portrait tablets, portrait iPad, e-readers (Nook/Kindle), landscape 800x480 phones (Android) */ }
 @media (min-width:801px)  { /* tablet, landscape iPad, lo-res laptops ands desktops */ }
 @media (min-width:1025px) { /* big landscape tablets, laptops, and desktops */ }
 @media (min-width:1281px) { /* hi-res laptops and desktops */ }
+
+@media only screen and (max-width: 600px) {
+    #status {
+        box-sizing: border-box;
+        flex-wrap: wrap;
+        padding: 8px 8px;
+    }
+
+    .app-name {
+        display: none;
+    }
+
+    #status .title {
+        font-size: 18pt;
+        flex-basis: 100%;
+    }
+
+    #filters {
+        display: none;
+    }
+
+    #search {
+        margin-left: auto;
+        min-width: 0;
+    }
+
+    #stop {
+        margin: 0px 0px 0px 8px;
+    }
+
+    #games {
+        grid-area: 1 / 1 / span 1 / span 2;
+        padding: 0;
+    }
+}
