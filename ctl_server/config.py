@@ -82,16 +82,17 @@ class GameConfig:
                 continue
             filter_match = True
             for (k, v_list) in filter_map.items():
-                if k == 't' and set(v_list) != set(game.tags):
+                filters = set(v_list)
+                if k == 't' and filters.intersection(set(game.tags)) != filters:
                     filter_match = False
                     break
-                elif k == 'o' and set(v_list) != { game.orientation }:
+                elif k == 'o' and filters != { game.orientation }:
                     filter_match = False
                     break
-                elif k == 'g' and set(v_list) != set(game.genres):
+                elif k == 'g' and filters.intersection(set(game.genres)) != filters:
                     filter_match = False
                     break
-                elif k == 's' and set(v_list) != set(game.series):
+                elif k == 's' and filters.intersection(set(game.series)) != filters:
                     filter_match = False
                     break
             if filter_match:
