@@ -1,4 +1,6 @@
 $(function() {
+    const cookies = Cookies.withAttributes({ expires: 31 });
+
     const hashMap = function() {
         return location.hash
             .replace(/^#+/, '')
@@ -36,8 +38,8 @@ $(function() {
         location.hash = `filters=${filters.join(',')}`;
     };
     const select = function(which) {
-        const $selected = $(".active:visible");
-        $(".active").removeClass("active");
+        const $selected = $(".game.active:visible");
+        $(".game.active").removeClass("active");
         if (which == 0) {
             return;
         }
@@ -93,23 +95,26 @@ $(function() {
         $(".game").on("click", function() {
             const item = $(this);
             const itemId = item.data('id');
-            toggleScrim(true);
             launch(itemId);
         });
     };
-    const setVolume = function(vol) {
+    const setVolume = function(vol, clearMute = true) {
         $.ajax({
             url: "volume",
             type: "POST",
             data: JSON.stringify({ 'volume': vol }),
             contentType: "application/json; charset=utf-8",
             dataType: "json",
-            success: function(){
-                // TODO
+            success: function(response) {
+                setUiVolume(response.volume);
             }
         });
+        if (clearMute) {
+            cookies.remove('pre_mute_vol');
+        }
     };
     const launch = function(id) {
+        toggleScrim(true);
         $.ajax({
             url: "launch",
             type: "POST",
@@ -135,7 +140,10 @@ $(function() {
             }
         });
     };
-    const updateVolume = function(value) {
+    const uiVolume = function() {
+        return parseInt($('#volume').val(), 10) || 0;
+    };
+    const setUiVolume = function(value) {
         $('#volume')
             .val(value)
             .trigger('change');
@@ -234,13 +242,13 @@ $(function() {
                     if (volumeReady) { setVolume(~~v); }
                 },
             });
-        updateVolume(0);
+        setUiVolume(0);
         // set current selection
         $.get(
             "query",
             function(resp) {
                 updateSelection(resp.game);
-                updateVolume(resp.volume || 0);
+                setUiVolume(resp.volume || 0);
             },
         );
         updateSelection();
@@ -249,6 +257,110 @@ $(function() {
         document.onselectstart = function() {
             return false;
         }
+        // set up search handler
+        $("#search").on("input", function(e) {
+            syncGames();
+        });
+        // set up keyboard handler
+        $(document).on("keyup", function(e) {
+            const $search = $("#search");
+            var handled = false;
+            if ($search.is(":focus")) {
+                if (e.keyCode == 27) {
+                    // esc
+                    closeSearch();
+                    handled = true;
+                } else if (e.keyCode == 38) {
+                    // up
+                    select(-1);
+                    handled = true;
+                } else if (e.keyCode == 40) {
+                    // down
+                    select(1);
+                    handled = true;
+                } else if (e.keyCode == 13) {
+                    // return
+                    const $active = $(".game.active");
+                    if ($active.length) {
+                        launch($active.data("id"));
+                        closeSearch();
+                        $active[0].scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                    handled = true;
+                }
+            } else {
+                if (e.keyCode == 84 || e.keyCode == 191) {
+                    // 't' or 'T'
+                    $search.focus();
+                    handled = true;
+                } else if (e.keyCode == 173) {
+                    // volume down
+                    const vol = uiVolume();
+                    const newVol = e.shiftKey
+                        ? Math.max(0, vol - 10)
+                        : Math.max(0, vol - 1);
+                    if (vol != newVol) {
+                        setVolume(newVol);
+                    }
+                    handled = true;
+                } else if (e.keyCode == 61) {
+                    // volume up
+                    const vol = parseInt($('#volume').val(), 10) || 0;
+                    const newVol = e.shiftKey
+                        ? Math.min(100, vol + 10)
+                        : Math.min(100, vol + 1);
+                    if (vol != newVol) {
+                        setVolume(newVol);
+                    }
+                    handled = true;
+                } else if (e.keyCode == 77) {
+                    // mute
+                    const vol = parseInt($('#volume').val(), 10) || 0;
+                    if (vol > 0) {
+                        cookies.set('pre_mute_vol', vol);
+                        setVolume(0, false);
+                    } else {
+                        const preMute = cookies.get('pre_mute_vol');
+                        if (preMute) {
+                            const newVol = parseInt(preMute, 10);
+                            setVolume(newVol);
+                        }
+                    }
+                    handled = true;
+                }
+            }
+            return !handled;
+        });
+        // set up drag-and-drop upload handlers
+        $('#content')
+            .on('dragenter', function(e) {
+                $('#drop_target').addClass('hovering');
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        $('#drop_target')
+            .on('dragover', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            })
+            .on('dragleave', function(e) {
+                $(this).removeClass('hovering');
+                e.preventDefault();
+                e.stopPropagation();
+            })
+            .on('drop', function(e) {
+                $(this).removeClass('hovering');
+                if (e.originalEvent.dataTransfer) {
+                    upload(e.originalEvent.dataTransfer.files);
+                }
+                e.preventDefault();
+                e.stopPropagation();
+        });
+        // set up stop button handler
+        $("#stop").on("click", function() {
+            toggleScrim(true);
+            stop();
+        });
     };
     const upload = function(files) {
         if (files.length == 0) {
@@ -279,62 +391,4 @@ $(function() {
         $('body').toggleClass('scrimmed', show);
     };
     initialize();
-    $("#stop").on("click", function() {
-        toggleScrim(true);
-        stop();
-    });
-    $('#content')
-        .on('dragenter', function(e) {
-            $('#drop_target').addClass('hovering');
-            e.preventDefault();
-            e.stopPropagation();
-        });
-    $('#drop_target')
-        .on('dragover', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        })
-        .on('dragleave', function(e) {
-            $(this).removeClass('hovering');
-            e.preventDefault();
-            e.stopPropagation();
-        })
-        .on('drop', function(e) {
-            $(this).removeClass('hovering');
-            if (e.originalEvent.dataTransfer) {
-                upload(e.originalEvent.dataTransfer.files);
-            }
-            e.preventDefault();
-            e.stopPropagation();
-    });
-    $(document).on("keyup", function(e) {
-        const $search = $("#search");
-        if ($search.is(":focus")) {
-            if (e.keyCode == 27) {
-                // esc
-                closeSearch();
-            } else if (e.keyCode == 38) {
-                // up
-                select(-1);
-            } else if (e.keyCode == 40) {
-                // down
-                select(1);
-            } else if (e.keyCode == 13) {
-                // return
-                const $active = $(".game.active");
-                if ($active.length) {
-                    launch($active.data("id"));
-                    closeSearch();
-                    $active[0].scrollIntoView({ behavior: "smooth", block: "center" });
-                }
-            }
-            return;
-        }
-        if (e.keyCode == 84 || e.keyCode == 116) {
-            $search.focus();
-        }
-    });
-    $("#search").on("input", function(e) {
-        syncGames();
-    });
 });

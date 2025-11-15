@@ -64,12 +64,15 @@ def volume():
             'message': 'Volume is not valid',
         }, http.HTTPStatus.BAD_REQUEST
 
-    subprocess.call([
+    result = read_process_output(
         'ssh',
-        konfig.game_server.ip,
-        f'{konfig.game_server.path}/set_volume.sh {volume}',
-    ])
-    return { 'status': 'OK' }
+        [
+            konfig.game_server.ip,
+            f'{konfig.game_server.path}/set_volume.sh {volume}',
+        ]
+    )
+    vol = int(result) if result.isdigit() else None
+    return { 'volume': vol }
 
 @app.route('/stop', methods=['POST'])
 def stop():

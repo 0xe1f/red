@@ -12,4 +12,5 @@ if [ "$VOLUME" -lt 0 ] || [ "$VOLUME" -gt 100 ]; then
     exit 1
 fi
 
-amixer sset PCM "$VOLUME"'%'
+amixer sset PCM "$VOLUME"'%' >/dev/null
+amixer sget PCM | grep '%]' | tail -1 | sed -n -E 's/.*\[([^%]+)%].*/\1/p'
