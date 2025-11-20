@@ -1,0 +1,55 @@
+game_server:
+  host: red1.local
+  ip: 192.168.1.101
+  path: game_servers
+  extra_args: >-
+    -background
+    --output-dims=320x256
+    --scale-mode=shortestxaspect
+    --max-clients=2
+game_clients:
+  - host: red0.local
+    client_ip: 192.168.1.102
+    server_ip: 192.168.1.101
+    path: rgbclient
+    exe: rgbclient
+    extra_args: >-
+      --retry-count=10
+      --retry-delay=500
+      --led-rows=64
+      --led-cols=64
+      --led-chain=5
+      --led-parallel=2
+      --led-slowdown-gpio=4
+      --led-gpio-mapping=regular
+      --led-pwm-bits=6
+      --src-rect=0,0-320,128
+      --dest-rect=0,0-320,128
+      --content-rect=0,0-320,256
+  - host: red1.local
+    client_ip: 192.168.1.101
+    server_ip: 192.168.1.101
+    path: rgbclient
+    exe: rgbclient
+    extra_args: >-
+      --retry-count=10
+      --retry-delay=500
+      --led-rows=64
+      --led-cols=64
+      --led-chain=5
+      --led-parallel=2
+      --led-slowdown-gpio=4
+      --led-gpio-mapping=regular
+      --led-pwm-bits=6
+      --src-rect=0,128-320,256
+      --dest-rect=0,0-320,128
+      --content-rect=0,0-320,256
+    unused: >-
+      --led-scan-mode=1
+      --led-no-busy-waiting
+      --led-pwm-dither-bits=1
+      --led-pwm-lsb-nanoseconds=50
+      --led-limit-refresh=30
+control_server:
+  host: red0.local
+  path: ctl_server
