@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en-US">
+    <head profile="http://www.w3.org/2005/10/profile">
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+        {% include 'fonts.html' %}
+        <link href="{{ url_for("static", filename="style/users.css") }}" type="text/css" rel="stylesheet"/>
+        <link href="{{ url_for("static", filename="style/login.css") }}" type="text/css" rel="stylesheet"/>
+        <title>Log in</title>
+    </head>
+    <body>
+        <div id="header">
+            <a class="app-name" href="https://github.com/0xe1f/red" target="_blank">RED</a>
+        </div>
+        <div class="fields">
+            <form action="{{ url_for("login_post") }}" method="post">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <ul>
+                        {% for category, message in messages %}
+                            <li class="{{ category if category else "error" }}">{{ message }}</li>
+                        {% endfor %}
+                        </ul>
+                    {% endif %}
+                    <input type="text" name="username" placeholder="username" value="{{ arg.username if arg is defined else "" }}" />
+                    <input type="password" name="password" placeholder="password" />
+                    <a href="{{ url_for("create_account_get") }}">Create account</a>
+                    <input type="submit" value="Sign in" />
+                {% endwith %}
+            </form>
+        </div>
+    </body>
+</html>

@@ -1,35 +1,56 @@
 #!/usr/bin/env python3
 
+# Copyright (C) 2024-2025 Akop Karapetyan
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import config
 from collections import defaultdict
-from flask import Flask, render_template, request
+import flask
+import flask_login
 import http
 import logging
 import os
 import re
 import subprocess
 import tempfile
+import tomllib
 from werkzeug.utils import secure_filename
 
-app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 128 * 1000 * 1000
+app = flask.Flask(__name__)
+app.config.from_file("config.toml", load=tomllib.load, text=False)
+
+import users
 
 ROM_UPLOAD_FILENAME_REGEX = r'^[A-Za-z0-9]+\.[A-Za-z0-9]{1,7}$'
 ROM_UPLOAD_ALLOWED_TYPES = [ '.zip', '.7z' ]
 ROM_UPLOAD_MAX_FILES = 5
 
 @app.route('/')
+@flask_login.login_required
 def index():
-    return render_template('index.html')
+    return flask.render_template('index.html')
 
 @app.route('/filters')
+@flask_login.login_required
 def filters():
     return game_konfig.filters()
 
 @app.route('/games')
+@flask_login.login_required
 def games():
-    search = request.args.get("search", "")
-    filters = request.args.get("filters", "")
+    search = flask.request.args.get("search", "")
+    filters = flask.request.args.get("filters", "")
     filter_map = defaultdict(list)
     if filters:
         for (k, v) in [ filter.split(":") for filter in filters.split(',') ]:
@@ -38,6 +59,7 @@ def games():
     return game_konfig.games(search=search, filter_map=filter_map)
 
 @app.route('/query')
+@flask_login.login_required
 def query():
     result = read_process_output(
         'ssh',
@@ -53,8 +75,9 @@ def query():
     }
 
 @app.route('/volume', methods=['POST'])
+@flask_login.login_required
 def volume():
-    dict = request.json
+    dict = flask.request.json
 
     volume = dict.get('volume')
     if not 0 <= volume <= 100:
@@ -75,13 +98,15 @@ def volume():
     return { 'volume': vol }
 
 @app.route('/stop', methods=['POST'])
+@flask_login.login_required
 def stop():
     konfig.game_server.stop()
     return { 'status': 'OK' }
 
 @app.route('/launch', methods=['POST'])
+@flask_login.login_required
 def launch():
-    dict = request.json
+    dict = flask.request.json
 
     id = dict.get('id')
     if not id:
@@ -115,15 +140,16 @@ def launch():
         }, http.HTTPStatus.BAD_REQUEST
 
 @app.route('/upload', methods=['POST'])
+@flask_login.login_required
 def upload():
     # Basic checks
-    if len(request.files) < 1:
+    if len(flask.request.files) < 1:
         return {
             'status': 'ERR',
             'message': 'No files uploaded',
         }, http.HTTPStatus.BAD_REQUEST
 
-    if len(request.files) > ROM_UPLOAD_MAX_FILES:
+    if len(flask.request.files) > ROM_UPLOAD_MAX_FILES:
         return {
             'status': 'ERR',
             'message': 'Too many files',
@@ -131,14 +157,14 @@ def upload():
 
     # Check individual files
     files = []
-    for i in range(len(request.files)):
-        if f'files[{i}]' not in request.files:
+    for i in range(len(flask.request.files)):
+        if f'files[{i}]' not in flask.request.files:
             return {
                 'status': 'ERR',
                 'message': 'Missing file upload',
             }, http.HTTPStatus.BAD_REQUEST
 
-        file = request.files[f'files[{i}]']
+        file = flask.request.files[f'files[{i}]']
         filename = file.filename
         if not re.fullmatch(ROM_UPLOAD_FILENAME_REGEX, filename):
             return {

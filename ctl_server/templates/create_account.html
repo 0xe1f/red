@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en-US">
+    <head profile="http://www.w3.org/2005/10/profile">
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+        {% include 'fonts.html' %}
+        <link href="{{ url_for("static", filename="style/users.css") }}" type="text/css" rel="stylesheet"/>
+        <link href="{{ url_for("static", filename="style/create_account.css") }}" type="text/css" rel="stylesheet"/>
+        <script src="{{ url_for("static", filename="js/jquery-3.7.1.min.js") }}" type="text/javascript"></script>
+        <script src="{{ url_for("static", filename="js/create_account.js") }}" type="text/javascript"></script>
+        <title>Create Account</title>
+    </head>
+    <body>
+        <div id="header">
+            <a class="app-name" href="https://github.com/0xe1f/red" target="_blank">RED</a>
+        </div>
+        <div class="fields">
+            <form action="{{ url_for("create_account_post") }}" method="post">
+                {% with messages = get_flashed_messages() %}
+                    {% if messages %}
+                        <ul>
+                        {% for message in messages %}
+                            <li>{{ message }}</li>
+                        {% endfor %}
+                        </ul>
+                    {% endif %}
+                    <input type="text" name="username" placeholder="username" value="{{ arg.username if arg is defined else "" }}" />
+                    <input type="text" name="email_address" placeholder="email address" value="{{ arg.email_address if arg is defined else "" }}" />
+                    <input type="password" name="password" placeholder="password" />
+                    <div class="password-strength">
+                        <div class="gauge"></div>
+                    </div>
+                    <input type="password" name="confirm_password" placeholder="confirm password" />
+                    <a href="{{ url_for("login_get") }}">Log in</a>
+                    <input type="submit" value="Create" />
+                {% endwith %}
+            </form>
+        </div>
+    </body>
+</html>

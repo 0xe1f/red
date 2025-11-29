@@ -1,0 +1,127 @@
+/*****************************************************************************
+ ** Copyright (C) 2024-2025 Akop Karapetyan
+ **
+ ** Licensed under the Apache License, Version 2.0 (the "License");
+ ** you may not use this file except in compliance with the License.
+ ** You may obtain a copy of the License at
+ **
+ **     http://www.apache.org/licenses/LICENSE-2.0
+ **
+ ** Unless required by applicable law or agreed to in writing, software
+ ** distributed under the License is distributed on an "AS IS" BASIS,
+ ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ ** See the License for the specific language governing permissions and
+ ** limitations under the License.
+ ******************************************************************************
+ */
+
+html, body, .fields {
+    height: 100%;
+    font-style: normal;
+}
+
+#header {
+    background-color: #fff;
+    border-bottom: solid 1px #dadce0;
+    padding: 17px 16px;
+}
+
+#header a {
+    color: #f94a37;
+    font-size: 20pt;
+    font-weight: bold;
+    text-decoration: none;
+}
+
+body {
+    font-family: Lato, helvetica neue, helvetica, arial, sans-serif;
+    font-size: 10pt;
+    color: #444;
+    margin: 0;
+    background-color: #fff;
+}
+
+.fields {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+form {
+    background-color: #fff;
+    border: solid 1px #777;
+    border-radius: 5px;
+    margin: auto auto;
+    width: 300px;
+    padding: 16px 24px;
+    display: grid;
+    grid-template-columns: 3fr 1fr;
+    align-items: center;
+}
+
+.fields input {
+    font-family: Lato, helvetica neue, helvetica, arial, sans-serif;
+    font-size: 16pt;
+    font-weight: normal;
+}
+
+.fields input[type=text],
+.fields input[type=password] {
+    border: solid 1px #777;
+    border-radius: 5px;
+    display: block;
+    margin: 8px 0;
+    padding: 0.25em 0.5em;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.fields a {
+    color: #1F51FF;
+    text-decoration: none;
+    font-size: 14pt;
+}
+
+.fields a:hover {
+    text-decoration: underline;
+}
+
+.fields input[type=submit] {
+    margin: 8px 0;
+    padding: 0.5em 1.5em;
+    background-color: #eee;
+    border: solid 1px #aaa;
+    border-radius: 3px;
+    box-shadow: 1px 1px 1px #ddd;
+    color: #999;
+    font-weight: 500;
+}
+
+.fields input[type=submit]:enabled {
+    color: #555;
+}
+
+.fields input[type=submit]:hover:enabled {
+    border-color: #000;
+}
+
+.fields input[type=submit]:active:enabled {
+    color: #555;
+}
+
+.fields ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+.fields li {
+    margin: 1em 0em;
+    font-size: 14pt;
+    color: red;
+    display: block;
+}
+
+.fields li.success {
+    color: green;
+}

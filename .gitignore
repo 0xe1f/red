@@ -5,3 +5,5 @@ __pycache__/
 *.code-workspace
 *.yaml
 venv/
+*.toml
+*.db
