@@ -113,6 +113,14 @@ sharing on one of the Pi units.
 
 At the moment, [FinalBurn Neo](https://github.com/finalburnneo/FBNeo) is the only server available.
 
+To keep things as fast as possible, I recommend turning off wifi on the server,
+both to minimize unnecessary resource utilization, and to prevent unintended
+client-to-server connections via WiFi. You can do this by adding
+```
+dtoverlay=disable-wifi
+```
+to the end of `/boot/config.txt`.
+
 ### Rendering Client(s)
 
 [Rendering Clients](rgbclient) connect to a running Game Server and display video based on data supplied by

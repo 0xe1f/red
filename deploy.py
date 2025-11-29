@@ -52,7 +52,7 @@ if args.svr or args.all:
     if not config.game_server:
         raise ValueError('Missing game server configuration')
 
-    print("Deploying to server...")
+    print("Deploying to control server for build...")
     subprocess.call([
         'rsync',
         '-vrtp',
@@ -60,7 +60,7 @@ if args.svr or args.all:
         '--exclude-from', 'game_servers/common.exclude',
         '--exclude-from', 'game_servers/fbneo.exclude',
         f'game_servers/',
-        f'{config.game_server.host}:{config.game_server.path}',
+        f'{config.control_server.host}:{config.game_server.path}_build',
     ])
 
     print("Building server(s)...")
@@ -68,9 +68,9 @@ if args.svr or args.all:
         'ssh',
         '-o',
         'StrictHostKeyChecking no',
-        f'{config.game_server.host}',
+        f'{config.control_server.host}',
         '-t',
-        f'cd {config.game_server.path} && ./build.sh',
+        f'{config.game_server.path}_build/build.sh {config.game_server.host} {config.game_server.path}',
     ])
 
 if args.cli or args.all:
