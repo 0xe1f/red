@@ -35,7 +35,7 @@ class GameConfig:
                     {
                         "name": k,
                         "count": len(v),
-                    } for k, v in self.orientations.items()], key=lambda x: x['name']),
+                    } for k, v in self.orientations.items()], key=lambda x: x['name'].lower()),
                 "prefix": 'o',
             },
             {
@@ -45,7 +45,7 @@ class GameConfig:
                     {
                         "name": k,
                         "count": len(v),
-                    } for k, v in self.genres.items()], key=lambda x: x['name']),
+                    } for k, v in self.genres.items()], key=lambda x: x['name'].lower()),
                 "prefix": 'g',
             },
             {
@@ -55,7 +55,7 @@ class GameConfig:
                     {
                         "name": k,
                         "count": len(v),
-                    } for k, v in self.tags.items()], key=lambda x: x['name']),
+                    } for k, v in self.tags.items()], key=lambda x: x['name'].lower()),
                 "prefix": 't',
                 "type": 'multi',
             },
@@ -66,7 +66,7 @@ class GameConfig:
                     {
                         "name": k,
                         "count": len(v),
-                    } for k, v in self.series.items()], key=lambda x: x['name']),
+                    } for k, v in self.series.items()], key=lambda x: x['name'].lower()),
                 "prefix": 's',
             },
         ]
@@ -74,7 +74,7 @@ class GameConfig:
     def games(self, search="", filter_map={}):
         all_games = self.game_map.values()
         if not (search or filter_map):
-            return sorted([ game.as_dict() for game in all_games ], key=lambda x: x['title'])
+            return sorted([ game.as_dict() for game in all_games ], key=lambda x: x['title'].lower())
 
         filtered_games = []
         for game in all_games:
@@ -98,7 +98,7 @@ class GameConfig:
             if filter_match:
                 filtered_games.append(game)
 
-        return sorted([ game.as_dict() for game in filtered_games ], key=lambda x: x['title'])
+        return sorted([ game.as_dict() for game in filtered_games ], key=lambda x: x['title'].lower())
 
 class Config:
 
