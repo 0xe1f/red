@@ -1,15 +1,19 @@
 #!/bin/bash
 
-EMULATOR_DIR=fbneo
-EMULATOR_EXE=fbneo
+APP_ID=$1
+TITLE_ID=$2
 
-cd `dirname $0`
-killall -s SIGINT ${EMULATOR_EXE} 2> /dev/null
-
-if [ "$1" == "--stop" ]; then
-    exit 0
+if [ -z "$APP_ID" ] || [ -z "$TITLE_ID" ]; then
+    echo "Error: app_id or title_id is missing" >&2
+    exit 1
 fi
 
-cd ${EMULATOR_DIR}
+cd `dirname $0`
+./stopall.sh
+
+# Discard the app_id
+shift
+
+cd "${APP_ID}"
 set -o pipefail
-./${EMULATOR_EXE} $@ 2>&1 | tee -a log.txt
+./${APP_ID} $@ 2>&1 | tee -a log.txt

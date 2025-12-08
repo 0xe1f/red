@@ -125,11 +125,11 @@ def launch():
     if code == 0:
         dl.create_launch(
             session_id=session.get('id'),
-            app_id='fbneo',
+            app_id=title.app_id,
             title_id=title.id,
         )
         dl.increment_launch_count(
-            app_id='fbneo',
+            app_id=title.app_id,
             title_id=title.id,
         )
         for client in konfig.game_clients:
