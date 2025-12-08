@@ -140,7 +140,7 @@ $(function() {
             dataType: "json",
             success: function(resp){
                 toggleScrim(false);
-                updateSelection(resp.game);
+                updateSelection(resp.title);
             }
         });
     };
@@ -353,7 +353,7 @@ $(function() {
         $.get(
             "query",
             function(resp) {
-                updateSelection(resp.game);
+                updateSelection(resp.title);
                 setUiVolume(resp.volume || 0);
             },
         );

@@ -14,6 +14,7 @@
 
 from __main__ import app
 from data.errors import DataException
+from flask import session
 from flask_login import current_user
 from objects.errors import ValidationException
 import data.sessions as ds
@@ -76,8 +77,8 @@ def login_post():
         )
 
     try:
-        session = ds.create_session(user.id, flask.request.remote_addr)
-        app.logger.info(f"Session ({session.id}) created")
+        user_session = ds.create_session(user.id, flask.request.remote_addr)
+        app.logger.info(f"Session ({user_session.id}) created")
     except DataException as e:
         app.logger.error(e.message)
         flask.flash("Error logging in")
@@ -86,7 +87,8 @@ def login_post():
             arg=arg,
         )
 
-    flask.session.permanent = True
+    session.permanent = True
+    session['id'] = user_session.id
     flask_login.utils.login_user(objects.User(user))
 
     if next := flask.request.args.get("next"):

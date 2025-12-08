@@ -80,4 +80,31 @@ def init_db():
     run_query("""
         CREATE INDEX IF NOT EXISTS sessions_user_id ON sessions (user_id)
     """, autocommit=False)
+    run_query("""
+        CREATE TABLE IF NOT EXISTS launches (
+            id INTEGER PRIMARY KEY,
+            session_id INTEGER NOT NULL,
+            app_id TEXT NOT NULL,
+            title_id TEXT NOT NULL,
+            launched_at INTEGER NOT NULL,
+            stopped_at INTEGER
+        )
+    """, autocommit=False)
+    run_query("""
+        CREATE INDEX IF NOT EXISTS launches_launched_at ON launches (launched_at)
+    """, autocommit=False)
+    run_query("""
+        CREATE TABLE IF NOT EXISTS launch_counts (
+            id INTEGER PRIMARY KEY,
+            app_id TEXT NOT NULL,
+            title_id TEXT NOT NULL,
+            count INTEGER NOT NULL
+        )
+    """, autocommit=False)
+    run_query("""
+        CREATE INDEX IF NOT EXISTS launch_counts_count ON launch_counts (count)
+    """, autocommit=False)
+    run_query("""
+        CREATE UNIQUE INDEX IF NOT EXISTS launch_counts_app_title_id ON launch_counts (app_id, title_id)
+    """, autocommit=False)
     get_db().commit()

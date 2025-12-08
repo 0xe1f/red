@@ -14,8 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import config
 from collections import defaultdict
+from flask import session
+from werkzeug.utils import secure_filename
+import config
 import flask
 import flask_login
 import http
@@ -25,10 +27,11 @@ import re
 import subprocess
 import tempfile
 import tomllib
-from werkzeug.utils import secure_filename
 
 app = flask.Flask(__name__)
 app.config.from_file("config.toml", load=tomllib.load, text=False)
+
+import data.launches as dl
 
 import users
 
@@ -61,18 +64,7 @@ def games():
 @app.route('/query')
 @flask_login.login_required
 def query():
-    result = read_process_output(
-        'ssh',
-        [
-            konfig.game_server.ip,
-            f'{konfig.game_server.path}/query.sh',
-        ]
-    )
-    title, vol, *_ = result.split(' ', 1) + [None] * 2
-    return {
-        'game': game_konfig.game_map[title].as_dict(),
-        'volume': vol,
-    }
+    return server_state()
 
 @app.route('/volume', methods=['POST'])
 @flask_login.login_required
@@ -100,7 +92,10 @@ def volume():
 @app.route('/stop', methods=['POST'])
 @flask_login.login_required
 def stop():
-    konfig.game_server.stop()
+    if server_state()['is_running']:
+        konfig.game_server.stop()
+        dl.end_launch()
+
     return { 'status': 'OK' }
 
 @app.route('/launch', methods=['POST'])
@@ -108,29 +103,40 @@ def stop():
 def launch():
     dict = flask.request.json
 
-    id = dict.get('id')
-    if not id:
+    if not (id := dict.get('id')):
         logging.error('Missing id')
         return {
             'status': 'ERR',
             'message': 'Game id missing',
         }, http.HTTPStatus.BAD_REQUEST
 
-    game = game_konfig.game_map.get(id)
-    if not game:
+    if server_state()['is_running']:
+        dl.end_launch()
+
+    title = game_konfig.game_map.get(id)
+    if not title:
         logging.error('Game not found')
         return {
             'status': 'ERR',
             'message': 'Game not found',
         }, http.HTTPStatus.NOT_FOUND
 
-    (code, stdout) = konfig.game_server.launch(game)
+    (code, stdout) = konfig.game_server.launch(title)
     if code == 0:
+        dl.create_launch(
+            session_id=session.get('id'),
+            app_id='fbneo',
+            title_id=title.id,
+        )
+        dl.increment_launch_count(
+            app_id='fbneo',
+            title_id=title.id,
+        )
         for client in konfig.game_clients:
             client.launch()
         return {
             'status': 'OK',
-            'game': game.as_dict(),
+            'title': title.as_dict(),
         }
     else:
         return {
@@ -200,6 +206,22 @@ def upload():
         subprocess.call(args)
 
     return { 'status': 'OK' }
+
+def server_state():
+    result = read_process_output(
+        'ssh',
+        [
+            konfig.game_server.ip,
+            f'{konfig.game_server.path}/query.sh',
+        ]
+    )
+    title_id, vol, *_ = result.split(' ', 1) + [None] * 2
+    title = game_konfig.game_map.get(title_id) if title_id else None
+    return {
+        'title': title.as_dict() if title else None,
+        'is_running': not not title,
+        'volume': vol,
+    }
 
 def read_process_output(exe, args):
     result = subprocess.run([exe] + args, stdout=subprocess.PIPE)
