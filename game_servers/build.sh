@@ -8,15 +8,10 @@ if [ -z "$HOST" ] || [ -z "$DEST" ]; then
     exit 1
 fi
 
-cd "$(dirname "$0")"
+cd `dirname $(readlink -f $0)`
 
 set -e
 rsync -vt * $HOST:$DEST
 
-echo "Building fbneo" >&2
-cd fbneo
-make ss RELEASEBUILD=1 BUILD_NATIVE=1
-ssh -o "StrictHostKeyChecking no" $HOST -t "mkdir -p $DEST/fbneo"
-scp -o "StrictHostKeyChecking no" fbneo $HOST:$DEST/fbneo/
-
-cd ..
+fbneo/build.sh $HOST $DEST
+chocolate-doom/build.sh $HOST $DEST

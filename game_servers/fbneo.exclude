@@ -25,3 +25,4 @@ fbneo/**/opengl/
 fbneo/**/video/sdl/
 fbneo/*/dep/generated/
 fbneo/**/visualstudio/
+fbneo/**/*.md

@@ -8,12 +8,15 @@ if [ -z "$APP_ID" ] || [ -z "$TITLE_ID" ]; then
     exit 1
 fi
 
-cd `dirname $0`
+BASE_DIR=`dirname $(readlink -f $0)`
+cd "$BASE_DIR"
+
 ./stopall.sh
 
 # Discard the app_id
 shift
 
-cd "${APP_ID}"
 set -o pipefail
-./${APP_ID} $@ 2>&1 | tee -a log.txt
+$APP_ID/launch.sh $@ 2>&1 | tee -a log.txt
+
+echo "$APP_ID $TITLE_ID" > $BASE_DIR/.launch_info

@@ -215,11 +215,11 @@ def server_state():
             f'{konfig.game_server.path}/query.sh',
         ]
     )
-    title_id, vol, *_ = result.split(' ', 1) + [None] * 2
+    _, title_id, vol, *_ = result.split(' ') + [None] * 4
     title = game_konfig.game_map.get(title_id) if title_id else None
     return {
         'title': title.as_dict() if title else None,
-        'is_running': not not title,
+        'is_running': not not title_id,
         'volume': vol,
     }
 

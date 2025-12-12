@@ -1,3 +1,6 @@
 [submodule "game_servers/fbneo"]
 	path = game_servers/fbneo
 	url = https://github.com/0xe1f/FBNeo.git
+[submodule "game_servers/chocolate-doom"]
+	path = game_servers/chocolate-doom
+	url = https://github.com/0xe1f/chocolate-doom.git
