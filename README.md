@@ -111,7 +111,8 @@ but accepts connections from rendering clients, and will dispatch frames as they
 To keep rendering fast, connections are done to/from eth0 IPs, which may require connection 
 sharing on one of the Pi units.
 
-At the moment, [FinalBurn Neo](https://github.com/finalburnneo/FBNeo) is the only server available.
+At the moment, [FinalBurn Neo](https://github.com/finalburnneo/FBNeo) and
+[Chocolate Doom](https://github.com/chocolate-doom/chocolate-doom) are supported.
 
 To keep things as fast as possible, I recommend turning off wifi on the server,
 both to minimize unnecessary resource utilization, and to prevent unintended

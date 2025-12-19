@@ -13,5 +13,7 @@ cd `dirname $(readlink -f $0)`
 set -e
 rsync -vt * $HOST:$DEST
 
-fbneo/build.sh $HOST $DEST
-chocolate-doom/build.sh $HOST $DEST
+for DIR in */; do
+    echo "Building ${DIR%/}..."
+    $DIR/build.sh $HOST $DEST
+done

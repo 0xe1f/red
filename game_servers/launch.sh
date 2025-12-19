@@ -16,6 +16,8 @@ cd "$BASE_DIR"
 # Discard the app_id
 shift
 
+echo "Launching $APP_ID/$TITLE_ID..." >> log.txt
+
 set -o pipefail
 $APP_ID/launch.sh $@ 2>&1 | tee -a log.txt
 

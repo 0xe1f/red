@@ -4,3 +4,6 @@
 [submodule "game_servers/chocolate-doom"]
 	path = game_servers/chocolate-doom
 	url = https://github.com/0xe1f/chocolate-doom.git
+[submodule "game_servers/blueberryMSX"]
+	path = game_servers/bluemsx
+	url = https://github.com/0xe1f/blueberryMSX.git
