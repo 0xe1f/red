@@ -53,10 +53,14 @@ stage_project() {
     local dirname="$1"
 
     echo -e "${BOLD_WHITE}>> ${GREEN}Staging build for $dirname... ${PLAIN}"
+    EXCLUDE_FILE=""
+    if [ -f "${dirname}.exclude" ]; then
+        EXCLUDE_FILE="--exclude-from ${dirname}.exclude"
+    fi
     rsync -trph \
         --info=progress2 \
         --exclude-from common.exclude \
-        --exclude-from fbneo.exclude \
+        $EXCLUDE_FILE \
         "$dirname" \
         "$BUILD_SVR:$BUILD_PATH/"
 }
