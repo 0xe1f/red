@@ -25,6 +25,7 @@ class GameConfig:
         self.genres = defaultdict(list)
         self.orientations = defaultdict(list)
         self.series = defaultdict(list)
+        self.platforms = defaultdict(list)
 
         with open(path) as fd:
             for item in yaml.safe_load(fd):
@@ -37,6 +38,7 @@ class GameConfig:
                 self.orientations[game.orientation].append(game.id)
                 for o in game.series:
                     self.series[o].append(game.id)
+                self.platforms[game.app_id].append(game.id)
 
     def filters(self):
         return [
@@ -49,6 +51,16 @@ class GameConfig:
                         "count": len(v),
                     } for k, v in self.orientations.items()], key=lambda x: x['name'].lower()),
                 "prefix": 'o',
+            },
+            {
+                "id": 'platform',
+                "label": 'Platform',
+                "options": sorted([
+                    {
+                        "name": k,
+                        "count": len(v),
+                    } for k, v in self.platforms.items()], key=lambda x: x['name'].lower()),
+                "prefix": 'p',
             },
             {
                 "id": 'genre',
@@ -99,6 +111,9 @@ class GameConfig:
                     filter_match = False
                     break
                 elif k == 'o' and filters != { game.orientation }:
+                    filter_match = False
+                    break
+                elif k == 'p' and filters != { game.app_id }:
                     filter_match = False
                     break
                 elif k == 'g' and filters.intersection(set(game.genres)) != filters:
