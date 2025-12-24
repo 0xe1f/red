@@ -126,11 +126,11 @@ def launch():
         dl.create_launch(
             session_id=session.get('id'),
             app_id=title.app_id,
-            title_id=title.id,
+            title_id=title.title_id,
         )
         dl.increment_launch_count(
             app_id=title.app_id,
-            title_id=title.id,
+            title_id=title.title_id,
         )
         for client in konfig.game_clients:
             client.launch()
@@ -215,8 +215,8 @@ def server_state():
             f'{konfig.game_server.path}/query.sh',
         ]
     )
-    _, title_id, vol, *_ = result.split(' ') + [None] * 4
-    title = game_konfig.game_map.get(title_id) if title_id else None
+    app_id, title_id, vol, *_ = result.split(' ') + [None] * 4
+    title = game_konfig.game_map.get(f'{app_id}:{title_id}') if title_id else None
     return {
         'title': title.as_dict() if title else None,
         'is_running': not not title_id,

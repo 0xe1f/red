@@ -187,7 +187,7 @@ class GameServer:
             args=[
                 'ssh',
                 self.ip,
-                f'{self.path}/launch.sh {game.app_id} {game.id} {self.extra_args} {game.extra_args}',
+                f'{self.path}/launch.sh {game.app_id} {game.title_id} {self.extra_args} {game.extra_args}',
             ],
             capture_output=True,
             text=True,
@@ -213,14 +213,16 @@ class Game:
 
     def __init__(self, **item):
         self.__dict__.update(item)
+
+        if 'app_id' not in item:
+            self.app_id = 'fbneo'
+        self.id = f'{self.app_id}:{self.title_id}'
         if 'tags' not in item:
             self.tags = []
         if 'genres' not in item:
             self.genres = []
         if 'orientation' not in item:
             self.orientation = 'landscape'
-        if 'app_id' not in item:
-            self.app_id = 'fbneo'
         if 'series' not in item:
             self.series = []
         if 'extra_args' not in item:
