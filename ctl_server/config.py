@@ -197,12 +197,21 @@ class GameServer:
         return obj
 
     def launch(self, game):
-        # TODO: game.extra_args duplicates args. eliminate duping
+        extra_args = []
+        if hasattr(self, 'platforms'):
+            extra_args.append(
+                self.platforms.get('common', {}).get('extra_args', '')
+            )
+            extra_args.append(
+                self.platforms.get(game.app_id, {}).get('extra_args', '')
+            )
+        extra_args.append(game.extra_args)
+
         proc = subprocess.run(
             args=[
                 'ssh',
                 self.ip,
-                f'{self.path}/launch.sh {game.app_id} {game.title_id} {self.extra_args} {game.extra_args}',
+                f"{self.path}/launch.sh {game.app_id} {game.title_id} {' '.join(filter(None, extra_args))}",
             ],
             capture_output=True,
             text=True,
