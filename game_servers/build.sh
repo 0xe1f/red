@@ -61,7 +61,7 @@ for DIR in $ARGS; do
     # Create remote directory
     ssh -o "StrictHostKeyChecking no" $GAME_SVR_HOST -t "mkdir -p $GAME_SVR_PATH/$DIRNAME"
     # Copy built files to remote server
-    rsync -trph \
+    rsync -trpKh \
         --info=progress2 \
         $FILES launch.sh stop.sh \
         "$GAME_SVR_HOST:$GAME_SVR_PATH/$DIRNAME/"
