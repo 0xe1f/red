@@ -1,0 +1,13 @@
+GP2X/
+macosx/
+win/
+dosbox/
+dc/
+devcpp_devpacks/
+*.txt
+*.TXT
+*.md
+Wolf4SDL*
+gp2x.*
+config.default
+Makefile.dc

@@ -7,3 +7,6 @@
 [submodule "game_servers/blueberryMSX"]
 	path = game_servers/bluemsx
 	url = https://github.com/0xe1f/blueberryMSX.git
+[submodule "game_servers/wolf4sdl"]
+	path = game_servers/wolf4sdl
+	url = https://github.com/0xe1f/wolf4sdl.git
