@@ -187,10 +187,13 @@ $(function() {
                                                 entry.options,
                                                 function(option) {
                                                     return $("<span />", {
-                                                        "class": `${entry.id} filter`,
+                                                        "class": `${entry.id} filter ${option.name}`,
                                                         "data-id": `${entry.prefix}:${option.name}`
                                                     })
-                                                        .text(option.name)
+                                                        .append(
+                                                            $("<span />", { "class": "title" })
+                                                                .text(option.name)
+                                                        )
                                                         .append(
                                                             $("<span />", { "class": "count" })
                                                                 .text(`(${option.count})`)
@@ -215,15 +218,20 @@ $(function() {
                 "filters": filters.join(','),
             },
             success: function(response) {
+                const found = filters.find(filter => filter.startsWith("o:"));
                 const $gamesContainer = $("#games");
-                $gamesContainer.empty();
+                $gamesContainer
+                    .removeClass()
+                    .empty();
+                if (found !== undefined) {
+                    $gamesContainer.addClass("oriented");
+                }
                 $.each(response, function(_, entry) {
                     $gamesContainer
                         .append(
                             $("<div />", {
-                                "class": "game",
+                                "class": `game ${entry.orientation}`,
                                 "data-id": entry.id,
-                                "data-filters": entry.filters.join(' '),
                             })
                                 .append(
                                     $("<span />", { "class": "title", text: entry.title })
