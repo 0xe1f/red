@@ -31,20 +31,12 @@ class Launch(Entity):
         self.set_prop("session_id", val)
 
     @property
-    def app_id(self) -> str:
-        return self.get_prop("app_id")
+    def uid(self) -> str:
+        return self.get_prop("uid")
 
-    @app_id.setter
-    def app_id(self, val: str):
-        self.set_prop("app_id", val)
-
-    @property
-    def title_id(self) -> str:
-        return self.get_prop("title_id")
-
-    @title_id.setter
-    def title_id(self, val: str):
-        self.set_prop("title_id", val)
+    @uid.setter
+    def uid(self, val: str):
+        self.set_prop("uid", val)
 
     @property
     def launched_at(self) -> int:
@@ -63,30 +55,26 @@ class Launch(Entity):
         self.set_prop("stopped_at", val)
 
 
-def create_launch(session_id: int, app_id: str, title_id: str) -> Launch:
+def create_launch(session_id: int, uid: str) -> Launch:
     launch = Launch({
         "session_id": session_id,
-        "app_id": app_id,
-        "title_id": title_id,
+        "uid": uid,
         "launched_at": datetime.now().timestamp(),
     })
     launch.id = dc.run_query("""
         INSERT INTO launches(
                     session_id,
-                    app_id,
-                    title_id,
+                    uid,
                     launched_at
                     )
              VALUES (
-                    ?,
                     ?,
                     ?,
                     ?
                     )
     """, (
         launch.session_id,
-        launch.app_id,
-        launch.title_id,
+        launch.uid,
         launch.launched_at,
         )
     )
@@ -124,26 +112,22 @@ def fetch_latest_launch() -> Launch | None:
     launch = Launch(launch_row)
     return launch
 
-def increment_launch_count(app_id: str, title_id: str):
+def increment_launch_count(uid: str):
     dc.run_query("""
         INSERT INTO launch_counts (
-                    app_id,
-                    title_id,
+                    uid,
                     count
                     )
              VALUES (
                     ?,
-                    ?,
                     1
                     )
         ON CONFLICT (
-                    app_id,
-                    title_id
+                    uid
                     )
           DO UPDATE
                 SET count = count + 1
     """, (
-        app_id,
-        title_id,
+        uid,
         )
     )

@@ -125,12 +125,10 @@ def launch():
     if code == 0:
         dl.create_launch(
             session_id=session.get('id'),
-            app_id=title.app_id,
-            title_id=title.title_id,
+            uid=title.id,
         )
         dl.increment_launch_count(
-            app_id=title.app_id,
-            title_id=title.title_id,
+            uid=title.id,
         )
         for client in konfig.game_clients:
             client.launch()
