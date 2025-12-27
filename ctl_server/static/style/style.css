@@ -267,6 +267,18 @@ div:has(> #volume) {
     font-size: 10pt;
 }
 
+#games.platformed .game .platform {
+    display: none;
+}
+
+#games:not(.platformed) .game .platform {
+    font-variant: small-caps;
+    font-weight: bold;
+    font-size: 12pt;
+    color: #f94a37;
+    padding-left: 0.5em;
+}
+
 .game .system {
     display: none;
 }

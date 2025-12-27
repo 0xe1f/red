@@ -218,13 +218,15 @@ $(function() {
                 "filters": filters.join(','),
             },
             success: function(response) {
-                const found = filters.find(filter => filter.startsWith("o:"));
                 const $gamesContainer = $("#games");
                 $gamesContainer
                     .removeClass()
                     .empty();
-                if (found !== undefined) {
+                if (filters.find(filter => filter.startsWith("o:")) !== undefined) {
                     $gamesContainer.addClass("oriented");
+                }
+                if (filters.find(filter => filter.startsWith("p:")) !== undefined) {
+                    $gamesContainer.addClass("platformed");
                 }
                 $.each(response, function(_, entry) {
                     $gamesContainer
@@ -235,6 +237,9 @@ $(function() {
                             })
                                 .append(
                                     $("<span />", { "class": "title", text: entry.title })
+                                )
+                                .append(
+                                    $("<span />", { "class": "platform", text: entry.app_id })
                                 )
                                 .append(
                                     $("<span />", { "class": "year", text: entry.year })
