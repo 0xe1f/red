@@ -111,8 +111,12 @@ but accepts connections from rendering clients, and will dispatch frames as they
 To keep rendering fast, connections are done to/from eth0 IPs, which may require connection 
 sharing on one of the Pi units.
 
-At the moment, [FinalBurn Neo](https://github.com/finalburnneo/FBNeo) and
-[Chocolate Doom](https://github.com/chocolate-doom/chocolate-doom) are supported.
+The following servers are currently supported:
+* [FinalBurn Neo](https://github.com/finalburnneo/FBNeo)
+* [Chocolate Doom](https://github.com/chocolate-doom/chocolate-doom)
+* [bluemsx](https://github.com/0xe1f/blueberryMSX)
+* [wolf4sdl](https://bitbucket.org/ks-presto/wolf4sdl/src/master/)
+* [Genesis Plus GX](https://github.com/ekeeke/Genesis-Plus-GX)
 
 To keep things as fast as possible, I recommend turning off wifi on the server,
 both to minimize unnecessary resource utilization, and to prevent unintended
