@@ -54,8 +54,10 @@ struct ViewRect {
 static int show_server_fps = 0;
 static int sockfd = -1;
 static int exit_main_loop = 0;
-static unsigned int retry_count = RETRY_COUNT_DEFAULT;
-static unsigned int retry_delay_ms = RETRY_DELAY_DEFAULT_MS;
+static int retry_count = RETRY_COUNT_DEFAULT;
+static int reconnect = 0;
+static int run_in_background = 0;
+static struct timespec retry_delay_ts;
 static unsigned short port = PORT_DEFAULT;
 static struct FrameGeometry data;
 static unsigned char bitmap_bpp = 0;
@@ -71,6 +73,11 @@ static struct LedCanvas *canvas = NULL;
 static struct ViewRect content;
 static struct ViewRect source;
 static struct ViewRect dest;
+static struct ViewRect blitSrc;
+static struct ViewRect blitDest;
+
+static void render();
+static const char *rect_string(const struct ViewRect *rect);
 
 // RGB565
 #define RED_RGB565(x) (((x>>11)&0x1f)*255/31)
@@ -102,20 +109,14 @@ static int connect_es(const char *server)
     dest_addr.sin_port = htons(port);
     dest_addr.sin_addr.s_addr = inet_addr(server);
 
-    struct timespec ts;
-    ts.tv_sec = 0;
-    ts.tv_nsec = retry_delay_ms * 1000000;
-
-    fprintf(stderr, "connecting to '%s' on port %d...\n",
-        server,
-        port);
-    for (int i = 0; i <= retry_count; i++) {
+    fprintf(stderr, "connecting to '%s' on port %d...\n", server, port);
+    for (int i = 0; (i <= retry_count || retry_count < 0) && !exit_main_loop; i++) {
         if (connect(sockfd,(struct sockaddr*)&dest_addr, sizeof(struct sockaddr)) == 0) {
             fprintf(stderr, "connected!\n");
             return 1;
         }
-        nanosleep(&ts, NULL);
-        fprintf(stderr, "retrying...\n");
+        nanosleep(&retry_delay_ts, NULL);
+        // fprintf(stderr, "retrying...\n");
     }
 
     fprintf(stderr, "connect() failed\n");
@@ -181,6 +182,8 @@ static inline void unpack(struct RGB *dest, unsigned char *src, int offset)
 
 static int read_preamble()
 {
+    blitSrc = source;
+    blitDest = dest;
     int r = read(sockfd, &data, sizeof(data));
     if (r != sizeof(data)) {
         fprintf(stderr, "Error reading buffer data (read %d bytes)\n", r);
@@ -221,31 +224,31 @@ static int read_preamble()
 
     // Center content
     int xdelta = (content.dx - data.bitmap_width) / 2;
-    if (source.dx - xdelta < 0) {
-        xdelta -= source.dx - xdelta;
+    if (blitSrc.dx - xdelta < 0) {
+        xdelta -= blitSrc.dx - xdelta;
     }
     int ydelta = (content.dy - data.bitmap_height) / 2;
-    if (source.dy - ydelta < 0) {
-        ydelta -= source.dy - ydelta;
+    if (blitSrc.dy - ydelta < 0) {
+        ydelta -= blitSrc.dy - ydelta;
     }
 
-    if (source.sx == 0) {
-        dest.sx += xdelta;
-        source.dx -= xdelta;
+    if (blitSrc.sx == 0) {
+        blitDest.sx += xdelta;
+        blitSrc.dx -= xdelta;
     } else {
-        dest.dx += xdelta;
-        source.sx -= xdelta;
+        blitDest.dx += xdelta;
+        blitSrc.sx -= xdelta;
     }
-    if (source.sy == 0) {
-        dest.sy += ydelta;
-        source.dy -= ydelta;
+    if (blitSrc.sy == 0) {
+        blitDest.sy += ydelta;
+        blitSrc.dy -= ydelta;
     } else {
-        dest.dy += ydelta;
-        source.sy -= ydelta;
+        blitDest.dy += ydelta;
+        blitSrc.sy -= ydelta;
     }
 
     if (data.attrs & ATTR_ROT180) {
-        vw_origin = dest.dx;
+        vw_origin = blitDest.dx;
     }
 
     return 1;
@@ -261,20 +264,39 @@ static int create_buffer()
     return 1;
 }
 
-static void clean_up()
+static void clear_buffer()
 {
-    if (matrix != NULL) {
-        led_matrix_delete(matrix);
-        matrix = NULL;
+    if (buffer != NULL) {
+        memset(buffer, 0, data.buffer_size);
     }
+    if (matrix != NULL) {
+        for (int i = 0; i < 2; i++) {
+            if (canvas != NULL) {
+                led_canvas_clear(canvas);
+                canvas = led_matrix_swap_on_vsync(matrix, canvas);
+            }
+        }
+    }
+}
+
+static void clean_up_connection()
+{
     if (sockfd != -1) {
-        fprintf(stderr, "Closing...\n");
         close(sockfd);
         sockfd = -1;
     }
     if (buffer != NULL) {
         free(buffer);
         buffer = NULL;
+    }
+}
+
+static void clean_up()
+{
+    clean_up_connection();
+    if (matrix != NULL) {
+        led_matrix_delete(matrix);
+        matrix = NULL;
     }
 }
 
@@ -300,7 +322,7 @@ static int init_rgb(int argc, char **argv)
 static void render()
 {
     struct RGB pixel = { 255, 255, 255 };
-    for (int ry = source.sy, yo = 0; ry < source.dy; ry++, yo++) {
+    for (int ry = blitSrc.sy, yo = 0; ry < blitSrc.dy; ry++, yo++) {
         if (ry >= data.bitmap_height) {
             break; // out of bounds
         }
@@ -309,12 +331,12 @@ static void render()
             rry = data.bitmap_height - 1 - ry;
         }
         unsigned char *rrow = buffer + rry * data.bitmap_pitch;
-        for (int rx = source.sx, xo = 0; rx < source.dx; rx++, xo++) {
+        for (int rx = blitSrc.sx, xo = 0; rx < blitSrc.dx; rx++, xo++) {
             if (rx >= data.bitmap_width) {
                 break; // out of bounds
             }
-            int wy = dest.sy + yo;
-            int wx = dest.sx + xo;
+            int wy = blitDest.sy + yo;
+            int wx = blitDest.sx + xo;
             if (wx < screen_width && wy < screen_height) {
                 unpack(&pixel, rrow, rx);
                 led_canvas_set_pixel(
@@ -422,6 +444,40 @@ static int validate_rect(struct ViewRect rect)
     return 1;
 }
 
+static const char *rect_string(const struct ViewRect *rect)
+{
+    static char buf[64];
+    snprintf(buf, 63, "%d,%d-%d,%d",
+        rect->sx,
+        rect->sy,
+        rect->dx,
+        rect->dy
+    );
+    return buf;
+}
+
+static void run_as_daemon()
+{
+    pid_t pid = fork();
+    if (pid < 0) {
+        fprintf(stderr, "Error forking process\n");
+        exit(1);
+    } else if (pid > 0) {
+        // Parent
+        fprintf(stderr, "Running in background, PID: %d\n", pid);
+        exit(0);
+    } else {
+        // Child
+        if (setsid() < 0) {
+            fprintf(stderr, "Error creating new session\n");
+            exit(1);
+        }
+        fclose(stdin);
+        fclose(stdout);
+        fclose(stderr);
+    }
+}
+
 static int parse_args(int argc, const char **argv)
 {
     if (argc < 2) {
@@ -433,6 +489,8 @@ static int parse_args(int argc, const char **argv)
     unsigned char src_set = 0;
     unsigned char dest_set = 0;
     unsigned char content_set = 0;
+    unsigned int retry_delay_ms = RETRY_DELAY_DEFAULT_MS;
+
     fprintf(stderr, "%s \\\n", argv[0]);
     for (int i = 1; i < argc; i++) {
         const char *arg = argv[i];
@@ -442,6 +500,22 @@ static int parse_args(int argc, const char **argv)
         }
         if (strcmp(arg, "--sfps") == 0) {
             show_server_fps = 1;
+        } else if (strcmp(arg, "--help") == 0) {
+            fprintf(stderr, "Usage: %s <server-ip> [--src-rect=x1,y1-x2,y2] [--dest-rect=x1,y1-x2,y2] [--content-rect=x1,y1-x2,y2] [--port=port] [--retry-count=count] [--retry-delay=ms] [--sfps] [--reconnect]\n", argv[0]);
+            fprintf(stderr, "  --sfps              Show server FPS\n");
+            fprintf(stderr, "  --src-rect          Source rectangle in server bitmap\n");
+            fprintf(stderr, "  --dest-rect         Destination rectangle on LED matrix\n");
+            fprintf(stderr, "  --content-rect      Content rectangle on LED matrix\n");
+            fprintf(stderr, "  --port              Server port (default: %d)\n", PORT_DEFAULT);
+            fprintf(stderr, "  --retry-count       Connection retry count (default: %d, -1 for infinite)\n", RETRY_COUNT_DEFAULT);
+            fprintf(stderr, "  --retry-delay       Connection retry delay in milliseconds (default: %d)\n", RETRY_DELAY_DEFAULT_MS);
+            fprintf(stderr, "  --reconnect         Reconnect on disconnection\n");
+            fprintf(stderr, "  --background        Run in background as a daemon\n");
+            return 0;
+        } else if (strcmp(arg, "--reconnect") == 0) {
+            reconnect = 1;
+        } else if (strcmp(arg, "--background") == 0) {
+            run_in_background = 1;
         } else if (strstr(arg, "--src-rect=")) {
             const char *post_eq = arg + 11;
             if (!parse_rect(post_eq, &source)) {
@@ -474,11 +548,11 @@ static int parse_args(int argc, const char **argv)
         } else if (strstr(arg, "--retry-count=")) {
             const char *post_eq = arg + 14;
             long p = strtol(post_eq, NULL, 10);
-            if (p < 0 || p > UINT32_MAX) {
+            if (p < INT32_MIN || p > INT32_MAX) {
                 fprintf(stderr, "'%s' is not a valid retry count\n", post_eq);
                 return 0;
             }
-            retry_count = (unsigned int) p;
+            retry_count = (int) p;
         } else if (strstr(arg, "--retry-delay=")) {
             const char *post_eq = arg + 14;
             long p = strtol(post_eq, NULL, 10);
@@ -512,6 +586,9 @@ static int parse_args(int argc, const char **argv)
         return 0;
     }
 
+    retry_delay_ts.tv_sec = 0;
+    retry_delay_ts.tv_nsec = retry_delay_ms * 1000000;
+
     return 1;
 }
 
@@ -519,6 +596,10 @@ int main(int argc, char **argv)
 {
     if (!parse_args(argc, (const char **)argv)) {
         return 1;
+    }
+
+    if (run_in_background) {
+        run_as_daemon();
     }
 
     if (!init_rgb(argc, argv)) {
@@ -538,20 +619,34 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (!connect_es(server)) {
-        clean_up();
-        return 1;
-    }
-
-    if (!read_preamble() || !create_buffer()) {
-        clean_up();
-        return 1;
-    }
-
     signal(SIGINT, sigint_handler);
-    main_loop();
-    clean_up();
+    unsigned int reconnect_attempt = 0;
+    do {
+        if (reconnect_attempt++ > 0) {
+            clear_buffer();
+            clean_up_connection();
+            nanosleep(&retry_delay_ts, NULL);
+        }
+        if (!connect_es(server)) {
+            if (reconnect && !exit_main_loop) {
+                continue;
+            } else {
+                break;
+            }
+        }
 
+        if (!read_preamble() || !create_buffer()) {
+            if (reconnect && !exit_main_loop) {
+                continue;
+            } else {
+                break;
+            }
+        }
+
+        main_loop();
+    } while (reconnect && !exit_main_loop);
+
+    clean_up();
     fprintf(stderr, "done\n");
 
     return 0;
