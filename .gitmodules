@@ -13,3 +13,6 @@
 [submodule "game_servers/genplus-gx"]
 	path = game_servers/genplus-gx
 	url = https://github.com/0xe1f/Genesis-Plus-GX.git
+[submodule "game_servers/geargrafx"]
+	path = game_servers/geargrafx
+	url = https://github.com/0xe1f/Geargrafx.git

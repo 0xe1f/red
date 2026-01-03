@@ -1,0 +1,17 @@
+LICENSE
+*.md
+*.txt
+tests/
+platforms/bsd/
+platforms/libretro/
+platforms/linux/
+platforms/macos/
+platforms/shared/dependencies/glad/
+platforms/shared/dependencies/imgui/
+platforms/shared/dependencies/json/
+platforms/shared/dependencies/mINI/
+platforms/shared/dependencies/nfd/
+platforms/shared/dependencies/stb/
+platforms/shared/desktop/gui*
+platforms/shared/makefiles/
+platforms/windows/
