@@ -1,5 +1,5 @@
 game_server:
-  host: red1.local
+  hostname: red1.local
   ip: 192.168.1.101
   path: game_servers
   extra_args: >-
@@ -8,7 +8,7 @@ game_server:
     --scale-mode=shortestxaspect
     --max-clients=2
 game_clients:
-  - host: red0.local
+  - hostname: red0.local
     client_ip: 192.168.1.102
     server_ip: 192.168.1.101
     path: rgbclient
@@ -26,7 +26,7 @@ game_clients:
       --src-rect=0,0-320,128
       --dest-rect=0,0-320,128
       --content-rect=0,0-320,256
-  - host: red1.local
+  - hostname: red1.local
     client_ip: 192.168.1.101
     server_ip: 192.168.1.101
     path: rgbclient
@@ -51,5 +51,5 @@ game_clients:
       --led-pwm-lsb-nanoseconds=50
       --led-limit-refresh=30
 control_server:
-  host: red0.local
+  hostname: red0.local
   path: ctl_server

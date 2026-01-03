@@ -6,7 +6,7 @@
 BUILD_SVR="$1"
 GAME_SVR_HOST="$2"
 GAME_SVR_PATH="$3"
-BUILD_PATH="${GAME_SVR_PATH}_build"
+BUILD_PATH="red_builds/${GAME_SVR_PATH}"
 
 # Text formatting constants
 BOLD_WHITE="$(tput bold)$(tput setaf 7)"

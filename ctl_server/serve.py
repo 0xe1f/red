@@ -131,7 +131,8 @@ def launch():
             uid=title.id,
         )
         for client in konfig.game_clients:
-            client.launch()
+            if not client.runs_as_daemon:
+                client.launch()
         return {
             'status': 'OK',
             'title': title.as_dict(),

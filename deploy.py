@@ -39,13 +39,13 @@ if args.ctl or args.all:
         '--exclude', '__pycache__',
         '--exclude', 'venv/',
         f'{config.control_server.path}',
-        f'{config.control_server.host}:'
+        f'{config.control_server.hostname}:'
     ])
     subprocess.call([
         'ssh',
         '-o',
         'StrictHostKeyChecking no',
-        f'{config.control_server.host}',
+        f'{config.control_server.hostname}',
         f'cd {config.control_server.path}; nohup ./{CTL_SERVER_EXE} >log.txt 2>&1 &',
     ])
 
@@ -55,8 +55,8 @@ if args.svr is not None or args.all:
 
     subprocess.call([
         'game_servers/stage.sh',
-        config.control_server.host,
-        config.game_server.host,
+        config.control_server.hostname,
+        config.game_server.hostname,
         config.game_server.path,
         *(args.svr or []),
     ])
@@ -72,15 +72,15 @@ if args.cli or args.all:
             'rsync',
             '-vrt',
             '--exclude', '.*',
-            f'rgbclient/',
-            f'{client.host}:{client.path}',
+            f'clients/rgbclient/',
+            f'{client.hostname}:{client.path}',
         ])
         # Build
         subprocess.call([
             'ssh',
             '-o',
             'StrictHostKeyChecking no',
-            f'{client.host}',
+            f'{client.hostname}',
             '-t',
             f'cd {client.path} && make',
         ])

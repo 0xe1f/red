@@ -149,9 +149,9 @@ class Config:
                 self.control_server = ControlServer(**conf['control_server'])
 
     def write_control_server_config(self, path):
-        game_server = self.game_server.to_dict('host')
+        game_server = self.game_server.to_dict('hostname')
         game_clients = list(
-            map(lambda client: client.to_dict('host'), self.game_clients)
+            map(lambda client: client.to_dict('hostname'), self.game_clients)
         )
 
         with open(path, 'w') as fd:
