@@ -18,21 +18,23 @@ struct PinState {
     int pin;
     int previous;
     int isClosed;
+    int orientation;
     unsigned long millis;
 };
 
+#define ORIENT_NONE      0
+#define ORIENT_LANDSCAPE 1
+#define ORIENT_PORTRAIT  2
+
 struct PinState pins[] = {
-    { 2, LOW, 0, 0UL, }, // landscape pin
-    { 3, LOW, 0, 0UL, }, // portrait pin
+    { 2, LOW, 0, ORIENT_LANDSCAPE, 0UL },
+    { 3, LOW, 0, ORIENT_PORTRAIT, 0UL },
     { -1, },
 };
 
 #define DEBOUNCE_DELAY_MS 50
+#define LOOP_DELAY_MS (1000/60)
 
-#define ORIENT_NONE      -1
-#define ORIENT_LANDSCAPE 0 // same as pin index
-#define ORIENT_PORTRAIT  1 // same as pin index
- 
 void setup()
 {
     for (struct PinState *p = pins; p->pin != -1; p++) {
@@ -48,10 +50,11 @@ static void scanPins()
 {
     for (struct PinState *p = pins; p->pin != -1; p++) {
         int reading = digitalRead(p->pin);
+        unsigned long now = millis();
         if (reading != p->previous) {
-            p->millis = millis();
+            p->millis = now;
         }
-        if ((millis() - p->millis) > DEBOUNCE_DELAY_MS) {
+        if ((now - p->millis) > DEBOUNCE_DELAY_MS) {
             p->isClosed = !reading;
         }
         p->previous = reading;
@@ -60,13 +63,30 @@ static void scanPins()
 
 static int getOrientation()
 {
-    int i = 0;
-    for (struct PinState *p = pins; p->pin != -1; p++, i++) {
+    for (struct PinState *p = pins; p->pin != -1; p++) {
         if (p->isClosed) {
-            return i;
+            return p->orientation;
         }
     }
     return ORIENT_NONE;
+}
+
+static const char* handleRequest(const char *req)
+{
+    static char buffer[512];
+    if (strstr(req, "orientation")) {
+        int orientation = getOrientation();
+        if (orientation == ORIENT_PORTRAIT) {
+            snprintf(buffer, sizeof(buffer), "%s:PORTRAIT", req);
+        } else if (orientation == ORIENT_LANDSCAPE) {
+            snprintf(buffer, sizeof(buffer), "%s:LANDSCAPE", req);
+        } else {
+            snprintf(buffer, sizeof(buffer), "%s:NONE", req);
+        }
+    } else {
+        snprintf(buffer, sizeof(buffer), "?");
+    }
+    return buffer;
 }
 
 void loop()
@@ -74,12 +94,13 @@ void loop()
     scanPins();
 
     int orientation = getOrientation();
-    static int prevOrientation = ORIENT_NONE;
-    if (orientation != prevOrientation) {
-        Serial.printf("Orientation changed to %s\n",
-            orientation == ORIENT_PORTRAIT ? "PORTRAIT" :
-            orientation == ORIENT_LANDSCAPE ? "LANDSCAPE" : "NONE");
-        prevOrientation = orientation;
-    }
     digitalWrite(LED_BUILTIN, orientation != ORIENT_NONE ? HIGH : LOW);
+
+    if (Serial.available() > 0) {
+        const char *request = Serial.readStringUntil('\n').c_str();
+        const char *response = handleRequest(request);
+        Serial.println(response);
+    }
+
+    delay(LOOP_DELAY_MS);
 }
