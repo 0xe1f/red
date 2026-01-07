@@ -66,6 +66,18 @@ def games():
 def query():
     return server_state()
 
+@app.route('/sync')
+@flask_login.login_required
+def sync():
+    orientation = "UNKNOWN"
+    if konfig.sensor.device:
+        response = read_process_output("./sensor.py", [ f"--device={konfig.sensor.device}", "orientation" ])
+        orientation = response
+
+    return {
+        'orientation': orientation,
+    }
+
 @app.route('/volume', methods=['POST'])
 @flask_login.login_required
 def volume():
@@ -223,7 +235,10 @@ def server_state():
     }
 
 def read_process_output(exe, args):
-    result = subprocess.run([exe] + args, stdout=subprocess.PIPE)
+    result = subprocess.run([exe] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if result.returncode != 0:
+        stderr = result.stderr.decode('utf-8').rstrip()
+        raise RuntimeError(f'Process {exe} failed: {stderr}')
     return result.stdout.decode('utf-8').rstrip()
 
 if __name__ == '__main__':

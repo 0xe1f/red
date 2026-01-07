@@ -17,14 +17,14 @@
 import serial
 from argparse import ArgumentParser
 
-device = 'ttyACM0'
+device = ''
 rate = 9600
 timeout = 1
 
 def read_args():
     global device, rate, timeout
 
-    parser = ArgumentParser(description='Query Arduino device')
+    parser = ArgumentParser(description='Query Arduino sensor')
     parser.add_argument('request', help='Request to send to device')
     parser.add_argument('--device', required=True, help='Serial device path')
     parser.add_argument('--rate', type=int, default=rate, help='Baud rate')

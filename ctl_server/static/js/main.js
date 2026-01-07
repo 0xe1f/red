@@ -17,6 +17,8 @@
 
 $(function() {
     const cookies = Cookies.withAttributes({ expires: 31 });
+    var syncTimeoutId = -1;
+    var lastSync = 0;
 
     const hashMap = function() {
         return location.hash
@@ -67,6 +69,41 @@ $(function() {
         if ($next.length) {
             $next[0].scrollIntoView({ behavior: "smooth", block: "center" });
         }
+    };
+    var syncState = function() {
+        (function stateUpdater() {
+            const timeoutMs = 5000; // 5 seconds
+            const now = new Date().getTime();
+
+            const delta = now - lastSync;
+            if (delta < timeoutMs) {
+                console.debug(`Ignoring sync request (last sync ${delta / 1000}s ago)`);
+                return; // No need to sync yet
+            }
+
+            if (syncTimeoutId > -1) {
+                clearTimeout(syncTimeoutId);
+                syncTimeoutId = -1;
+            }
+
+            if (!document.hidden) {
+                lastSync = now;
+                $.ajax({
+                    url: "sync",
+                    contentType: "application/json; charset=utf-8",
+                    dataType: "json",
+                    success: function(response) {
+                        // TODO: handle response
+                        console.debug(response);
+                    }
+                })
+                .always(function() {
+                    syncTimeoutId = setTimeout(stateUpdater, timeoutMs);
+                });
+            } else {
+                syncTimeoutId = setTimeout(stateUpdater, timeoutMs);
+            }
+        })();
     };
     const closeSearch = function() {
         $("#search").trigger("blur");
@@ -442,4 +479,5 @@ $(function() {
         $('body').toggleClass('scrimmed', show);
     };
     initialize();
+    syncState();
 });

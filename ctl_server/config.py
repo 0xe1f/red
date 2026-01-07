@@ -147,18 +147,25 @@ class Config:
                     self.game_clients.append(GameClient(**item))
             if 'control_server' in conf:
                 self.control_server = ControlServer(**conf['control_server'])
+            if 'sensor' in conf:
+                self.sensor = SensorConfig(**conf['sensor'])
+
+        if not hasattr(self, 'sensor'):
+            self.sensor = SensorConfig()
 
     def write_control_server_config(self, path):
         game_server = self.game_server.to_dict('hostname')
         game_clients = list(
             map(lambda client: client.to_dict('hostname'), self.game_clients)
         )
+        sensor = self.sensor.to_dict()
 
         with open(path, 'w') as fd:
             yaml.safe_dump(
                 {
                     'game_server': game_server,
                     'game_clients': game_clients,
+                    'sensor': sensor,
                 },
                 stream=fd,
             )
@@ -232,6 +239,20 @@ class ControlServer:
 
     def __init__(self, **item):
         self.__dict__.update(item)
+
+class SensorConfig:
+
+    def __init__(self, **item):
+        self.__dict__.update(item)
+
+        if 'device' not in item:
+            self.device = None
+
+    def to_dict(self, *remove):
+        obj = self.__dict__
+        for prop in remove:
+            del obj[prop]
+        return obj
 
 class Game:
 

@@ -22,7 +22,7 @@ struct PinState {
     unsigned long millis;
 };
 
-#define ORIENT_NONE      0
+#define ORIENT_UNKNOWN   0
 #define ORIENT_LANDSCAPE 1
 #define ORIENT_PORTRAIT  2
 
@@ -68,7 +68,7 @@ static int getOrientation()
             return p->orientation;
         }
     }
-    return ORIENT_NONE;
+    return ORIENT_UNKNOWN;
 }
 
 static const char* handleRequest(const char *req)
@@ -81,7 +81,7 @@ static const char* handleRequest(const char *req)
         } else if (orientation == ORIENT_LANDSCAPE) {
             snprintf(buffer, sizeof(buffer), "%s:LANDSCAPE", req);
         } else {
-            snprintf(buffer, sizeof(buffer), "%s:NONE", req);
+            snprintf(buffer, sizeof(buffer), "%s:UNKNOWN", req);
         }
     } else {
         snprintf(buffer, sizeof(buffer), "?");
@@ -94,7 +94,7 @@ void loop()
     scanPins();
 
     int orientation = getOrientation();
-    digitalWrite(LED_BUILTIN, orientation != ORIENT_NONE ? HIGH : LOW);
+    digitalWrite(LED_BUILTIN, orientation != ORIENT_UNKNOWN ? HIGH : LOW);
 
     if (Serial.available() > 0) {
         const char *request = Serial.readStringUntil('\n').c_str();
