@@ -17,21 +17,66 @@
 
 $(function() {
     const cookies = Cookies.withAttributes({ expires: 31 });
+    const orientations = [ 'portrait', 'landscape' ];
     var syncTimeoutId = -1;
     var lastSync = 0;
+    var lastSensorOrientation = null;
 
-    const hashMap = function() {
+    const hashMap = function(destructureFilters = false) {
         return location.hash
             .replace(/^#+/, '')
             .split('&')
             .map((arg) => {
-                const pair = arg.split('=', 2);
-                return { k: pair[0], v: pair[1] };
+                var [key, value] = arg.split('=', 2);
+                if (destructureFilters && key == 'filters') {
+                    value = value
+                        .split(',')
+                        .map((arg) => {
+                            const pair = arg.split(':', 2);
+                            return { k: pair[0], v: pair[1] };
+                        })
+                        .reduce(function(map, obj) {
+                            if (!map[obj.k]) {
+                                map[obj.k] = [];
+                            }
+                            map[obj.k].push(obj.v);
+                            return map;
+                        }, {});
+                }
+                return { k: key, v: value };
             })
             .reduce(function(map, obj) {
                 map[obj.k] = obj.v;
                 return map;
             }, {});
+    };
+    const buildHash = function(map) {
+        if (!map) {
+            return null;
+        }
+        return Object.keys(map)
+            .filter(function(key) {
+                return !!key;
+            })
+            .map(function(key) {
+                var value = map[key];
+                if (key == 'filters' && typeof value !== 'string') {
+                    value = Object.keys(value)
+                        .filter(function(subkey) {
+                            return !!subkey;
+                        })
+                        .map(function(subkey) {
+                            return value[subkey]
+                                .map(function(v) {
+                                    return `${subkey}:${v}`;
+                                })
+                                .join(',');
+                        })
+                        .join(',');
+                }
+                return `${key}=${value}`;
+            })
+            .join('&');
     };
     const updateSelection = function(game) {
         $('.game.selected').removeClass('selected');
@@ -48,13 +93,47 @@ $(function() {
                 .addClass('selected');
         }
     };
-    const syncGames = function() {
+    const syncSidebar = function() {
+        // Synchronize sidebar filter selection with data from URL hash
+        const map = hashMap();
+        $('.filter')
+            .removeClass('selected');
+        if (map.filters) {
+            map.filters
+                .split(',')
+                .forEach((f) => {
+                    const $filter = $(`.filter[data-id~="${f}"`);
+                    $filter
+                        .addClass('selected');
+                    $filter
+                        .closest('.filters')
+                        .addClass('active');
+                })
+        }
+    };
+    const syncHash = function() {
+        // Build and apply hash from currently selected filters
+        // const searchTerm = $("#search:focus").val() || "";
+        const filters = $('.filter.selected')
+            .map(function() { return $(this).data('id'); })
+            .toArray();
+
+        const url = new URL(location);
+        const newHash = filters.length > 0
+            ? `filters=${filters.join(',')}`
+            : '';
+        if (newHash != url.hash.replace(/^#/, '')) {
+            url.hash = newHash;
+            history.pushState({}, "", url);
+        }
+    };
+    const syncGameList = function() {
         const searchTerm = $("#search:focus").val() || "";
         const filters = $('.filter.selected')
             .map(function() { return $(this).data('id'); })
             .toArray();
         fetchGames(searchTerm, filters);
-        location.hash = `filters=${filters.join(',')}`;
+        syncHash();
     };
     const select = function(which) {
         const $selected = $(".game.active:visible");
@@ -93,8 +172,23 @@ $(function() {
                     contentType: "application/json; charset=utf-8",
                     dataType: "json",
                     success: function(response) {
-                        // TODO: handle response
-                        console.debug(response);
+                        const map = hashMap(destructureFilters = true);
+                        const filterOrientation = (map.filters || {}).o;
+                        const sensorOrientation = response.orientation.toLowerCase();
+
+                        if (
+                            filterOrientation != sensorOrientation &&
+                            sensorOrientation != lastSensorOrientation &&
+                            orientations.includes(sensorOrientation)
+                        ) {
+                            // Auto-orient based on sensor reading
+                            $(`.filter.orientation`)
+                                .removeClass('selected');
+                            $(`.filter.orientation.${sensorOrientation}`)
+                                .addClass('selected');
+                            lastSensorOrientation = sensorOrientation;
+                            syncGameList();
+                        }
                     }
                 })
                 .always(function() {
@@ -109,7 +203,7 @@ $(function() {
         $("#search").trigger("blur");
         $("#search").val("");
         select(0);
-        syncGames();
+        syncGameList();
     };
     const initFilters = function() {
         // Set up filter click handlers
@@ -127,23 +221,10 @@ $(function() {
                 $item.toggleClass('selected');
                 $filters
                     .toggleClass('active', $filters.find('.selected').length > 0);
-                syncGames();
+                syncGameList();
             });
-        // Restore filter from hash
-        const map = hashMap();
-        if (map.filters) {
-            map.filters
-                .split(',')
-                .forEach((f) => {
-                    const $filter = $(`.filter[data-id~="${f}"`);
-                    $filter
-                        .addClass('selected');
-                    $filter
-                        .closest('.filters')
-                        .addClass('active');
-                })
-        }
-        syncGames();
+        syncSidebar();
+        syncGameList();
     };
     const initGames = function() {
         $(".game").on("click", function() {
@@ -415,7 +496,7 @@ $(function() {
         }
         // set up search handler
         $("#search").on("input", function(e) {
-            syncGames();
+            syncGameList();
         });
         // set up keyboard handler
         $(document).on("keyup", onKeyPressed);
@@ -448,6 +529,10 @@ $(function() {
         $("#stop").on("click", function() {
             toggleScrim(true);
             stop();
+        });
+        $(window).on('hashchange', function() {
+            syncSidebar();
+            syncGameList();
         });
     };
     const upload = function(files) {
