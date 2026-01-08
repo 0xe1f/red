@@ -276,10 +276,10 @@ $(function() {
         });
     };
     const uiVolume = function() {
-        return parseInt($('#volume').val(), 10) || 0;
+        return parseInt($('#volume-slider').val(), 10) || 0;
     };
     const setUiVolume = function(value) {
-        $('#volume')
+        $('#volume-slider')
             .val(value)
             .trigger('change');
     };
@@ -417,7 +417,7 @@ $(function() {
                 handled = true;
             } else if (e.keyCode == 61) {
                 // volume up
-                const vol = parseInt($('#volume').val(), 10) || 0;
+                const vol = parseInt($('#volume-slider').val(), 10) || 0;
                 const newVol = e.shiftKey
                     ? Math.min(100, vol + 10)
                     : Math.min(100, vol + 2);
@@ -427,7 +427,7 @@ $(function() {
                 handled = true;
             } else if (e.keyCode == 77) {
                 // mute
-                const vol = parseInt($('#volume').val(), 10) || 0;
+                const vol = parseInt($('#volume-slider').val(), 10) || 0;
                 if (vol > 0) {
                     cookies.set('pre_mute_vol', vol);
                     setVolume(0, false);
@@ -465,20 +465,10 @@ $(function() {
     };
     const initialize = function() {
         // init volume control
-        var volumeReady = false;
-        $('#volume')
-            .knob({
-                'fgColor': '#66CC66',
-                'angleOffset': -125,
-                'angleArc': 250,
-                'fgColor': '#66CC66',
-                'width': 50,
-                'height': 50,
-                'change': function(_) { volumeReady = true; },
-                'release' : function (v) {
-                    if (volumeReady) { setVolume(~~v); }
-                },
-            });
+        initMenus();
+        $('#volume-slider').on('input', function() {
+            setVolume(~~(this.value));
+        });
         setUiVolume(0);
         // set current selection
         $.get(
@@ -558,6 +548,27 @@ $(function() {
                 // TODO
                 toggleScrim(false);
             }
+        });
+    };
+    const initMenus = function() {
+        $("body")
+            .append($("<ul />", { "id": "menu-user-options", "class": "menu" })
+                .append($("<li />", { "class": "menu-volume" })
+                    .append($("<input />", { "type": "range", "id": "volume-slider" }))
+                )
+                .append($("<li />", { "class": "divider" }))
+                .append($("<li />", { "class": "menu-sign-out" }).text("Sign out"))
+            )
+        ;
+
+        $(".menu li").not(".divider").wrapInner("<span />");
+
+        $$menu.click(function(e) {
+            var $item = e.$item;
+            if ($item.is(".menu-sign-out")) {
+                $("#sign-out")[0].click();
+            }
+            return false;
         });
     };
     const toggleScrim = function(show) {
