@@ -1,0 +1,84 @@
+/*****************************************************************************
+ ** Copyright (C) 2024 Akop Karapetyan
+ **
+ ** Licensed under the Apache License, Version 2.0 (the "License");
+ ** you may not use this file except in compliance with the License.
+ ** You may obtain a copy of the License at
+ **
+ **     http://www.apache.org/licenses/LICENSE-2.0
+ **
+ ** Unless required by applicable law or agreed to in writing, software
+ ** distributed under the License is distributed on an "AS IS" BASIS,
+ ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ ** See the License for the specific language governing permissions and
+ ** limitations under the License.
+ ******************************************************************************
+ */
+
+button.dropdown {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20height%3D%2220px%22%20viewBox%3D%220%20-960%20960%20960%22%20width%3D%2220px%22%20fill%3D%22%231f1f1f%22%3E%3Cpath%20d%3D%22M480-384%20288-576h384L480-384Z%22%2F%3E%3C%2Fsvg%3E");
+    background-repeat: no-repeat;
+    background-position: right center;
+    padding: 0.5em 20px 0.5em 20px;
+}
+
+.dropdown {
+    border: none;
+    box-shadow: none;
+    padding: 3px 25px 0.25em 1em;
+    background-color: transparent;
+    cursor: pointer;
+    font-weight: normal;
+    font-size: 12pt;
+    height: auto;
+    color: #777;
+}
+
+.dropdown:hover {
+    color: #000;
+}
+
+ul.menu {
+    position: absolute;
+    display: none;
+    margin: 0;
+    padding-left: 0;
+    background-color: #fff;
+    list-style-type: none;
+    border: solid 1px #ccc;
+    border-radius: 2px;
+    box-shadow: 2px 2px 2px #ddd;
+    min-width: 13em;
+}
+
+.menu li {
+    color: #555;
+    padding: 0.5em 1em;
+}
+
+.menu li:hover,
+.menu li.hovered {
+    cursor: pointer;
+    background-color: #ccc;
+}
+
+.menu li.divider,
+.menu li.divider:hover {
+    cursor: default;
+    height: 1px;
+    padding: 0;
+    background-color: #ccc;
+}
+
+.menu li.selected-menu-item span {
+    background: url(sprites.png) no-repeat -225px -225px;
+}
+
+.menu li span {
+    padding-left: 20px;
+    white-space: nowrap;
+}
+
+.menu li.checked span {
+    background: url(sprites.png) no-repeat -225px -225px;
+}
