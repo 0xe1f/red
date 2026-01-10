@@ -16,3 +16,6 @@
 [submodule "game_servers/geargrafx"]
 	path = game_servers/geargrafx
 	url = https://github.com/0xe1f/Geargrafx.git
+[submodule "game_servers/nestopia"]
+	path = game_servers/nestopia
+	url = https://github.com/0xe1f/nestopia.git

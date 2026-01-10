@@ -1,0 +1,6 @@
+COPYING
+README
+*.xml
+*.xsd
+intl/
+palettes/

@@ -57,6 +57,13 @@ for DIR in $ARGS; do
     # Get last line of output as files to copy
     FILES=$(echo "$BUILD_OUTPUT" | tail -n 1)
 
+    if [[ "$FILES" == done:* ]]; then
+        FILES="${FILES#done:}"
+    else
+        echo -e "${RED}Build failed ${PLAIN}" >&2
+        exit 1
+    fi
+
     echo -e "${BOLD_WHITE}>> ${GREEN}Installing... ${PLAIN}"
     # Create remote directory
     ssh -o "StrictHostKeyChecking no" $GAME_SVR_HOST -t "mkdir -p $GAME_SVR_PATH/$DIRNAME"

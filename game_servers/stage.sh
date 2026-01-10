@@ -25,7 +25,7 @@ shift 3
 # If no projects are specified, stage all directories
 ARGS="$@"
 if [ -z "$ARGS" ]; then
-    ARGS=$(find . -maxdepth 1 -type d -not -name '.*' | tr -s '[:space:]' ' ')
+    ARGS=$(find . -maxdepth 1 -type d -not -name '.*' -not -name deps | tr -s '[:space:]' ' ')
 fi
 
 # Check that all specified directories have a build.sh
@@ -39,13 +39,17 @@ done
 set -e
 
 copy_scripts() {
-    echo -e "${BOLD_WHITE}>> ${GREEN}Copying scripts/files... ${PLAIN}"
+    echo -e "${BOLD_WHITE}>> ${GREEN}Copying common code... ${PLAIN}"
     rsync -tph \
         --info=progress2 \
         --exclude '*.exclude' \
         --exclude 'stage.sh' \
         --exclude='*/' \
         ./* \
+        "$BUILD_SVR:$BUILD_PATH/"
+    rsync -trph \
+        --info=progress2 \
+        deps \
         "$BUILD_SVR:$BUILD_PATH/"
 }
 
