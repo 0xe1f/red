@@ -19,3 +19,6 @@
 [submodule "game_servers/nestopia"]
 	path = game_servers/nestopia
 	url = https://github.com/0xe1f/nestopia.git
+[submodule "game_servers/snes9x"]
+	path = game_servers/snes9x
+	url = https://github.com/0xe1f/snes9x.git

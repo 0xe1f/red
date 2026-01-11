@@ -211,6 +211,7 @@ static int read_preamble()
         return 0;
     }
 
+#if 0
     if (bitmap_bpp * data.bitmap_width != data.bitmap_pitch) {
         fprintf(stderr, "Bitmap pitch does not fempute (%d != %d)\n",
             bitmap_bpp * data.bitmap_width,
@@ -218,6 +219,7 @@ static int read_preamble()
         );
         return 0;
     }
+#endif
     fprintf(stderr, "Projected Mbps: %.02f\n",
         (float)(data.buffer_size * 60) / 1024 / 1024
     );
