@@ -117,6 +117,8 @@ The following servers are currently supported:
 * [bluemsx](https://github.com/0xe1f/blueberryMSX)
 * [wolf4sdl](https://bitbucket.org/ks-presto/wolf4sdl/src/master/)
 * [Genesis Plus GX](https://github.com/ekeeke/Genesis-Plus-GX)
+* [GearGrafx](https://github.com/drhelius/Geargrafx)
+* [Nestopia](https://github.com/libretro/nestopia)
 
 To keep things as fast as possible, I recommend turning off wifi on the server,
 both to minimize unnecessary resource utilization, and to prevent unintended
