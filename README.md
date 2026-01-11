@@ -119,6 +119,7 @@ The following servers are currently supported:
 * [Genesis Plus GX](https://github.com/ekeeke/Genesis-Plus-GX)
 * [GearGrafx](https://github.com/drhelius/Geargrafx)
 * [Nestopia](https://github.com/libretro/nestopia)
+* [SNES9X](https://github.com/snes9xgit/snes9x)
 
 To keep things as fast as possible, I recommend turning off wifi on the server,
 both to minimize unnecessary resource utilization, and to prevent unintended

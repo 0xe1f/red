@@ -1,0 +1,13 @@
+LICENSE
+*.md
+*.txt
+docs/
+external/
+filter/
+gtk/
+jma/
+libretro/
+macosx/
+qt/
+unix/
+win32/
