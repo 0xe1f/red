@@ -28,7 +28,7 @@ struct PinState {
 
 struct PinState pins[] = {
     { 2, LOW, 0, ORIENT_LANDSCAPE, 0UL },
-    { 3, LOW, 0, ORIENT_PORTRAIT, 0UL },
+    { 11, LOW, 0, ORIENT_PORTRAIT, 0UL },
     { -1, },
 };
 
