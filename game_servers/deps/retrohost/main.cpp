@@ -38,7 +38,8 @@ static struct retro_core_options_v2_intl core_options_v2_intl;
 static struct retro_system_info system_info;
 static struct retro_system_av_info av_info;
 static struct retro_input_descriptor *input_descriptors = NULL;
-const struct retro_system_content_info_override *content_info;
+static const struct retro_system_content_info_override *content_info;
+static const struct retro_subsystem_info *subsystem_info;
 static const char *system_path = "./roms";
 static const char *save_path = "./save";
 static SoundQueue sound_queue;
@@ -110,13 +111,17 @@ static int16_t callback_input_state(unsigned port, unsigned device, unsigned ind
     return 0;
 }
 
-static void set_content_info_override(const struct retro_system_content_info_override *data)
+static void dump_env()
 {
-    content_info = data;
-    for (const struct retro_system_content_info_override *content_info = data; content_info->extensions; content_info++) {
-        fprintf(stderr, "set_content_info_override: %s (need_fullpath=%s)\n",
-            content_info->extensions,
-            content_info->need_fullpath ? "true" : "false");
+    fprintf(stderr, "content_info_override:\n");
+    for (const struct retro_system_content_info_override *info = content_info; info && info->extensions; info++) {
+        fprintf(stderr, "  %s (need_fullpath=%s)\n",
+            info->extensions,
+            info->need_fullpath ? "true" : "false");
+    }
+    fprintf(stderr, "subsystem_info:\n");
+    for (const struct retro_subsystem_info *info = subsystem_info; info && info->ident; info++) {
+        fprintf(stderr, "  %s (%s)\n", info->desc, info->ident);
     }
 }
 
@@ -148,6 +153,9 @@ static bool callback_environment_set(unsigned cmd, void *data)
         break;
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL:
         core_options_v2_intl = *(struct retro_core_options_v2_intl *)data;
+        break;
+    case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
+        // bool support_achievements = *(bool *)data;
         break;
     case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: {
             struct retro_input_descriptor *desc = (struct retro_input_descriptor *)data;
@@ -209,8 +217,20 @@ static bool callback_environment_set(unsigned cmd, void *data)
             *updated = false;
         }
         break;
+    case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE: {
+        unsigned *flags = (unsigned *)data;
+        // 0: Enable Video
+        // 1: Enable Audio
+        // 2: Use Fast Savestates.
+        // 3: Hard Disable Audio
+        *flags = 0x3;
+        break;
+    }
     case RETRO_ENVIRONMENT_SET_VARIABLES:
         fprintf(stderr, "RETRO_ENVIRONMENT_SET_VARIABLES\n");
+        break;
+    case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
+        subsystem_info = (const struct retro_subsystem_info *)data;
         break;
     case RETRO_ENVIRONMENT_SET_GEOMETRY: {
             av_info = *(struct retro_system_av_info *)data;
@@ -232,7 +252,7 @@ static bool callback_environment_set(unsigned cmd, void *data)
         // struct retro_core_option_display *display = (struct retro_core_option_display *)data;
         break;
     case RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE:
-        set_content_info_override((const struct retro_system_content_info_override *)data);
+        content_info = (const struct retro_system_content_info_override *)data;
         break;
     case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
         // uint64_t quirks = *(uint64_t *)data;
@@ -652,6 +672,7 @@ int main(int argc, const char **argv)
     // void retro_cheat_set(unsigned index, bool enabled, const char *code)
     
     retro_init();
+    dump_env();
 
     if (!load(opts.rom_path)) {
         fprintf(stderr, "Failed to load file '%s'\n", opts.rom_path);
