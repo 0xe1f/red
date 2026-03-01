@@ -14,7 +14,7 @@ EXE=main
 
 all: $(EXE)
 
-$(EXE): main.o sound_queue.o \
+$(EXE): main.o files.o sound_queue.o \
 	$(MINIZIP_ROOT)/unzip.o $(MINIZIP_ROOT)/ioapi.o \
 	$(RGBSERVER_ROOT)/rgbserver.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
