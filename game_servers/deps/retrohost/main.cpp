@@ -201,6 +201,17 @@ static bool callback_environment_set(unsigned cmd, void *data)
             }
         }
         break;
+    case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO:
+        // FIXME!! this can fire within retro_run()
+        // av_info = *(struct retro_system_av_info *)data;
+        // break;
+        return false;
+    case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
+        // const struct retro_memory_map *maps = (struct retro_memory_map *)data;
+        break;
+    case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE:
+        // struct retro_rumble_interface *rumble = (struct retro_rumble_interface *)data;
+        return false;
     case RETRO_ENVIRONMENT_GET_VARIABLE: {
             struct retro_variable *var = (struct retro_variable *)data;
             // FIXME
