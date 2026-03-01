@@ -2,18 +2,21 @@
 ## 2026, Akop Karapetyan
 ##
 
+MINIZIP_ROOT=minizip
 LIBRETRO_ROOT=libretro-common
 RGBSERVER_ROOT=../rgbserver
-INCLUDE=-I$(LIBRETRO_ROOT)/include -I$(RGBSERVER_ROOT)
+INCLUDE=-I$(LIBRETRO_ROOT)/include -I$(MINIZIP_ROOT) -I$(RGBSERVER_ROOT)
 DEFINE=
 CFLAGS=-Wall -O2 `sdl2-config --cflags`
 CXXFLAGS=$(CFLAGS) 
-LDFLAGS=`sdl2-config --libs`
+LDFLAGS=`sdl2-config --libs` -lz
 EXE=main
 
 all: $(EXE)
 
-$(EXE): main.o sound_queue.o $(RGBSERVER_ROOT)/rgbserver.o
+$(EXE): main.o sound_queue.o \
+	$(MINIZIP_ROOT)/unzip.o $(MINIZIP_ROOT)/ioapi.o \
+	$(RGBSERVER_ROOT)/rgbserver.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 %.o: %.cpp

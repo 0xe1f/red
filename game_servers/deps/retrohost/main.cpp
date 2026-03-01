@@ -9,6 +9,7 @@
 #include "libretro.h"
 #include "sound_queue.h"
 #include "rgbserver.h"
+#include "unzip.h"
 
 static void *solib = NULL;
 
@@ -37,16 +38,27 @@ static struct retro_core_options_v2_intl core_options_v2_intl;
 static struct retro_system_info system_info;
 static struct retro_system_av_info av_info;
 static struct retro_input_descriptor *input_descriptors = NULL;
-struct retro_system_content_info_override content_info;
+const struct retro_system_content_info_override *content_info;
 static const char *system_path = "./roms";
 static const char *save_path = "./save";
 static SoundQueue sound_queue;
 static struct FrameGeometry geometry;
 static unsigned char pixel_format = PIXEL_FORMAT_UNKNOWN;
+static bool is_running = true;
+static struct retro_game_info *game_info = NULL;
+static struct retro_game_info_ext *game_info_ext = NULL;
 
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
-    fprintf(stderr, "retro: ");
+    if (level == RETRO_LOG_DEBUG) {
+        fprintf(stderr, "D: ");
+    } else if (level == RETRO_LOG_INFO) {
+        fprintf(stderr, "I: ");
+    } else if (level == RETRO_LOG_WARN) {
+        fprintf(stderr, "W: ");
+    } else if (level == RETRO_LOG_ERROR) {
+        fprintf(stderr, "E: ");
+    }
     va_list va;
     va_start(va, fmt);
     vfprintf(stderr, fmt, va);
@@ -96,6 +108,16 @@ static int16_t callback_input_state(unsigned port, unsigned device, unsigned ind
 {
     // fprintf(stderr, "input_state: port=%u device=%u index=%u id=%u\n", port, device, index, id);
     return 0;
+}
+
+static void set_content_info_override(const struct retro_system_content_info_override *data)
+{
+    content_info = data;
+    for (const struct retro_system_content_info_override *content_info = data; content_info->extensions; content_info++) {
+        fprintf(stderr, "set_content_info_override: %s (need_fullpath=%s)\n",
+            content_info->extensions,
+            content_info->need_fullpath ? "true" : "false");
+    }
 }
 
 static bool callback_environment_set(unsigned cmd, void *data)
@@ -210,7 +232,7 @@ static bool callback_environment_set(unsigned cmd, void *data)
         // struct retro_core_option_display *display = (struct retro_core_option_display *)data;
         break;
     case RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE:
-        content_info = *((struct retro_system_content_info_override *)data);
+        set_content_info_override((const struct retro_system_content_info_override *)data);
         break;
     case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
         // uint64_t quirks = *(uint64_t *)data;
@@ -219,16 +241,22 @@ static bool callback_environment_set(unsigned cmd, void *data)
         // struct retro_disk_control_callback *disk_interface = (struct retro_disk_control_callback *)data;
         break;
     case RETRO_ENVIRONMENT_GET_GAME_INFO_EXT:
-        // struct retro_game_info_ext *info = (struct retro_game_info_ext *)data;
-        return false; // FIXME
+        *(const struct retro_game_info_ext **)data = game_info_ext;
+        break;
     case RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK:
+        // FIXME
         // struct retro_audio_buffer_status_callback *audio_buffer_status = (struct retro_audio_buffer_status_callback *)data;
-        return false; // FIXME
+        return false;
     case RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY:
+        // FIXME
         // unsigned latency = *(unsigned *)data;
-        return false; // FIXME
+        return false;
+    case RETRO_ENVIRONMENT_GET_VFS_INTERFACE:
+        // FIXME
+        // struct retro_vfs_interface_info *vfs = (struct retro_vfs_interface_info *)data;
+        return false;
     default:
-        fprintf(stderr, "W: retro_environment_set(): unrecognized cmd=%u\n", cmd);
+        fprintf(stderr, "W: retro_environment_set(): unrecognized cmd=%1$u (0x%1$x)\n", cmd);
         return false;
     }
 
@@ -246,33 +274,217 @@ static void mkdirs()
     }
 }
 
-static struct retro_game_info* init_game_info(const char *path)
+static bool is_extension_supported(const char *path)
 {
-    static struct retro_game_info game_info;
+    if (!content_info) {
+        return true;
+    }
+
+    for (const struct retro_system_content_info_override *info = content_info; info->extensions; info++) {
+        const char *ext = strrchr(path, '.');
+        if (!ext) {
+            fprintf(stderr, "No file extension found: %s\n", path);
+            return false;
+        }
+        ext++; // skip the dot
+
+        bool found = false;
+        for (const char *p = info->extensions; *p; p++) {
+            if (strncmp(p, ext, strlen(ext)) == 0 &&
+                (*(p + strlen(ext)) == '|' || *(p + strlen(ext)) == '\0')) {
+                found = true;
+                break;
+            }
+            // skip to next extension after pipe
+            while (*p && *p != '|') p++;
+        }
+
+        if (!found) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool has_extension(const char *path, const char *ext)
+{
+    const char *file_ext = strrchr(path, '.');
+    return file_ext && strcmp(file_ext + 1, ext) == 0;
+}
+
+static bool load_zip(const char *path)
+{
+    static struct retro_game_info info_local;
+    static struct retro_game_info_ext info_local_ext;
+    info_local = (struct retro_game_info){ 0 };
+    info_local_ext = (struct retro_game_info_ext){ 0 };
+
+    unzFile fd = unzOpen(path);
+    if (!fd) {
+        fprintf(stderr, "Failed to open zip: %s\n", path);
+        return false;
+    }
+
+    static char archived_path[512];
+    static char archived_filename[512];
+    static char archived_ext[512];
+    static char dir[512];
+    void *data = NULL;
+    unz_file_info info;
+    int ret = unzGoToFirstFile(fd);
+    while (ret == UNZ_OK) {
+        if (unzGetCurrentFileInfo(fd, &info, archived_path, sizeof(archived_path), 0, 0, 0, 0) == UNZ_OK) {
+            if (is_extension_supported(archived_path)) {
+                if ((ret = unzOpenCurrentFile(fd)) == UNZ_OK) {
+                    size_t size = info.uncompressed_size;
+                    if (!(data = malloc(size))) {
+                        fprintf(stderr, "Failed to allocate %zu bytes for %s\n", size, archived_path);
+                        unzCloseCurrentFile(fd);
+                        continue;
+                    }
+
+                    if ((ret = unzReadCurrentFile(fd, data, size)) == (int) size) {
+                        fprintf(stderr, "Loaded '%s'\n", archived_path);
+
+                        const char *slash = strrchr(path, '/');
+                        if (slash) {
+                            strncat(dir, path, slash - path);
+                        } else {
+                            strncat(dir, ".", sizeof(dir) - 1);
+                        }
+
+                        const char *archived_slash = strrchr(archived_path, '/');
+                        if (archived_slash) {
+                            strncat(archived_filename, archived_slash + 1, sizeof(archived_filename) - 1);
+                        } else {
+                            strncat(archived_filename, archived_path, sizeof(archived_filename) - 1);
+                        }
+
+                        char *archived_dot = strrchr(archived_filename, '.');
+                        if (archived_dot) {
+                            *archived_dot = '\0';
+                            strncat(archived_ext, archived_dot + 1, sizeof(archived_ext) - 1);
+                        } else {
+                            strncat(archived_ext, "", sizeof(archived_ext) - 1);
+                        }
+
+                        info_local = (struct retro_game_info){ path, data, size, NULL };
+                        info_local_ext = (struct retro_game_info_ext){
+                            /* full_path */ NULL,
+                            /* archive_path */ path,
+                            /* archive_file */ archived_path,
+                            /* dir */ dir,
+                            /* name */ archived_filename,
+                            /* ext */ archived_ext,
+                            /* meta */ NULL,
+                            /* data */ data,
+                            /* size */ size,
+                            /* file_in_archive */ true,
+                            /* persistent_data */ true
+                        };
+
+                        unzCloseCurrentFile(fd);
+                        break;
+                    }
+
+                    free(data);
+                    unzCloseCurrentFile(fd);
+                }
+            }
+        }
+        ret = unzGoToNextFile(fd);
+    }
+    unzClose(fd);
+
+    if (!info_local.data) {
+        fprintf(stderr, "Nothing loaded from zip: %s\n", path);
+        return false;
+    }
+
+    game_info = &info_local;
+    game_info_ext = &info_local_ext;
+
+    return true;
+}
+
+static bool load_direct(const char *path)
+{
+    static struct retro_game_info info_local;
+    static struct retro_game_info_ext info_local_ext;
+    info_local = (struct retro_game_info){ 0 };
+    info_local_ext = (struct retro_game_info_ext){ 0 };
+
+    static char dir[512];
+    static char filename[512];
+    static char ext[512];
 
     FILE *f = fopen(path, "rb");
     if (!f) {
-        fprintf(stderr, "Failed to open game: %s\n", path);
-        return NULL;
+        fprintf(stderr, "Failed to read file: %s\n", path);
+        return false;
     }
 
     fseek(f, 0, SEEK_END);
-    size_t game_size = ftell(f);
+    size_t size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    void *game_data = malloc(game_size);
-    if (!game_data) {
-        fprintf(stderr, "Failed to allocate memory for game: %s\n", path);
-        fclose(f);
-        return NULL;
-    }
+    void *data = malloc(size);
+    if (!data) {
+        fprintf(stderr, "Failed to allocate %zu bytes for %s\n", size, path);
+    } else {
+        fread(data, 1, size, f);
 
-    fread(game_data, 1, game_size, f);
+        const char *slash = strrchr(path, '/');
+        if (slash) {
+            strncat(dir, path, slash - path);
+            strncat(filename, slash + 1, sizeof(filename) - 1);
+        } else {
+            strncat(dir, ".", sizeof(dir) - 1);
+            strncat(filename, path, sizeof(filename) - 1);
+        }
+
+        char *dot = strrchr(filename, '.');
+        if (dot) {
+            *dot = '\0';
+            strncat(ext, dot + 1, sizeof(ext) - 1);
+        } else {
+            strncat(ext, "", sizeof(ext) - 1);
+        }
+
+        info_local = (struct retro_game_info){ path, data, size, NULL };
+        info_local_ext = (struct retro_game_info_ext){
+            /* full_path */ path,
+            /* archive_path */ NULL,
+            /* archive_file */ NULL,
+            /* dir */ dir,
+            /* name */ filename,
+            /* ext */ ext,
+            /* meta */ NULL,
+            /* data */ data,
+            /* size */ size,
+            /* file_in_archive */ false,
+            /* persistent_data */ true
+        };
+    }
     fclose(f);
 
-    game_info = (struct retro_game_info){ path, game_data, game_size, NULL };
+    if (!info_local.data) {
+        return false;
+    }
 
-    return &game_info;
+    game_info = &info_local;
+    game_info_ext = &info_local_ext;
+
+    return true;
+}
+
+static bool load(const char *path)
+{
+    if (has_extension(path, "zip")) {
+        return load_zip(path);
+    }
+    return load_direct(path);
 }
 
 static double millis()
@@ -323,17 +535,74 @@ static void clean_up()
 {
     rgbs_end();
     dlclose(solib);
+
+    if (game_info) {
+        // data pointer is shared between game_info and game_info_ext
+        free((void*)game_info->data);
+        game_info = NULL;
+        game_info_ext = NULL;
+    }
 }
 
-int main(int argc, char **argv)
+static void sigint_handler(int s)
 {
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s <game>\n", argv[0]);
+    fprintf(stderr, "Caught SIGINT, shutting down...\n");
+    is_running = false;
+}
+
+typedef struct {
+    const char *rom_path;
+    const char *so_path;
+} options;
+
+static void usage(const char *progname)
+{
+    fprintf(stderr, "Usage: %s <game>\n", progname);
+}
+
+static bool parse_args(int argc, const char **argv, options *opts)
+{
+    int i;
+    const char **arg;
+    for (i = 1, arg = argv + 1; i < argc; i++, arg++) {
+        if (strcmp(*arg, "--help") == 0 || strcmp(*arg, "-h") == 0) {
+            usage(*argv);
+            exit(0);
+        } else if (strcmp(*arg, "--core") == 0 || strcmp(*arg, "-c") == 0) {
+            if (++i >= argc) {
+                fprintf(stderr, "Missing argument for %s\n", *arg);
+                return false;
+            }
+            opts->so_path = *(++arg);
+        } else if (**arg == '-') {
+            fprintf(stderr, "Unrecognized switch: %s\n", *arg);
+            return false;
+        } else if (opts->rom_path == NULL) {
+            opts->rom_path = *arg;
+        } else {
+            fprintf(stderr, "Unrecognized argument: %s\n", *arg);
+            return false;
+        }
+    }
+    return true;
+}
+
+int main(int argc, const char **argv)
+{
+    options opts = {0};
+    if (!parse_args(argc, argv, &opts)) {
         return 1;
     }
 
-    solib = dlopen("./nestopia_libretro.so", RTLD_NOW);
-    if (!solib) {
+    if (!opts.rom_path) {
+        fprintf(stderr, "Missing rom path\n");
+        return 1;
+    } else if (!opts.so_path || access(opts.so_path, F_OK) == -1) {
+        fprintf(stderr, "Missing or invalid core\n");
+        return 1;
+    }
+
+    if (!(solib = dlopen(opts.so_path, RTLD_NOW))) {
         fprintf(stderr, "Failed to load libretro core: %s\n", dlerror());
         return 1;
     }
@@ -351,19 +620,6 @@ int main(int argc, char **argv)
     LOAD_SYMBOL(retro_run)
     LOAD_SYMBOL(retro_unload_game)
     LOAD_SYMBOL(retro_deinit)
-
-    // void (*retro_get_system_info)(struct retro_system_info*) = (void (*)(struct retro_system_info*)) dlsym(solib, "retro_get_system_info");
-    // bool (*retro_load_game)(const struct retro_game_info *) = (bool (*)(const struct retro_game_info *)) dlsym(solib, "retro_load_game");
-    // void (*retro_set_video_refresh)(retro_video_refresh_t) = (void (*)(retro_video_refresh_t)) dlsym(solib, "retro_set_video_refresh");
-    // void (*retro_set_audio_sample)(retro_audio_sample_t) = (void (*)(retro_audio_sample_t)) dlsym(solib, "retro_set_audio_sample");
-    // void (*retro_set_audio_sample_batch)(retro_audio_sample_batch_t) = (void (*)(retro_audio_sample_batch_t)) dlsym(solib, "retro_set_audio_sample_batch");
-    // void (*retro_set_input_poll)(retro_input_poll_t) = (void (*)(retro_input_poll_t)) dlsym(solib, "retro_set_input_poll");
-    // void (*retro_set_input_state)(retro_input_state_t) = (void (*)(retro_input_state_t)) dlsym(solib, "retro_set_input_state");
-    // void (*retro_set_environment)(retro_environment_t) = (void (*)(retro_environment_t)) dlsym(solib, "retro_set_environment");
-    // void (*retro_init)(void) = (void (*)(void)) dlsym(solib, "retro_init");
-    // void (*retro_run)(void) = (void (*)(void)) dlsym(solib, "retro_run");
-    // void (*retro_unload_game)(void) = (void (*)(void)) dlsym(solib, "retro_unload_game");
-    // void (*retro_deinit)(void) = (void (*)(void)) dlsym(solib, "retro_deinit");
 
     mkdirs();
     rgbs_start();
@@ -397,30 +653,27 @@ int main(int argc, char **argv)
     
     retro_init();
 
-    const char *game_path = argv[1];
-    const struct retro_game_info *game_info = init_game_info(game_path);
-    if (!game_info) {
-        fprintf(stderr, "Failed to initialize game info for: %s\n", game_path);
+    if (!load(opts.rom_path)) {
+        fprintf(stderr, "Failed to load file '%s'\n", opts.rom_path);
         clean_up();
         return 1;
     }
 
     if (!retro_load_game(game_info)) {
-        fprintf(stderr, "Failed to load %s\n", game_path);
+        fprintf(stderr, "Failed to load '%s'\n", opts.rom_path);
         clean_up();
         return 1;
     }
 
-    fprintf(stderr, "Successfully loaded: %s\n", game_path);
+    fprintf(stderr, "Successfully loaded: %s\n", opts.rom_path);
 
-    while (true) {
+    signal(SIGINT, sigint_handler);
+    while (is_running) {
         retro_run();
         throttle(true);
     }
 
     retro_unload_game();
-    free((void *)game_info->data);
-
     retro_deinit();
 
     clean_up();
