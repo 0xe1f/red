@@ -30,6 +30,7 @@ DEFINE_SYMBOL(retro_init, void, void)
 DEFINE_SYMBOL(retro_run, void, void)
 DEFINE_SYMBOL(retro_unload_game, void, void)
 DEFINE_SYMBOL(retro_deinit, void, void)
+DEFINE_SYMBOL(retro_get_system_av_info, void, struct retro_system_av_info*)
 
 static struct retro_controller_info *ports;
 static struct retro_core_options_intl core_options_v1_intl;
@@ -108,16 +109,25 @@ static int16_t callback_input_state(unsigned port, unsigned device, unsigned ind
 
 static void dump_env()
 {
-    fprintf(stderr, "content_info_override:\n");
-    for (const struct retro_system_content_info_override *info = content_info; info && info->extensions; info++) {
-        fprintf(stderr, "  %s (need_fullpath=%s)\n",
-            info->extensions,
-            info->need_fullpath ? "true" : "false");
+    if (content_info) {
+        fprintf(stderr, "content_info_override:\n");
+        for (const struct retro_system_content_info_override *info = content_info; info->extensions; info++) {
+            fprintf(stderr, "  %s (need_fullpath=%s)\n",
+                info->extensions,
+                info->need_fullpath ? "true" : "false");
+        }
     }
-    fprintf(stderr, "subsystem_info:\n");
-    for (const struct retro_subsystem_info *info = subsystem_info; info && info->ident; info++) {
-        fprintf(stderr, "  %s (%s)\n", info->desc, info->ident);
+
+    if (subsystem_info) {
+        fprintf(stderr, "subsystem_info:\n");
+        for (const struct retro_subsystem_info *info = subsystem_info; info->ident; info++) {
+            fprintf(stderr, "  %s (%s)\n", info->desc, info->ident);
+        }
     }
+
+    fprintf(stderr, "AV:\n");
+    fprintf(stderr, "  %ux%u @ %f fps\n", av_info.geometry.base_width, av_info.geometry.base_height, av_info.timing.fps);
+    fprintf(stderr, "  sample_rate: %.02f\n", av_info.timing.sample_rate);
 }
 
 static bool callback_environment_set(unsigned cmd, void *data)
@@ -227,21 +237,8 @@ static bool callback_environment_set(unsigned cmd, void *data)
     case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
         subsystem_info = (const struct retro_subsystem_info *)data;
         break;
-    case RETRO_ENVIRONMENT_SET_GEOMETRY: {
-            av_info = *(struct retro_system_av_info *)data;
-            fprintf(stderr, "gfx: %ux%u @ %f fps\n",
-                av_info.geometry.base_width,
-                av_info.geometry.base_height,
-                av_info.timing.fps);
-
-            int channels = 2;
-            fprintf(stderr, "audio: %.02f %d channels\n",
-                av_info.timing.sample_rate,
-                channels);
-
-            sound_queue.Stop();
-            sound_queue.Start(av_info.timing.sample_rate, channels);
-        }
+    case RETRO_ENVIRONMENT_SET_GEOMETRY:
+        av_info = *(struct retro_system_av_info *)data;
         break;
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
         // struct retro_core_option_display *display = (struct retro_core_option_display *)data;
@@ -287,7 +284,7 @@ static double millis()
 
 static void throttle(bool show_fps)
 {
-    if (av_info.timing.fps <= 0) {
+    if (av_info.timing.fps <= 0.01) {
         return;
     }
 
@@ -373,6 +370,12 @@ static bool parse_args(int argc, const char **argv, options *opts)
     return true;
 }
 
+static void reset_audio()
+{
+    sound_queue.Stop();
+    sound_queue.Start(av_info.timing.sample_rate, 2);
+}
+
 int main(int argc, const char **argv)
 {
     options opts = {0};
@@ -406,6 +409,7 @@ int main(int argc, const char **argv)
     LOAD_SYMBOL(retro_run)
     LOAD_SYMBOL(retro_unload_game)
     LOAD_SYMBOL(retro_deinit)
+    LOAD_SYMBOL(retro_get_system_av_info)
 
     files_mkdirs();
     rgbs_start();
@@ -438,7 +442,6 @@ int main(int argc, const char **argv)
     // void retro_cheat_set(unsigned index, bool enabled, const char *code)
     
     retro_init();
-    dump_env();
 
     if (!files_load(opts.rom_path, content_info)) {
         fprintf(stderr, "Failed to load file '%s'\n", opts.rom_path);
@@ -451,8 +454,12 @@ int main(int argc, const char **argv)
         clean_up();
         return 1;
     }
-
     fprintf(stderr, "Successfully loaded: %s\n", opts.rom_path);
+
+    retro_get_system_av_info(&av_info);
+    reset_audio();
+
+    dump_env();
 
     signal(SIGINT, sigint_handler);
     while (is_running) {
