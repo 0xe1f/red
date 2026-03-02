@@ -34,6 +34,7 @@ DEFINE_SYMBOL(retro_unload_game, void, void)
 DEFINE_SYMBOL(retro_deinit, void, void)
 DEFINE_SYMBOL(retro_get_system_av_info, void, struct retro_system_av_info*)
 
+static unsigned int api_version = 0;
 static struct retro_controller_info *ports;
 static struct retro_core_options_intl core_options_v1_intl;
 static struct retro_core_options_v2_intl core_options_v2_intl;
@@ -44,7 +45,7 @@ static const struct retro_system_content_info_override *content_info;
 static const struct retro_subsystem_info *subsystem_info;
 static SoundQueue sound_queue;
 static struct FrameGeometry geometry;
-static unsigned char pixel_format = PIXEL_FORMAT_UNKNOWN;
+static unsigned char pixel_format = PIXEL_FORMAT_UNKNOWN; // default is 1555
 static bool is_running = true;
 
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
@@ -115,6 +116,10 @@ static int16_t callback_input_state(unsigned port, unsigned device, unsigned ind
 
 static void dump_env()
 {
+    fprintf(stderr, "----\n");
+    fprintf(stderr, "%s %s (api v.%u)\n",
+        system_info.library_name, system_info.library_version, api_version);
+
     if (content_info) {
         fprintf(stderr, "content_info_override:\n");
         for (const struct retro_system_content_info_override *info = content_info; info->extensions; info++) {
@@ -132,8 +137,14 @@ static void dump_env()
     }
 
     fprintf(stderr, "AV:\n");
-    fprintf(stderr, "  %ux%u @ %f fps\n", av_info.geometry.base_width, av_info.geometry.base_height, av_info.timing.fps);
+    fprintf(stderr, "  geometry: %ux%u\n", av_info.geometry.base_width, av_info.geometry.base_height);
+    fprintf(stderr, "  fps: %.02f\n", av_info.timing.fps);
     fprintf(stderr, "  sample_rate: %.02f\n", av_info.timing.sample_rate);
+    fprintf(stderr, "  pixel_format: %s\n",
+        pixel_format == PIXEL_FORMAT_ARGB8888 ? "ARGB8888" :
+        pixel_format == PIXEL_FORMAT_RGB565 ? "RGB565" :
+        "UNKNOWN");
+    fprintf(stderr, "----\n");
 }
 
 static bool callback_environment_set(unsigned cmd, void *data)
@@ -169,42 +180,39 @@ static bool callback_environment_set(unsigned cmd, void *data)
         // bool support_achievements = *(bool *)data;
         break;
     case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: {
-            struct retro_input_descriptor *desc = (struct retro_input_descriptor *)data;
+        struct retro_input_descriptor *desc = (struct retro_input_descriptor *)data;
 
-            unsigned count = 0;
-            for (struct retro_input_descriptor *d = desc; d->description; d++, count++);
+        unsigned count = 0;
+        for (struct retro_input_descriptor *d = desc; d->description; d++, count++);
 
-            input_descriptors = (struct retro_input_descriptor *)malloc(sizeof(struct retro_input_descriptor) * (count + 1));
-            if (input_descriptors) {
-                for (unsigned i = 0; i < count; i++) {
-                    input_descriptors[i] = desc[i];
-                }
-                input_descriptors[count] = (struct retro_input_descriptor){ 0 };
+        input_descriptors = (struct retro_input_descriptor *)malloc(sizeof(struct retro_input_descriptor) * (count + 1));
+        if (input_descriptors) {
+            for (unsigned i = 0; i < count; i++) {
+                input_descriptors[i] = desc[i];
             }
+            input_descriptors[count] = (struct retro_input_descriptor){ 0 };
         }
         break;
+    }
     case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:
         *(const char **)data = system_path;
         break;
     case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY:
         *(const char **)data = save_path;
         break;
-    case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
-            enum retro_pixel_format fmt = *(enum retro_pixel_format *)data;
-            switch (fmt) {
-            case RETRO_PIXEL_FORMAT_XRGB8888:
-                pixel_format = PIXEL_FORMAT_ARGB8888;
-                fprintf(stderr, "Pixel format: ARGB8888\n");
-                break;
-            case RETRO_PIXEL_FORMAT_RGB565:
-                pixel_format = PIXEL_FORMAT_RGB565;
-                fprintf(stderr, "Pixel format: RGB565\n");
-                break;
-            default:
-                pixel_format = PIXEL_FORMAT_UNKNOWN;
-                fprintf(stderr, "Unsupported pixel format: %d\n", fmt);
-                return false;
-            }
+    case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT:
+        switch (*(enum retro_pixel_format *)data) {
+        case RETRO_PIXEL_FORMAT_XRGB8888:
+            pixel_format = PIXEL_FORMAT_ARGB8888;
+            break;
+        case RETRO_PIXEL_FORMAT_RGB565:
+            pixel_format = PIXEL_FORMAT_RGB565;
+            break;
+        default:
+            pixel_format = PIXEL_FORMAT_UNKNOWN;
+            fprintf(stderr, "Unsupported pixel format: %d\n",
+                *(enum retro_pixel_format *)data);
+            return false;
         }
         break;
     case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO:
@@ -220,27 +228,22 @@ static bool callback_environment_set(unsigned cmd, void *data)
         // struct retro_rumble_interface *rumble = (struct retro_rumble_interface *)data;
         return false;
     case RETRO_ENVIRONMENT_GET_VARIABLE: {
-            struct retro_variable *var = (struct retro_variable *)data;
-            var->value = NULL;
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE: %s\n", var->key);
-            return false;
-        }
+        struct retro_variable *var = (struct retro_variable *)data;
+        var->value = NULL;
+        fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE: %s\n", var->key);
+        return false;
+    }
+    case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
+        // fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE\n");
+        *((bool *)data) = false;
         break;
-    case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE: {
-            bool *updated = (bool *)data;
-            // fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE\n");
-            *updated = false;
-        }
-        break;
-    case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE: {
-        unsigned *flags = (unsigned *)data;
+    case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE:
         // 0: Enable Video
         // 1: Enable Audio
         // 2: Use Fast Savestates.
         // 3: Hard Disable Audio
-        *flags = 0x3;
+        *((unsigned *)data) = 0x3;
         break;
-    }
     case RETRO_ENVIRONMENT_SET_VARIABLES:
         fprintf(stderr, "RETRO_ENVIRONMENT_SET_VARIABLES\n");
         break;
@@ -387,15 +390,8 @@ int main(int argc, const char **argv)
     files_mkdirs();
     rgbs_start();
 
-    unsigned int version = retro_api_version();
-    fprintf(stderr, "api version: %u\n", version);
-
+    api_version = retro_api_version();
     retro_get_system_info(&system_info);
-    fprintf(stderr, "%s %s (api v.%u)\n",
-        system_info.library_name,
-        system_info.library_version,
-        version);
-
     retro_set_video_refresh(callback_video_refresh);
     retro_set_audio_sample(callback_audio_sample);
     retro_set_audio_sample_batch(callback_audio_sample_batch);

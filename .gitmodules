@@ -22,3 +22,6 @@
 [submodule "game_servers/snes9x"]
 	path = game_servers/snes9x
 	url = https://github.com/0xe1f/snes9x.git
+[submodule "game_servers/mgba"]
+	path = game_servers/mgba
+	url = https://git@github.com/mgba-emu/mgba.git
