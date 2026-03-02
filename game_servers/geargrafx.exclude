@@ -3,7 +3,6 @@ LICENSE
 *.txt
 tests/
 platforms/bsd/
-platforms/libretro/
 platforms/linux/
 platforms/macos/
 platforms/shared/dependencies/glad/

@@ -29,8 +29,8 @@ if [ -z "$ARGS" ]; then
 else
     # Check that all specified directories have a build.sh
     for DIR in $ARGS; do
-        if [ ! -f "$DIR/build.sh" ]; then
-            echo -e "${RED}Error: No build.sh found in $DIR${PLAIN}" >&2
+        if [ ! -d "$DIR" ]; then
+            echo -e "${RED}Error: $DIR is not a valid module${PLAIN}" >&2
             exit 1
         fi
     done
@@ -50,12 +50,12 @@ for DIR in $ARGS; do
     DIRNAME=$(basename $DIR)
     echo -e "${BOLD_WHITE}>> ${GREEN}Building $DIRNAME... ${PLAIN}"
 
-    pushd $DIRNAME > /dev/null
-
     # Run build script and capture output
-    BUILD_OUTPUT=$(./build.sh | tee /dev/tty)
+    BUILD_OUTPUT=$(./build_module.sh $DIRNAME | tee /dev/tty)
     # Get last line of output as files to copy
     FILES=$(echo "$BUILD_OUTPUT" | tail -n 1)
+
+    pushd $DIRNAME > /dev/null
 
     if [[ "$FILES" == done:* ]]; then
         FILES="${FILES#done:}"

@@ -3,10 +3,8 @@ LICENSE
 *.txt
 docs/
 external/
-filter/
 gtk/
 jma/
-libretro/
 macosx/
 qt/
 unix/

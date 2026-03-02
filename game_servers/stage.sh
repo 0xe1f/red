@@ -30,8 +30,8 @@ fi
 
 # Check that all specified directories have a build.sh
 for DIR in $ARGS; do
-    if [ ! -f "$DIR/build.sh" ]; then
-        echo -e "${RED}Error: No build.sh found in $DIR${PLAIN}" >&2
+    if [ ! -d "$DIR" ]; then
+        echo -e "${RED}Error: $DIR is not a valid module${PLAIN}" >&2
         exit 1
     fi
 done

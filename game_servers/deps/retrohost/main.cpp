@@ -4,10 +4,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
 #include "libretro.h"
 #include "sound_queue.h"
 #include "rgbserver.h"
+#include "args.h"
 #include "files.h"
 
 static void *solib = NULL;
@@ -47,14 +49,18 @@ static bool is_running = true;
 
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
+    time_t now = time(NULL);
+    struct tm tm = *localtime(&now);
+    fprintf(stderr, "%d-%02d-%02d %02d:%02d:%02d ", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+
     if (level == RETRO_LOG_DEBUG) {
-        fprintf(stderr, "D: ");
+        fprintf(stderr, "D ");
     } else if (level == RETRO_LOG_INFO) {
-        fprintf(stderr, "I: ");
+        fprintf(stderr, "I ");
     } else if (level == RETRO_LOG_WARN) {
-        fprintf(stderr, "W: ");
+        fprintf(stderr, "W ");
     } else if (level == RETRO_LOG_ERROR) {
-        fprintf(stderr, "E: ");
+        fprintf(stderr, "E ");
     }
     va_list va;
     va_start(va, fmt);
@@ -202,6 +208,7 @@ static bool callback_environment_set(unsigned cmd, void *data)
         }
         break;
     case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO:
+        fprintf(stderr, "FIXME: RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO\n");
         // FIXME!! this can fire within retro_run()
         // av_info = *(struct retro_system_av_info *)data;
         // break;
@@ -214,21 +221,13 @@ static bool callback_environment_set(unsigned cmd, void *data)
         return false;
     case RETRO_ENVIRONMENT_GET_VARIABLE: {
             struct retro_variable *var = (struct retro_variable *)data;
-            // FIXME
-            if (strcmp(var->key, "nestopia_favored_system") == 0) {
-                fprintf(stderr, "FIXME FIXME FIXME %s\n", var->key);
-                var->value = "auto";
-                return true;
-            } else {
-                fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE: %s\n", var->key);
-                var->value = NULL;
-            }
+            var->value = NULL;
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE: %s\n", var->key);
             return false;
         }
         break;
     case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE: {
             bool *updated = (bool *)data;
-            // FIXME -- stopped here --
             // fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE\n");
             *updated = false;
         }
@@ -286,7 +285,7 @@ static bool callback_environment_set(unsigned cmd, void *data)
     return true;
 }
 
-static double millis()
+static double nanos()
 {
     struct timeval tp;
     gettimeofday(&tp, NULL);
@@ -299,7 +298,7 @@ static void throttle(bool show_fps)
         return;
     }
 
-    double now_ms = millis();
+    double now_ms = nanos();
     static uint32_t frame_count = 0;
     frame_count++;
     static double start_ms = 0;
@@ -311,17 +310,17 @@ static void throttle(bool show_fps)
     } else {
         if (now_ms < next_frame_ms) {
             usleep((int)(next_frame_ms - now_ms));
-            now_ms = millis();
+            now_ms = nanos();
         }
 
         while (next_frame_ms <= now_ms) {
             next_frame_ms += target_frame_time_ms;
         }
     }
-    now_ms = millis();
+    now_ms = nanos();
 
     // Calculate (and optionally display) FPS every second
-    if (now_ms - start_ms >= 1000000) {
+    if (now_ms - start_ms >= 1000000.0) {
         if (show_fps) {
             fprintf(stderr, "FPS: %u\n", frame_count);
         }
@@ -344,43 +343,6 @@ static void sigint_handler(int s)
     is_running = false;
 }
 
-typedef struct {
-    const char *rom_path;
-    const char *so_path;
-} options;
-
-static void usage(const char *progname)
-{
-    fprintf(stderr, "Usage: %s <game>\n", progname);
-}
-
-static bool parse_args(int argc, const char **argv, options *opts)
-{
-    int i;
-    const char **arg;
-    for (i = 1, arg = argv + 1; i < argc; i++, arg++) {
-        if (strcmp(*arg, "--help") == 0 || strcmp(*arg, "-h") == 0) {
-            usage(*argv);
-            exit(0);
-        } else if (strcmp(*arg, "--core") == 0 || strcmp(*arg, "-c") == 0) {
-            if (++i >= argc) {
-                fprintf(stderr, "Missing argument for %s\n", *arg);
-                return false;
-            }
-            opts->so_path = *(++arg);
-        } else if (**arg == '-') {
-            fprintf(stderr, "Unrecognized switch: %s\n", *arg);
-            return false;
-        } else if (opts->rom_path == NULL) {
-            opts->rom_path = *arg;
-        } else {
-            fprintf(stderr, "Unrecognized argument: %s\n", *arg);
-            return false;
-        }
-    }
-    return true;
-}
-
 static void reset_audio()
 {
     sound_queue.Stop();
@@ -389,8 +351,8 @@ static void reset_audio()
 
 int main(int argc, const char **argv)
 {
-    options opts = {0};
-    if (!parse_args(argc, argv, &opts)) {
+    ArgsOptions opts = {0};
+    if (!args_parse(argc, argv, &opts)) {
         return 1;
     }
 
