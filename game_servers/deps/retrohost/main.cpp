@@ -52,20 +52,21 @@ static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
     time_t now = time(NULL);
     struct tm tm = *localtime(&now);
-    fprintf(stderr, "%d-%02d-%02d %02d:%02d:%02d ", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+    FILE *out = (level == RETRO_LOG_ERROR) ? stderr : stdout;
+    fprintf(out, "%d-%02d-%02d %02d:%02d:%02d ", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 
     if (level == RETRO_LOG_DEBUG) {
-        fprintf(stderr, "D ");
+        fprintf(out, "D ");
     } else if (level == RETRO_LOG_INFO) {
-        fprintf(stderr, "I ");
+        fprintf(out, "I ");
     } else if (level == RETRO_LOG_WARN) {
-        fprintf(stderr, "W ");
+        fprintf(out, "W ");
     } else if (level == RETRO_LOG_ERROR) {
-        fprintf(stderr, "E ");
+        fprintf(out, "E ");
     }
     va_list va;
     va_start(va, fmt);
-    vfprintf(stderr, fmt, va);
+    vfprintf(out, fmt, va);
     va_end(va);
 }
 
@@ -116,35 +117,35 @@ static int16_t callback_input_state(unsigned port, unsigned device, unsigned ind
 
 static void dump_env()
 {
-    fprintf(stderr, "----\n");
-    fprintf(stderr, "%s %s (api v.%u)\n",
+    fprintf(stdout, "----\n");
+    fprintf(stdout, "%s %s (api v.%u)\n",
         system_info.library_name, system_info.library_version, api_version);
 
     if (content_info) {
-        fprintf(stderr, "content_info_override:\n");
+        fprintf(stdout, "content_info_override:\n");
         for (const struct retro_system_content_info_override *info = content_info; info->extensions; info++) {
-            fprintf(stderr, "  %s (need_fullpath=%s)\n",
+            fprintf(stdout, "  %s (need_fullpath=%s)\n",
                 info->extensions,
                 info->need_fullpath ? "true" : "false");
         }
     }
 
     if (subsystem_info) {
-        fprintf(stderr, "subsystem_info:\n");
+        fprintf(stdout, "subsystem_info:\n");
         for (const struct retro_subsystem_info *info = subsystem_info; info->ident; info++) {
-            fprintf(stderr, "  %s (%s)\n", info->desc, info->ident);
+            fprintf(stdout, "  %s (%s)\n", info->desc, info->ident);
         }
     }
 
-    fprintf(stderr, "AV:\n");
-    fprintf(stderr, "  geometry: %ux%u\n", av_info.geometry.base_width, av_info.geometry.base_height);
-    fprintf(stderr, "  fps: %.02f\n", av_info.timing.fps);
-    fprintf(stderr, "  sample_rate: %.02f\n", av_info.timing.sample_rate);
-    fprintf(stderr, "  pixel_format: %s\n",
+    fprintf(stdout, "AV:\n");
+    fprintf(stdout, "  geometry: %ux%u\n", av_info.geometry.base_width, av_info.geometry.base_height);
+    fprintf(stdout, "  fps: %.02f\n", av_info.timing.fps);
+    fprintf(stdout, "  sample_rate: %.02f\n", av_info.timing.sample_rate);
+    fprintf(stdout, "  pixel_format: %s\n",
         pixel_format == PIXEL_FORMAT_ARGB8888 ? "ARGB8888" :
         pixel_format == PIXEL_FORMAT_RGB565 ? "RGB565" :
         "UNKNOWN");
-    fprintf(stderr, "----\n");
+    fprintf(stdout, "----\n");
 }
 
 static bool callback_environment_set(unsigned cmd, void *data)
@@ -325,7 +326,7 @@ static void throttle(bool show_fps)
     // Calculate (and optionally display) FPS every second
     if (now_ms - start_ms >= 1000000.0) {
         if (show_fps) {
-            fprintf(stderr, "FPS: %u\n", frame_count);
+            fprintf(stdout, "FPS: %u\n", frame_count);
         }
         frame_count = 0;
         start_ms = now_ms;
@@ -365,6 +366,25 @@ int main(int argc, const char **argv)
     } else if (!opts.so_path || access(opts.so_path, F_OK) == -1) {
         fprintf(stderr, "Missing or invalid core\n");
         return 1;
+    }
+
+    if (opts.background) {
+        fprintf(stdout, "Entering background mode...\n");
+        pid_t pid = fork();
+        if (pid < 0) {
+            fprintf(stderr, "fork() failed\n");
+            clean_up();
+            return 1;
+        } else if (pid == 0) {
+            // Child; keep going
+            // Redirect stdout and stderr to /dev/null
+            freopen("/dev/null", "w", stdout);
+            freopen("/dev/null", "w", stderr);
+        } else {
+            fprintf(stdout, "Continuing in background as pid %d\n", pid);
+            clean_up();
+            return 0;
+        }
     }
 
     if (!(solib = dlopen(opts.so_path, RTLD_NOW))) {
@@ -423,7 +443,7 @@ int main(int argc, const char **argv)
         clean_up();
         return 1;
     }
-    fprintf(stderr, "Successfully loaded: %s\n", opts.rom_path);
+    fprintf(stdout, "Successfully loaded: %s\n", opts.rom_path);
 
     retro_get_system_av_info(&av_info);
     reset_audio();

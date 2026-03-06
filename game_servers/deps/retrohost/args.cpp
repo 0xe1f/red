@@ -24,6 +24,15 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts)
                 return false;
             }
             opts->so_path = *(++arg);
+        } else if (strncmp(*arg, "--output-dims=", 14) == 0) {
+            // FIXME: parse output dimensions
+        } else if (strncmp(*arg, "--scale-mode=", 13) == 0) {
+            // FIXME: parse scale mode
+        } else if (strncmp(*arg, "--max-clients=", 14) == 0) {
+            // FIXME: parse max clients
+        } else if (strcmp(*arg, "--background") == 0 || strcmp(*arg, "-background") == 0) {
+            // FIXME: parse background flag
+            opts->background = true;
         } else if (**arg == '-') {
             fprintf(stderr, "Unrecognized switch: %s\n", *arg);
             return false;

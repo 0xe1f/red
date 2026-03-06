@@ -7,3 +7,4 @@ __pycache__/
 venv/
 *.toml
 *.db
+game_servers/deps/retrohost/rh

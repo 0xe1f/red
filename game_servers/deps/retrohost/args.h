@@ -4,6 +4,7 @@
 typedef struct {
     const char *rom_path;
     const char *so_path;
+    bool background;
 } ArgsOptions;
 
 bool args_parse(int argc, const char **argv, ArgsOptions *opts);

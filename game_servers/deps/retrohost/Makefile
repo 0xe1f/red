@@ -10,11 +10,11 @@ DEFINE=
 CFLAGS=-Wall -O2 `sdl2-config --cflags`
 CXXFLAGS=$(CFLAGS) 
 LDFLAGS=`sdl2-config --libs` -lz
-EXE=main
+EXE=rh
 
 all: $(EXE)
 
-$(EXE): args.o files.o main.o sound_queue.o \
+$(EXE): args.o files.o sound_queue.o main.o \
 	$(MINIZIP_ROOT)/unzip.o $(MINIZIP_ROOT)/ioapi.o \
 	$(RGBSERVER_ROOT)/rgbserver.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)

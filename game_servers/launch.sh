@@ -15,10 +15,24 @@ cd "$BASE_DIR"
 
 # Discard the app_id
 shift
+set -o pipefail
 
 echo "Launching $APP_ID/$TITLE_ID..." >> log.txt
 
-set -o pipefail
-$APP_ID/launch.sh $@ 2>&1 | tee -a log.txt
+SO_FILE=`find $APP_ID/ -maxdepth 1 -name '*_libretro.so'`
+if [ -f "$SO_FILE" ]; then
+    echo "Found core: $SO_FILE..." >> log.txt
+    ROM_PATH="$(find -L $APP_ID/roms -name "$TITLE_ID.*" | head -1)"
+    shift
+    if [ -z "$ROM_PATH" ]; then
+        echo "No ROM file found for $TITLE_ID" >&2
+        exit 1
+    fi
+    echo "Found $ROM_PATH..." >> log.txt
+    ./rh -c "$SO_FILE" "$ROM_PATH" "$@" 2>&1 >> log.txt
+else
+    echo "Calling launch.sh..." >> log.txt
+    $APP_ID/launch.sh $@ 2>&1 | tee -a log.txt
+fi
 
 echo "$APP_ID $TITLE_ID" > $BASE_DIR/.launch_info
