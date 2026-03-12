@@ -6,7 +6,12 @@ RH_PID=`pgrep -x rh`
 if [ ! -z "$RH_PID" ]; then
     echo "Stopping retrohost (pid $RH_PID)..." >> log.txt
     kill -s SIGINT $RH_PID
-    sleep 1
+    for I in {1..8}; do
+        if ! pgrep -x rh > /dev/null; then
+            break
+        fi
+        sleep 0.25
+    done
     if pgrep -x rh > /dev/null; then
         echo "Force-stopping..." >> log.txt
         kill -9 $RH_PID
