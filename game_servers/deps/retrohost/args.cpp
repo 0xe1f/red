@@ -70,6 +70,12 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts)
             opts->show_fps = true;
         } else if (strcmp(*arg, "--verbose") == 0 || strcmp(*arg, "-v") == 0) {
             opts->verbose = true;
+        } else if (strcmp(*arg, "--bios") == 0) {
+            if (++i >= argc) {
+                fprintf(stderr, "Missing argument for %s\n", *arg);
+                return false;
+            }
+            opts->bios_path = *(++arg);
         } else if (**arg == '-') {
             fprintf(stderr, "Unrecognized switch: %s\n", *arg);
             return false;

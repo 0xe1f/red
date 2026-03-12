@@ -4,6 +4,7 @@
 typedef struct {
     const char *rom_path;
     const char *so_path;
+    const char *bios_path;
     bool background;
     bool show_fps;
     int max_clients;
