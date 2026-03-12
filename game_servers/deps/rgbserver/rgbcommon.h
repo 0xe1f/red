@@ -27,6 +27,10 @@ struct FrameGeometry {
 #define PIXEL_FORMAT_RGBA5551 3
 #define PIXEL_FORMAT_ARGB8888 4
 
+#define PIXEL_FORMAT_BPP(pf) \
+    ((pf) == PIXEL_FORMAT_RGBA8888 || (pf) == PIXEL_FORMAT_ARGB8888 ? 4 : \
+     (pf) == PIXEL_FORMAT_RGB565 || (pf) == PIXEL_FORMAT_RGBA5551 ? 2 : 0)
+
 #define ATTR_ROT180 0x01
 
 #endif // _STRUCTS

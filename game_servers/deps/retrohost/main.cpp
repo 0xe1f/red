@@ -34,6 +34,15 @@ DEFINE_SYMBOL(retro_unload_game, void, void)
 DEFINE_SYMBOL(retro_deinit, void, void)
 DEFINE_SYMBOL(retro_get_system_av_info, void, struct retro_system_av_info*)
 
+typedef struct {
+    void *data;
+    unsigned short width = 0;
+    unsigned short height = 0;
+    unsigned short bpp = 0;
+    unsigned short pitch = 0;
+    unsigned int size = 0;
+} VideoBuffer;
+
 static unsigned int api_version = 0;
 static struct retro_controller_info *ports;
 static struct retro_core_options_intl core_options_v1_intl;
@@ -47,6 +56,8 @@ static SoundQueue sound_queue;
 static struct FrameGeometry geometry;
 static unsigned char pixel_format = PIXEL_FORMAT_UNKNOWN; // default is 1555
 static bool is_running = true;
+static ArgsOptions opts;
+static VideoBuffer video_buffer = {0};
 
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
@@ -70,14 +81,120 @@ static void callback_log(enum retro_log_level level, const char *fmt, ...)
     va_end(va);
 }
 
+static void realloc_buffer_if_needed()
+{
+    if (video_buffer.data) {
+        free(video_buffer.data);
+        video_buffer.data = NULL;
+    }
+
+    if (opts.output_width > 0 && opts.output_height > 0) {
+        video_buffer.width = opts.output_width;
+        video_buffer.height = opts.output_height;
+        video_buffer.bpp = PIXEL_FORMAT_BPP(pixel_format);
+        fprintf(stderr, "Creating interim buffer of size %ux%u (bpp=%d)\n",
+            video_buffer.width, video_buffer.height, video_buffer.bpp);
+        video_buffer.pitch = video_buffer.width * video_buffer.bpp;
+        video_buffer.size = video_buffer.pitch * video_buffer.height;
+        video_buffer.data = calloc(video_buffer.size, 1);
+    }
+}
+
+static void blit_buffer(
+    const void *data, unsigned width, unsigned height, size_t pitch,
+    const unsigned char **out, size_t *out_size
+)
+{
+    if (!video_buffer.data) {
+        // No interim buffer, use source directly
+        *out = (const unsigned char *) data;
+        *out_size = (int) pitch * height;
+        return;
+    }
+
+    unsigned char *dst = (unsigned char *) video_buffer.data;
+    const unsigned char *src = (const unsigned char *) data;
+
+    // Calculate source dimensions to blit
+    unsigned int src_width = width;
+    bool halve_width = src_width > video_buffer.width && opts.scale_mode == SCALE_MODE_HALF;
+    if (halve_width) {
+        src_width /= 2;
+    }
+    unsigned int src_height = height;
+    bool halve_height = src_height > video_buffer.height && opts.scale_mode == SCALE_MODE_HALF;
+    if (halve_height) {
+        src_height /= 2;
+    }
+    unsigned int dst_width = video_buffer.width;
+    unsigned int dst_height = video_buffer.height;
+
+    // If source is larger, center it in destination
+    int offset_x = (dst_width > src_width) ? (dst_width - src_width) / 2 : 0;
+    int offset_y = (dst_height > src_height) ? (dst_height - src_height) / 2 : 0;
+
+    // Clamp source dimensions to destination if larger
+    unsigned int blit_width = (src_width > dst_width) ? dst_width : src_width;
+    unsigned int blit_height = (src_height > dst_height) ? dst_height : src_height;
+
+    // If source is larger, start from center
+    unsigned int src_offset_x = (src_width > dst_width) ? (src_width - dst_width) / 2 : 0;
+    unsigned int src_offset_y = (src_height > dst_height) ? (src_height - dst_height) / 2 : 0;
+
+    // Blit source to destination
+    size_t bpp = video_buffer.bpp;
+    for (unsigned int y = 0; y < blit_height; y++) {
+        unsigned int sy = y;
+        if (halve_height) {
+            sy <<= 1;
+        }
+        unsigned char *dr = dst + (offset_y + y) * video_buffer.pitch + offset_x * bpp;
+        const unsigned char *sr = src + (src_offset_y + sy) * pitch + src_offset_x * bpp * 2;
+        if (halve_width) {
+            for (unsigned int x = 0; x < blit_width; x++) {
+                if (bpp == 2) {
+                    *(unsigned short *)dr = *(const unsigned short *)sr;
+                } else if (bpp == 4) {
+                    *(unsigned int *)dr = *(const unsigned int *)sr;
+                }
+                sr += bpp << 1;
+                dr += bpp;
+            }
+        } else {
+            memcpy(dr, sr, blit_width * bpp);
+        }
+    }
+
+    *out = (const unsigned char *) video_buffer.data;
+    *out_size = video_buffer.size;
+}
+
 static void callback_video_refresh(const void *data, unsigned width, unsigned height, size_t pitch)
 {
-    if (geometry.bitmap_width != width 
-        || geometry.bitmap_height != height 
-        || geometry.bitmap_pitch != pitch 
-        || geometry.pixel_format != pixel_format
-    ) {
-        geometry = (struct FrameGeometry){
+    static unsigned pw = 0, ph = 0;
+    static size_t pp = 0;
+    bool dims_changed = false;
+    if (pw != width || ph != height || pp != pitch) {
+        fprintf(stderr, "size changed: %ux%u pitch=%zu => %ux%u pitch=%zu\n", pw, ph, pp, width, height, pitch);
+        pw = width;
+        ph = height;
+        pp = pitch;
+        dims_changed = true;
+    }
+
+    if (video_buffer.data && geometry.bitmap_width == 0) {
+        geometry = (struct FrameGeometry) {
+            (unsigned int) video_buffer.pitch * video_buffer.height,
+            (unsigned short) video_buffer.pitch,
+            (unsigned short) video_buffer.width,
+            (unsigned short) video_buffer.height,
+            pixel_format,
+            0,
+            MAGIC_NUMBER
+        };
+        rgbs_set_buffer_data(geometry);
+    } else if (!video_buffer.data && dims_changed) {
+        geometry = (struct FrameGeometry) {
             (unsigned int) pitch * height,
             (unsigned short) pitch,
             (unsigned short) width,
@@ -89,8 +206,12 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
         rgbs_set_buffer_data(geometry);
     }
 
+    const unsigned char *out;
+    size_t out_size;
+    blit_buffer(data, width, height, pitch, &out, &out_size);
+
     rgbs_poll();
-    rgbs_send((const unsigned char *) data, (int) pitch * height);
+    rgbs_send(out, out_size);
 }
 
 static void callback_audio_sample(int16_t left, int16_t right)
@@ -152,37 +273,70 @@ static bool callback_environment_set(unsigned cmd, void *data)
 {
     switch (cmd) {
     case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION\n");
+        }
         *((unsigned *)data) = 1;
         break;
     case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_CONTROLLER_INFO\n");
+        }
         ports = (struct retro_controller_info *)data;
         break;
     case RETRO_ENVIRONMENT_GET_LOG_INTERFACE:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_LOG_INTERFACE\n");
+        }
         ((struct retro_log_callback *)data)->log = callback_log;
         break;
     case RETRO_ENVIRONMENT_GET_INPUT_BITMASKS:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_INPUT_BITMASKS\n");
+        }
         return true;
     case RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION\n");
+        }
         *(unsigned *)data = 1;
         break;
     case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL:
-        fprintf(stderr, "RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL: %d\n", *(unsigned *)data);
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL: %d\n", *(unsigned *)data);
+        }
         break;
     case RETRO_ENVIRONMENT_GET_LANGUAGE:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_LANGUAGE\n");
+        }
         *((unsigned *)data) = RETRO_LANGUAGE_ENGLISH;
         break;
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL\n");
+        }
         core_options_v1_intl = *(struct retro_core_options_intl *)data;
         break;
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL\n");
+        }
         core_options_v2_intl = *(struct retro_core_options_v2_intl *)data;
         break;
     case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS\n");
+        }
         // bool support_achievements = *(bool *)data;
         break;
     case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: {
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS\n");
+        }
         struct retro_input_descriptor *desc = (struct retro_input_descriptor *)data;
 
+        // FIXME: is this right?
         unsigned count = 0;
         for (struct retro_input_descriptor *d = desc; d->description; d++, count++);
 
@@ -196,12 +350,21 @@ static bool callback_environment_set(unsigned cmd, void *data)
         break;
     }
     case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY\n");
+        }
         *(const char **)data = system_path;
         break;
     case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY\n");
+        }
         *(const char **)data = save_path;
         break;
     case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_PIXEL_FORMAT\n");
+        }
         switch (*(enum retro_pixel_format *)data) {
         case RETRO_PIXEL_FORMAT_XRGB8888:
             pixel_format = PIXEL_FORMAT_ARGB8888;
@@ -215,69 +378,117 @@ static bool callback_environment_set(unsigned cmd, void *data)
                 *(enum retro_pixel_format *)data);
             return false;
         }
+        realloc_buffer_if_needed();
         break;
     case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO:
-        fprintf(stderr, "FIXME: RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO\n");
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO\n");
+        }
         // FIXME!! this can fire within retro_run()
         // av_info = *(struct retro_system_av_info *)data;
         // break;
         return false;
     case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_MEMORY_MAPS\n");
+        }
         // const struct retro_memory_map *maps = (struct retro_memory_map *)data;
         break;
     case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE\n");
+        }
         // struct retro_rumble_interface *rumble = (struct retro_rumble_interface *)data;
         return false;
     case RETRO_ENVIRONMENT_GET_VARIABLE: {
         struct retro_variable *var = (struct retro_variable *)data;
         var->value = NULL;
-        fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE: %s\n", var->key);
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE: %s\n", var->key);
+        }
         return false;
     }
     case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
-        // fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE\n");
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE\n");
+        }
         *((bool *)data) = false;
         break;
     case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE:
-        // 0: Enable Video
-        // 1: Enable Audio
-        // 2: Use Fast Savestates.
-        // 3: Hard Disable Audio
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE\n");
+        }
+        // 0x01: Enable Video
+        // 0x02: Enable Audio
+        // 0x04: Use Fast Savestates.
+        // 0x08: Hard Disable Audio
         *((unsigned *)data) = 0x3;
         break;
     case RETRO_ENVIRONMENT_SET_VARIABLES:
-        fprintf(stderr, "RETRO_ENVIRONMENT_SET_VARIABLES\n");
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_VARIABLES\n");
+        }
         break;
     case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
         subsystem_info = (const struct retro_subsystem_info *)data;
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO\n");
+        }
         break;
     case RETRO_ENVIRONMENT_SET_GEOMETRY:
         av_info = *(struct retro_system_av_info *)data;
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_GEOMETRY\n");
+        }
         break;
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY\n");
+        }
         // struct retro_core_option_display *display = (struct retro_core_option_display *)data;
         break;
     case RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE:
         content_info = (const struct retro_system_content_info_override *)data;
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE\n");
+        }
         break;
     case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS\n");
+        }
         // uint64_t quirks = *(uint64_t *)data;
         break;
     case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE\n");
+        }
         // struct retro_disk_control_callback *disk_interface = (struct retro_disk_control_callback *)data;
         break;
     case RETRO_ENVIRONMENT_GET_GAME_INFO_EXT:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_GAME_INFO_EXT\n");
+        }
         *(const struct retro_game_info_ext **)data = game_info_ext;
         break;
     case RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK\n");
+        }
         // FIXME
         // struct retro_audio_buffer_status_callback *audio_buffer_status = (struct retro_audio_buffer_status_callback *)data;
         return false;
     case RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY\n");
+        }
         // FIXME
         // unsigned latency = *(unsigned *)data;
         return false;
     case RETRO_ENVIRONMENT_GET_VFS_INTERFACE:
+        if (opts.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_VFS_INTERFACE\n");
+        }
         // FIXME
         // struct retro_vfs_interface_info *vfs = (struct retro_vfs_interface_info *)data;
         return false;
@@ -324,10 +535,8 @@ static void throttle(bool show_fps)
     now_ms = nanos();
 
     // Calculate (and optionally display) FPS every second
-    if (now_ms - start_ms >= 1000000.0) {
-        if (show_fps) {
-            fprintf(stdout, "FPS: %u\n", frame_count);
-        }
+    if (opts.show_fps && now_ms - start_ms >= 1000000.0) {
+        fprintf(stdout, "FPS: %u\n", frame_count);
         frame_count = 0;
         start_ms = now_ms;
     }
@@ -337,6 +546,8 @@ static void clean_up()
 {
     rgbs_end();
     dlclose(solib);
+    free(video_buffer.data);
+    video_buffer.data = NULL;
 
     files_clean_up();
 }
@@ -355,7 +566,6 @@ static void reset_audio()
 
 int main(int argc, const char **argv)
 {
-    ArgsOptions opts = {0};
     if (!args_parse(argc, argv, &opts)) {
         return 1;
     }

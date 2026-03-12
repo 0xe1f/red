@@ -28,7 +28,7 @@ if [ -f "$SO_FILE" ]; then
         echo "No ROM file found for $TITLE_ID" >&2
         exit 1
     fi
-    echo "Found $ROM_PATH..." >> log.txt
+    echo ./rh -c "$SO_FILE" "$ROM_PATH" "$@" >> log.txt
     ./rh -c "$SO_FILE" "$ROM_PATH" "$@" 2>&1 >> log.txt
 else
     echo "Calling launch.sh..." >> log.txt
