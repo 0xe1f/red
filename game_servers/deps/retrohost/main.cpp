@@ -1,4 +1,5 @@
 #include <dlfcn.h>
+#include <libgen.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -58,6 +59,8 @@ static unsigned char pixel_format = PIXEL_FORMAT_UNKNOWN; // default is 1555
 static bool is_running = true;
 static ArgsOptions args;
 static VideoBuffer video_buffer = {0};
+static KvPair *kv_pairs = NULL;
+static int kv_count = 0;
 
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
@@ -353,13 +356,13 @@ static bool callback_environment_set(unsigned cmd, void *data)
         if (args.verbose) {
             fprintf(stderr, "RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY\n");
         }
-        *(const char **)data = system_path;
+        *(const char **)data = files_system_path();
         break;
     case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY:
         if (args.verbose) {
             fprintf(stderr, "RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY\n");
         }
-        *(const char **)data = save_path;
+        *(const char **)data = files_save_path();
         break;
     case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT:
         if (args.verbose) {
@@ -402,11 +405,11 @@ static bool callback_environment_set(unsigned cmd, void *data)
         return false;
     case RETRO_ENVIRONMENT_GET_VARIABLE: {
         struct retro_variable *var = (struct retro_variable *)data;
-        var->value = NULL;
+        var->value = args_find_value(kv_pairs, kv_count, var->key);
         if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE: %s\n", var->key);
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE: %s = %s\n", var->key, var->value);
         }
-        return false;
+        return var->value != NULL;
     }
     case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
         if (args.verbose) {
@@ -548,6 +551,8 @@ static void clean_up()
     dlclose(solib);
     free(video_buffer.data);
     video_buffer.data = NULL;
+    args_free_kvs(kv_pairs, kv_count);
+    kv_pairs = NULL;
 
     files_clean_up();
 }
@@ -566,8 +571,11 @@ static void reset_audio()
 
 int main(int argc, const char **argv)
 {
-    if (!args_parse(argc, argv, &args)) {
+    if (!args_parse(argc, argv, &args, &kv_pairs, &kv_count)) {
         return 1;
+    }
+    if (args.verbose) {
+        args_dump_kvs(kv_pairs, kv_count);
     }
 
     if (!args.rom_path) {
@@ -617,7 +625,7 @@ int main(int argc, const char **argv)
     LOAD_SYMBOL(retro_deinit)
     LOAD_SYMBOL(retro_get_system_av_info)
 
-    files_mkdirs();
+    files_mkdirs(dirname((char *)args.so_path));
     rgbs_start();
 
     api_version = retro_api_version();

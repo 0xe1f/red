@@ -6,8 +6,10 @@
 #include "libretro.h"
 #include "files.h"
 
-const char *system_path = "./roms";
-const char *save_path = "./save";
+static const char *system_path_name = "bios";
+static const char *save_path_name = "save";
+static char system_path[1024];
+static char save_path[1024];
 
 struct retro_game_info *game_info = NULL;
 struct retro_game_info_ext *game_info_ext = NULL;
@@ -234,8 +236,16 @@ bool files_load(const char *path, const struct retro_system_content_info_overrid
     return load_direct(path, content_info);
 }
 
-void files_mkdirs()
+void files_mkdirs(const char *base_path)
 {
+    size_t len = strlen(base_path);
+    bool needs_slash = len > 0 && base_path[len - 1] != '/';
+
+    snprintf(system_path, sizeof(system_path), "%s%s%s",
+        base_path, needs_slash ? "/" : "", system_path_name);
+    snprintf(save_path, sizeof(save_path), "%s%s%s",
+        base_path, needs_slash ? "/" : "", save_path_name);
+
     struct stat st = {0};
     if (stat(system_path, &st) == -1) {
         mkdir(system_path, 0755);
@@ -253,4 +263,14 @@ void files_clean_up()
         game_info = NULL;
         game_info_ext = NULL;
     }
+}
+
+const char* files_system_path()
+{
+    return system_path;
+}
+
+const char* files_save_path()
+{
+    return save_path;
 }
