@@ -75,6 +75,7 @@ static VideoBuffer video_buffer = {0};
 static KvStore kv_store = {0};
 
 static void set_core_options_intl(const struct retro_core_option_definition *option_defs);
+static void set_variables(struct retro_variable *vars);
 
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
@@ -447,6 +448,7 @@ static bool callback_environment_set(unsigned cmd, void *data)
         if (args.verbose) {
             fprintf(stderr, "RETRO_ENVIRONMENT_SET_VARIABLES\n");
         }
+        set_variables((struct retro_variable *)data);
         break;
     case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
         subsystem_info = (const struct retro_subsystem_info *)data;
@@ -582,6 +584,29 @@ static void reset_audio()
 {
     sound_queue.Stop();
     sound_queue.Start(av_info.timing.sample_rate, 2);
+}
+
+static void set_variables(struct retro_variable *vars)
+{
+    static char value_buf[1024];
+    for (const struct retro_variable *v = vars; v->key; v++) {
+        const char *title_end = strstr(v->value, "; ");
+        if (!title_end) {
+            continue;
+        }
+        const char *value_start = title_end + 2;
+        const char *value_end = strchr(value_start, '|');
+        if (value_end) {
+            strncpy(value_buf, value_start, value_end - value_start);
+            value_buf[value_end - value_start] = '\0';
+        } else {
+            strncpy(value_buf, value_start, sizeof(value_buf) - 1);
+            value_buf[sizeof(value_buf) - 1] = '\0';
+        }
+        if (!kvstore_find_value(&kv_store, v->key)) {
+            kvstore_put(&kv_store, v->key, value_buf);
+        }
+    }
 }
 
 static void set_core_options_intl(const struct retro_core_option_definition *option_defs)
