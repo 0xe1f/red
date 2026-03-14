@@ -11,23 +11,23 @@ cd $MODULE_NAME
 case "$MODULE_NAME" in
     bluemsx)
         make && \
-            echo "done:bluemsx Machines"
+            echo "done:bluemsx Machines launch.sh stop.sh"
         ;;
     chocolate-doom)
         if [ ! -f Makefile ]; then
             ./autogen.sh || exit 1
         fi
         make && \
-                echo "done:src/chocolate-doom src/chocolate-heretic src/chocolate-hexen src/chocolate-strife"
+                echo "done:src/chocolate-doom src/chocolate-heretic src/chocolate-hexen src/chocolate-strife launch.sh stop.sh"
         ;;
     wolf4sdl)
         touch version.h && make CONFIG=config.ssw RGBS_DIR=../deps/rgbserver && \
             touch version.h && make CONFIG=config.sss RGBS_DIR=../deps/rgbserver && \
-            echo "done:wolf3d spear"
+            echo "done:wolf3d spear launch.sh stop.sh"
         ;;
     fbneo)
         make ss RELEASEBUILD=1 BUILD_NATIVE=1 && \
-            echo "done:fbneo"
+            echo "done:fbneo launch.sh stop.sh"
         ;;
     nestopia)
         cd libretro && make && \
@@ -65,6 +65,10 @@ case "$MODULE_NAME" in
         cd build && \
             make && \
             echo "done:build/mgba_libretro.so"
+        ;;
+    lr-fbneo)
+        cd src/burner/libretro/ && make && \
+            echo "done:src/burner/libretro/fbneo_libretro.so"
         ;;
     *)
         echo "Unknown module: $MODULE_NAME" >&2

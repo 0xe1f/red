@@ -17,6 +17,12 @@
 
 #include "kv_store.h"
 
+enum Verbosity {
+    VERBOSITY_NONE = 0,
+    VERBOSITY_NORMAL = 1,
+    VERBOSITY_EXTRA = 2
+};
+
 typedef struct {
     const char *rom_path;
     const char *so_path;
@@ -26,7 +32,7 @@ typedef struct {
     int max_clients;
     int output_width;
     int output_height;
-    bool verbose;
+    enum Verbosity verbose;
     unsigned char scale_mode;
 } ArgsOptions;
 

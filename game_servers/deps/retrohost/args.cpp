@@ -33,6 +33,7 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
     opts->output_height = 0;
     opts->max_clients = -1;
     opts->scale_mode = SCALE_MODE_NONE;
+    opts->verbose = VERBOSITY_NONE;
     char temp[512];
     for (i = 1, arg = argv + 1; i < argc; i++, arg++) {
         if (strcmp(*arg, "--help") == 0 || strcmp(*arg, "-h") == 0) {
@@ -88,7 +89,9 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
         } else if (strcmp(*arg, "--show-fps") == 0 || strcmp(*arg, "-fps") == 0) {
             opts->show_fps = true;
         } else if (strcmp(*arg, "--verbose") == 0 || strcmp(*arg, "-v") == 0) {
-            opts->verbose = true;
+            opts->verbose = VERBOSITY_NORMAL;
+        } else if (strcmp(*arg, "--verbose-extra") == 0 || strcmp(*arg, "-v2") == 0) {
+            opts->verbose = VERBOSITY_EXTRA;
         } else if (strcmp(*arg, "--keyvalue") == 0 || strcmp(*arg, "-kv") == 0) {
             if (++i >= argc) {
                 fprintf(stderr, "Missing argument for %s\n", *arg);

@@ -73,8 +73,9 @@ static bool is_running = true;
 static ArgsOptions args;
 static VideoBuffer video_buffer = {0};
 static KvStore kv_store = {0};
+static retro_core_options_update_display_callback_t core_options_update_display_callback = NULL;
 
-static void set_core_options_intl(const struct retro_core_option_definition *option_defs);
+static void set_core_options(const struct retro_core_option_definition *option_defs);
 static void set_variables(struct retro_variable *vars);
 
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
@@ -189,6 +190,10 @@ static void blit_buffer(
 
 static void callback_video_refresh(const void *data, unsigned width, unsigned height, size_t pitch)
 {
+    if (!data) {
+        return;
+    }
+
     static unsigned pw = 0, ph = 0;
     static size_t pp = 0;
     bool dims_changed = false;
@@ -290,6 +295,18 @@ static void dump_env()
 static bool callback_environment_set(unsigned cmd, void *data)
 {
     switch (cmd) {
+    case RETRO_ENVIRONMENT_SET_ROTATION:
+        if (args.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_ROTATION: %d\n", *(unsigned *)data);
+        }
+        // FIXME: handle rotation
+        return false;
+    case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK:
+        if (args.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK\n");
+        }
+        core_options_update_display_callback = ((retro_core_options_update_display_callback *)data)->callback;
+        break;
     case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION:
         if (args.verbose) {
             fprintf(stderr, "RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION\n");
@@ -335,9 +352,15 @@ static bool callback_environment_set(unsigned cmd, void *data)
             fprintf(stderr, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL\n");
         }
         const struct retro_core_options_intl *opts = (struct retro_core_options_intl *)data;
-        set_core_options_intl(opts->local ? opts->local : opts->us);
+        set_core_options(opts->local ? opts->local : opts->us);
         break;
     }
+    case RETRO_ENVIRONMENT_SET_CORE_OPTIONS:
+        if (args.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS\n");
+        }
+        set_core_options((struct retro_core_option_definition *)data);
+        break;
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL:
         if (args.verbose) {
             fprintf(stderr, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL\n");
@@ -423,19 +446,19 @@ static bool callback_environment_set(unsigned cmd, void *data)
     case RETRO_ENVIRONMENT_GET_VARIABLE: {
         struct retro_variable *var = (struct retro_variable *)data;
         var->value = kvstore_find_value(&kv_store, var->key);
-        if (args.verbose) {
+        if (args.verbose == VERBOSITY_EXTRA) {
             fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE: %s = %s\n", var->key, var->value);
         }
         return var->value != NULL;
     }
     case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
-        if (args.verbose) {
+        if (args.verbose == VERBOSITY_EXTRA) {
             fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE\n");
         }
         *((bool *)data) = false;
         break;
     case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE:
-        if (args.verbose) {
+        if (args.verbose == VERBOSITY_EXTRA) {
             fprintf(stderr, "RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE\n");
         }
         // 0x01: Enable Video
@@ -512,6 +535,13 @@ static bool callback_environment_set(unsigned cmd, void *data)
         }
         // FIXME
         // struct retro_vfs_interface_info *vfs = (struct retro_vfs_interface_info *)data;
+        return false;
+    case RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT:
+        if (args.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT\n");
+        }
+        // FIXME
+        // struct retro_savestate_context *savestate = (struct retro_savestate_context *)data;
         return false;
     default:
         fprintf(stderr, "W: retro_environment_set(): unrecognized cmd=%1$u (0x%1$x)\n", cmd);
@@ -609,7 +639,7 @@ static void set_variables(struct retro_variable *vars)
     }
 }
 
-static void set_core_options_intl(const struct retro_core_option_definition *option_defs)
+static void set_core_options(const struct retro_core_option_definition *option_defs)
 {
     for (const retro_core_option_definition *def = option_defs; def->key; def++) {
         // Don't override existing values

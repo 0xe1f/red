@@ -91,7 +91,7 @@ for DIR in $ARGS; do
     # Copy built files to remote server
     rsync -trpKh \
         --info=progress2 \
-        $FILES launch.sh stop.sh \
+        $FILES \
         "$GAME_SVR_HOST:$GAME_SVR_PATH/$DIRNAME/"
 
     popd > /dev/null
