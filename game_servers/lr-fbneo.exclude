@@ -1,6 +1,7 @@
 *.md
-/makefile
-/makefile.*
+*.txt
+makefile
+makefile.*
 dats/
 fbahelpfilesrc/
 metadata/
@@ -13,7 +14,8 @@ src/burner/resource/
 src/burner/sdl/
 src/burner/win32/
 src/dep/kaillera/
-src/dep/libs/
+src/dep/libs/libspng/
+src/dep/libs/lua/
 src/dep/macos/
 src/dep/mingw/
 src/dep/pi/

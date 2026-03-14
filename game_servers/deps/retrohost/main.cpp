@@ -58,13 +58,16 @@ typedef struct {
     unsigned int size = 0;
 } VideoBuffer;
 
+struct retro_system_info system_info;
+const struct retro_system_content_info_override *content_info;
+struct retro_game_info *game_info = NULL;
+struct retro_game_info_ext *game_info_ext = NULL;
+
 static unsigned int api_version = 0;
 static struct retro_controller_info *ports;
 static struct retro_core_options_v2_intl core_options_v2_intl;
-static struct retro_system_info system_info;
 static struct retro_system_av_info av_info;
 static struct retro_input_descriptor *input_descriptors = NULL;
-static const struct retro_system_content_info_override *content_info;
 static const struct retro_subsystem_info *subsystem_info;
 static SoundQueue sound_queue;
 static struct FrameGeometry geometry;
@@ -264,28 +267,29 @@ static void dump_env()
     fprintf(stdout, "----\n");
     fprintf(stdout, "%s %s (api v.%u)\n",
         system_info.library_name, system_info.library_version, api_version);
+    fprintf(stdout, "  extensions: %s\n", system_info.valid_extensions);
 
     if (content_info) {
-        fprintf(stdout, "content_info_override:\n");
+        fprintf(stdout, "  content_info_override:\n");
         for (const struct retro_system_content_info_override *info = content_info; info->extensions; info++) {
-            fprintf(stdout, "  %s (need_fullpath=%s)\n",
+            fprintf(stdout, "    %s (need_fullpath=%s)\n",
                 info->extensions,
                 info->need_fullpath ? "true" : "false");
         }
     }
 
     if (subsystem_info) {
-        fprintf(stdout, "subsystem_info:\n");
+        fprintf(stdout, "  subsystem_info:\n");
         for (const struct retro_subsystem_info *info = subsystem_info; info->ident; info++) {
-            fprintf(stdout, "  %s (%s)\n", info->desc, info->ident);
+            fprintf(stdout, "    %s (%s)\n", info->desc, info->ident);
         }
     }
 
-    fprintf(stdout, "AV:\n");
-    fprintf(stdout, "  geometry: %ux%u\n", av_info.geometry.base_width, av_info.geometry.base_height);
-    fprintf(stdout, "  fps: %.02f\n", av_info.timing.fps);
-    fprintf(stdout, "  sample_rate: %.02f\n", av_info.timing.sample_rate);
-    fprintf(stdout, "  pixel_format: %s\n",
+    fprintf(stdout, "  av_info:\n");
+    fprintf(stdout, "    geometry: %ux%u\n", av_info.geometry.base_width, av_info.geometry.base_height);
+    fprintf(stdout, "    fps: %.02f\n", av_info.timing.fps);
+    fprintf(stdout, "    sample_rate: %.02f\n", av_info.timing.sample_rate);
+    fprintf(stdout, "    pixel_format: %s\n",
         pixel_format == PIXEL_FORMAT_ARGB8888 ? "ARGB8888" :
         pixel_format == PIXEL_FORMAT_RGB565 ? "RGB565" :
         "UNKNOWN");
@@ -485,12 +489,13 @@ static bool callback_environment_set(unsigned cmd, void *data)
             fprintf(stderr, "RETRO_ENVIRONMENT_SET_GEOMETRY\n");
         }
         break;
-    case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY\n");
+    case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: {
+        struct retro_core_option_display *display = (struct retro_core_option_display *)data;
+        if (args.verbose == VERBOSITY_EXTRA) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: %s\n", display->key);
         }
-        // struct retro_core_option_display *display = (struct retro_core_option_display *)data;
-        break;
+        return false;
+    }
     case RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE:
         content_info = (const struct retro_system_content_info_override *)data;
         if (args.verbose) {
@@ -727,7 +732,7 @@ int main(int argc, const char **argv)
     
     retro_init();
 
-    if (!files_load(args.rom_path, content_info)) {
+    if (!files_load(args.rom_path)) {
         fprintf(stderr, "Failed to load file '%s'\n", args.rom_path);
         if (args.verbose) {
             dump_env();
