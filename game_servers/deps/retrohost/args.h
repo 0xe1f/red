@@ -1,10 +1,7 @@
 #ifndef LRHOST_ARGS_H__
 #define LRHOST_ARGS_H__
 
-typedef struct KvPair {
-    char *key;
-    const char *value;
-} KvPair;
+#include "kv_store.h"
 
 typedef struct {
     const char *rom_path;
@@ -19,10 +16,7 @@ typedef struct {
     unsigned char scale_mode;
 } ArgsOptions;
 
-bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvPair **kv_pairs, int *kv_count);
-void args_free_kvs(KvPair *kv_pairs, int kv_count);
-void args_dump_kvs(KvPair *kv_pairs, int kv_count);
-const char* args_find_value(const KvPair *kv_pairs, int kv_count, const char *key);
+bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_store);
 
 #define SCALE_MODE_NONE            0
 #define SCALE_MODE_SHORTESTXASPECT 1

@@ -46,7 +46,6 @@ typedef struct {
 
 static unsigned int api_version = 0;
 static struct retro_controller_info *ports;
-static struct retro_core_options_intl core_options_v1_intl;
 static struct retro_core_options_v2_intl core_options_v2_intl;
 static struct retro_system_info system_info;
 static struct retro_system_av_info av_info;
@@ -59,8 +58,9 @@ static unsigned char pixel_format = PIXEL_FORMAT_UNKNOWN; // default is 1555
 static bool is_running = true;
 static ArgsOptions args;
 static VideoBuffer video_buffer = {0};
-static KvPair *kv_pairs = NULL;
-static int kv_count = 0;
+static KvStore kv_store = {0};
+
+static void set_core_options_intl(const struct retro_core_option_definition *option_defs);
 
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
@@ -315,12 +315,14 @@ static bool callback_environment_set(unsigned cmd, void *data)
         }
         *((unsigned *)data) = RETRO_LANGUAGE_ENGLISH;
         break;
-    case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL:
+    case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL: {
         if (args.verbose) {
             fprintf(stderr, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL\n");
         }
-        core_options_v1_intl = *(struct retro_core_options_intl *)data;
+        const struct retro_core_options_intl *opts = (struct retro_core_options_intl *)data;
+        set_core_options_intl(opts->local ? opts->local : opts->us);
         break;
+    }
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL:
         if (args.verbose) {
             fprintf(stderr, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL\n");
@@ -405,7 +407,7 @@ static bool callback_environment_set(unsigned cmd, void *data)
         return false;
     case RETRO_ENVIRONMENT_GET_VARIABLE: {
         struct retro_variable *var = (struct retro_variable *)data;
-        var->value = args_find_value(kv_pairs, kv_count, var->key);
+        var->value = kvstore_find_value(&kv_store, var->key);
         if (args.verbose) {
             fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE: %s = %s\n", var->key, var->value);
         }
@@ -551,8 +553,7 @@ static void clean_up()
     dlclose(solib);
     free(video_buffer.data);
     video_buffer.data = NULL;
-    args_free_kvs(kv_pairs, kv_count);
-    kv_pairs = NULL;
+    kvstore_free(&kv_store);
 
     files_clean_up();
 }
@@ -569,13 +570,20 @@ static void reset_audio()
     sound_queue.Start(av_info.timing.sample_rate, 2);
 }
 
+static void set_core_options_intl(const struct retro_core_option_definition *option_defs)
+{
+    for (const retro_core_option_definition *def = option_defs; def->key; def++) {
+        // Don't override existing values
+        if (def->default_value && !kvstore_find_value(&kv_store, def->key)) {
+            kvstore_put(&kv_store, def->key, def->default_value);
+        }
+    }
+}
+
 int main(int argc, const char **argv)
 {
-    if (!args_parse(argc, argv, &args, &kv_pairs, &kv_count)) {
+    if (!args_parse(argc, argv, &args, &kv_store)) {
         return 1;
-    }
-    if (args.verbose) {
-        args_dump_kvs(kv_pairs, kv_count);
     }
 
     if (!args.rom_path) {
@@ -672,7 +680,10 @@ int main(int argc, const char **argv)
     retro_get_system_av_info(&av_info);
     reset_audio();
 
-    dump_env();
+    if (args.verbose) {
+        dump_env();
+        kvstore_dump(&kv_store);
+    }
 
     signal(SIGINT, sigint_handler);
     while (is_running) {
