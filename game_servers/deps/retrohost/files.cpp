@@ -25,49 +25,50 @@ static const char *save_path_name = "save";
 static char system_path[1024];
 static char save_path[1024];
 
-struct retro_game_info *game_info = NULL;
-struct retro_game_info_ext *game_info_ext = NULL;
+extern struct retro_system_info system_info;
+extern const struct retro_system_content_info_override *content_info;
+extern struct retro_game_info *game_info;
+extern struct retro_game_info_ext *game_info_ext;
 
-//
-
-static bool is_extension_supported(const char *path, const struct retro_system_content_info_override *content_info);
+static bool is_extension_supported(const char *path);
 static bool has_extension(const char *path, const char *ext);
-static bool load_zip(const char *path, const struct retro_system_content_info_override *content_info);
-static bool load_direct(const char *path, const struct retro_system_content_info_override *content_info);
+static bool load_zip(const char *path);
+static bool load_direct(const char *path);
+static bool extension_list_contains(const char *ext_delim, const char *ext);
 
-//
-
-static bool is_extension_supported(const char *path, const struct retro_system_content_info_override *content_info)
+static bool extension_list_contains(const char *ext_delim, const char *ext)
 {
-    if (!content_info) {
+    for (const char *p = ext_delim; *p; p++) {
+        if (strncmp(p, ext, strlen(ext)) == 0 &&
+            (*(p + strlen(ext)) == '|' || *(p + strlen(ext)) == '\0')) {
+            return true;
+        }
+        // skip to next extension after pipe
+        while (*p && *p != '|') p++;
+    }
+    return false;
+}
+
+static bool is_extension_supported(const char *path)
+{
+    const char *ext = strrchr(path, '.');
+    if (!ext) {
+        fprintf(stderr, "No file extension found: %s\n", path);
+        return false;
+    }
+    ext++; // skip the dot
+
+    if (system_info.valid_extensions && extension_list_contains(system_info.valid_extensions, ext)) {
         return true;
     }
 
-    for (const struct retro_system_content_info_override *info = content_info; info->extensions; info++) {
-        const char *ext = strrchr(path, '.');
-        if (!ext) {
-            fprintf(stderr, "No file extension found: %s\n", path);
-            return false;
-        }
-        ext++; // skip the dot
-
-        bool found = false;
-        for (const char *p = info->extensions; *p; p++) {
-            if (strncmp(p, ext, strlen(ext)) == 0 &&
-                (*(p + strlen(ext)) == '|' || *(p + strlen(ext)) == '\0')) {
-                found = true;
-                break;
-            }
-            // skip to next extension after pipe
-            while (*p && *p != '|') p++;
-        }
-
-        if (!found) {
-            return false;
+    for (const struct retro_system_content_info_override *info = content_info; info && info->extensions; info++) {
+        if (extension_list_contains(info->extensions, ext)) {
+            return true;
         }
     }
 
-    return true;
+    return false;
 }
 
 static bool has_extension(const char *path, const char *ext)
@@ -76,7 +77,7 @@ static bool has_extension(const char *path, const char *ext)
     return file_ext && strcasecmp(file_ext + 1, ext) == 0;
 }
 
-static bool load_zip(const char *path, const struct retro_system_content_info_override *content_info)
+static bool load_zip(const char *path)
 {
     static struct retro_game_info info_local;
     static struct retro_game_info_ext info_local_ext;
@@ -98,7 +99,7 @@ static bool load_zip(const char *path, const struct retro_system_content_info_ov
     int ret = unzGoToFirstFile(fd);
     while (ret == UNZ_OK) {
         if (unzGetCurrentFileInfo(fd, &info, archived_path, sizeof(archived_path), 0, 0, 0, 0) == UNZ_OK) {
-            if (is_extension_supported(archived_path, content_info)) {
+            if (is_extension_supported(archived_path)) {
                 if ((ret = unzOpenCurrentFile(fd)) == UNZ_OK) {
                     size_t size = info.uncompressed_size;
                     if (!(data = malloc(size))) {
@@ -171,7 +172,7 @@ static bool load_zip(const char *path, const struct retro_system_content_info_ov
     return true;
 }
 
-static bool load_direct(const char *path, const struct retro_system_content_info_override *content_info)
+static bool load_direct(const char *path)
 {
     static struct retro_game_info info_local;
     static struct retro_game_info_ext info_local_ext;
@@ -242,12 +243,15 @@ static bool load_direct(const char *path, const struct retro_system_content_info
     return true;
 }
 
-bool files_load(const char *path, const struct retro_system_content_info_override *content_info)
+bool files_load(const char *path)
 {
-    if (has_extension(path, "zip")) {
-        return load_zip(path, content_info);
+    if (is_extension_supported(path)) {
+        return load_direct(path);
     }
-    return load_direct(path, content_info);
+    if (has_extension(path, "zip")) {
+        return load_zip(path);
+    }
+    return false;
 }
 
 void files_mkdirs(const char *base_path)
