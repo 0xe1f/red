@@ -26,8 +26,8 @@ case "$MODULE_NAME" in
             echo "done:wolf3d spear launch.sh stop.sh"
         ;;
     fbneo)
-        make ss RELEASEBUILD=1 BUILD_NATIVE=1 && \
-            echo "done:fbneo launch.sh stop.sh"
+        cd src/burner/libretro/ && make && \
+            echo "done:src/burner/libretro/fbneo_libretro.so"
         ;;
     nestopia)
         cd libretro && make && \
@@ -65,10 +65,6 @@ case "$MODULE_NAME" in
         cd build && \
             make && \
             echo "done:build/mgba_libretro.so"
-        ;;
-    lr-fbneo)
-        cd src/burner/libretro/ && make && \
-            echo "done:src/burner/libretro/fbneo_libretro.so"
         ;;
     *)
         echo "Unknown module: $MODULE_NAME" >&2
