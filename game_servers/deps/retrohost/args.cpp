@@ -45,18 +45,22 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
                 return false;
             }
             opts->so_path = *(++arg);
-        } else if (strncmp(*arg, "--output-dims=", 14) == 0 || strncmp(*arg, "-wxh=", 5) == 0) {
-            const char *eq = strchr(*arg, '=') + 1;
-            const char *sep = strchr(eq, 'x');
-            if (sep && eq) {
-                strncpy(temp, eq, sep - eq);
-                temp[sep - eq] = '\0';
+        } else if (strcmp(*arg, "--output-dims") == 0 || strcmp(*arg, "-wxh") == 0) {
+            if (++i >= argc) {
+                fprintf(stderr, "Missing argument for %s\n", *arg);
+                return false;
+            }
+            const char *value = *(++arg);
+            const char *sep = strchr(value, 'x');
+            if (sep && value) {
+                strncpy(temp, value, sep - value);
+                temp[sep - value] = '\0';
                 opts->output_width = atoi(temp);
                 opts->output_height = atoi(sep + 1);
             }
 
             if (opts->output_width <= 0 || opts->output_height <= 0) {
-                fprintf(stderr, "Invalid output dimensions: '%s'\n", eq);
+                fprintf(stderr, "Invalid output dimensions: '%s'\n", value);
                 return false;
             }
         } else if (strcmp(*arg, "--scale-mode") == 0 || strcmp(*arg, "-sm") == 0) {
