@@ -66,6 +66,10 @@ case "$MODULE_NAME" in
             make && \
             echo "done:build/mgba_libretro.so"
         ;;
+    lr-bluemsx)
+        make -f Makefile.libretro && \
+            echo "done:bluemsx_libretro.so"
+        ;;
     *)
         echo "Unknown module: $MODULE_NAME" >&2
         exit 1

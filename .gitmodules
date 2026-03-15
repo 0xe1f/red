@@ -25,3 +25,6 @@
 [submodule "game_servers/mgba"]
 	path = game_servers/mgba
 	url = https://git@github.com/mgba-emu/mgba.git
+[submodule "game_servers/lr-bluemsx"]
+	path = game_servers/lr-bluemsx
+	url = https://github.com/libretro/blueMSX-libretro.git

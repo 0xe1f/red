@@ -70,6 +70,7 @@ static bool is_running = true;
 static ArgsOptions args;
 static KvStore kv_store = {0};
 static retro_core_options_update_display_callback_t core_options_update_display_callback = NULL;
+static bool supports_no_game = false;
 
 static void set_core_options(const struct retro_core_option_definition *option_defs);
 static void set_variables(struct retro_variable *vars);
@@ -472,6 +473,12 @@ static bool callback_environment_set(unsigned cmd, void *data)
         // FIXME
         // struct retro_savestate_context *savestate = (struct retro_savestate_context *)data;
         return false;
+    case RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME:
+        if (args.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME\n");
+        }
+        supports_no_game = *(bool *)data;
+        break;
     default:
         fprintf(stderr, "W: retro_environment_set(): unrecognized cmd=%1$u (0x%1$x)\n", cmd);
         return false;
