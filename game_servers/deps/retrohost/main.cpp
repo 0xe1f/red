@@ -26,6 +26,7 @@
 #include "rgbserver.h"
 #include "args.h"
 #include "files.h"
+#include "video.h"
 
 static void *solib = NULL;
 
@@ -49,32 +50,24 @@ DEFINE_SYMBOL(retro_unload_game, void, void)
 DEFINE_SYMBOL(retro_deinit, void, void)
 DEFINE_SYMBOL(retro_get_system_av_info, void, struct retro_system_av_info*)
 
-typedef struct {
-    void *data;
-    unsigned short width = 0;
-    unsigned short height = 0;
-    unsigned short bpp = 0;
-    unsigned short pitch = 0;
-    unsigned int size = 0;
-} VideoBuffer;
-
 struct retro_system_info system_info;
 const struct retro_system_content_info_override *content_info;
 struct retro_game_info *game_info = NULL;
 struct retro_game_info_ext *game_info_ext = NULL;
+VideoBuffer video_buffer = {0};
+struct retro_system_av_info av_info;
+Rotation rotation = ROTATE_NONE;
+unsigned char pixel_format = PIXEL_FORMAT_UNKNOWN; // default is 1555
 
 static unsigned int api_version = 0;
 static struct retro_controller_info *ports;
 static struct retro_core_options_v2_intl core_options_v2_intl;
-static struct retro_system_av_info av_info;
 static struct retro_input_descriptor *input_descriptors = NULL;
 static const struct retro_subsystem_info *subsystem_info;
 static SoundQueue sound_queue;
 static struct FrameGeometry geometry;
-static unsigned char pixel_format = PIXEL_FORMAT_UNKNOWN; // default is 1555
 static bool is_running = true;
 static ArgsOptions args;
-static VideoBuffer video_buffer = {0};
 static KvStore kv_store = {0};
 static retro_core_options_update_display_callback_t core_options_update_display_callback = NULL;
 
@@ -122,75 +115,6 @@ static void realloc_buffer_if_needed()
     }
 }
 
-static void blit_buffer(
-    const void *data, unsigned width, unsigned height, size_t pitch,
-    const unsigned char **out, size_t *out_size
-)
-{
-    if (!video_buffer.data) {
-        // No interim buffer, use source directly
-        *out = (const unsigned char *) data;
-        *out_size = (int) pitch * height;
-        return;
-    }
-
-    unsigned char *dst = (unsigned char *) video_buffer.data;
-    const unsigned char *src = (const unsigned char *) data;
-
-    // Calculate source dimensions to blit
-    unsigned int src_width = width;
-    bool halve_width = src_width > video_buffer.width && args.scale_mode == SCALE_MODE_HALF;
-    if (halve_width) {
-        src_width /= 2;
-    }
-    unsigned int src_height = height;
-    bool halve_height = src_height > video_buffer.height && args.scale_mode == SCALE_MODE_HALF;
-    if (halve_height) {
-        src_height /= 2;
-    }
-    unsigned int dst_width = video_buffer.width;
-    unsigned int dst_height = video_buffer.height;
-
-    // If source is larger, center it in destination
-    int offset_x = (dst_width > src_width) ? (dst_width - src_width) / 2 : 0;
-    int offset_y = (dst_height > src_height) ? (dst_height - src_height) / 2 : 0;
-
-    // Clamp source dimensions to destination if larger
-    unsigned int blit_width = (src_width > dst_width) ? dst_width : src_width;
-    unsigned int blit_height = (src_height > dst_height) ? dst_height : src_height;
-
-    // If source is larger, start from center
-    unsigned int src_offset_x = (src_width > dst_width) ? (src_width - dst_width) / 2 : 0;
-    unsigned int src_offset_y = (src_height > dst_height) ? (src_height - dst_height) / 2 : 0;
-
-    // Blit source to destination
-    size_t bpp = video_buffer.bpp;
-    for (unsigned int y = 0; y < blit_height; y++) {
-        unsigned int sy = y;
-        if (halve_height) {
-            sy <<= 1;
-        }
-        unsigned char *dr = dst + (offset_y + y) * video_buffer.pitch + offset_x * bpp;
-        const unsigned char *sr = src + (src_offset_y + sy) * pitch + src_offset_x * bpp * 2;
-        if (halve_width) {
-            for (unsigned int x = 0; x < blit_width; x++) {
-                if (bpp == 2) {
-                    *(unsigned short *)dr = *(const unsigned short *)sr;
-                } else if (bpp == 4) {
-                    *(unsigned int *)dr = *(const unsigned int *)sr;
-                }
-                sr += bpp << 1;
-                dr += bpp;
-            }
-        } else {
-            memcpy(dr, sr, blit_width * bpp);
-        }
-    }
-
-    *out = (const unsigned char *) video_buffer.data;
-    *out_size = video_buffer.size;
-}
-
 static void callback_video_refresh(const void *data, unsigned width, unsigned height, size_t pitch)
 {
     if (!data) {
@@ -215,7 +139,7 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
             (unsigned short) video_buffer.width,
             (unsigned short) video_buffer.height,
             pixel_format,
-            0,
+            (rotation == ROTATE_CCW90 || rotation == ROTATE_CCW180) ? ATTR_ROT180 : ATTR_NONE,
             MAGIC_NUMBER
         };
         rgbs_set_buffer_data(geometry);
@@ -226,7 +150,7 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
             (unsigned short) width,
             (unsigned short) height,
             pixel_format,
-            0,
+            (rotation == ROTATE_CCW90 || rotation == ROTATE_CCW180) ? ATTR_ROT180 : ATTR_NONE,
             MAGIC_NUMBER
         };
         rgbs_set_buffer_data(geometry);
@@ -234,7 +158,7 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
 
     const unsigned char *out;
     size_t out_size;
-    blit_buffer(data, width, height, pitch, &out, &out_size);
+    blit(args.scale_mode, data, width, height, pitch, &out, &out_size);
 
     rgbs_poll();
     rgbs_send(out, out_size);
@@ -300,11 +224,11 @@ static bool callback_environment_set(unsigned cmd, void *data)
 {
     switch (cmd) {
     case RETRO_ENVIRONMENT_SET_ROTATION:
+        rotation = (Rotation)(*(unsigned *)data);
         if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_ROTATION: %d\n", *(unsigned *)data);
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_ROTATION: %d\n", rotation);
         }
-        // FIXME: handle rotation
-        return false;
+        break;
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK:
         if (args.verbose) {
             fprintf(stderr, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK\n");

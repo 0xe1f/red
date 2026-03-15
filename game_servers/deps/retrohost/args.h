@@ -16,11 +16,12 @@
 #define LRHOST_ARGS_H__
 
 #include "kv_store.h"
+#include "video.h"
 
 enum Verbosity {
-    VERBOSITY_NONE = 0,
+    VERBOSITY_NONE   = 0,
     VERBOSITY_NORMAL = 1,
-    VERBOSITY_EXTRA = 2
+    VERBOSITY_EXTRA  = 2
 };
 
 typedef struct {
@@ -33,14 +34,9 @@ typedef struct {
     int output_width;
     int output_height;
     enum Verbosity verbose;
-    unsigned char scale_mode;
+    enum ScaleMode scale_mode;
 } ArgsOptions;
 
 bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_store);
-
-#define SCALE_MODE_NONE            0
-#define SCALE_MODE_SHORTESTXASPECT 1
-#define SCALE_MODE_FIT             2
-#define SCALE_MODE_HALF            3
 
 #endif // LRHOST_ARGS_H__

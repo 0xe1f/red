@@ -31,6 +31,7 @@ struct FrameGeometry {
     ((pf) == PIXEL_FORMAT_RGBA8888 || (pf) == PIXEL_FORMAT_ARGB8888 ? 4 : \
      (pf) == PIXEL_FORMAT_RGB565 || (pf) == PIXEL_FORMAT_RGBA5551 ? 2 : 0)
 
-#define ATTR_ROT180 0x01
+#define ATTR_NONE   ((unsigned char) 0x00)
+#define ATTR_ROT180 ((unsigned char) 0x01)
 
 #endif // _STRUCTS

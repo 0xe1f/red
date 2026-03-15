@@ -24,7 +24,7 @@ EXE=rh
 
 all: $(EXE)
 
-$(EXE): kv_store.o args.o files.o sound_queue.o main.o \
+$(EXE): kv_store.o args.o files.o sound_queue.o video.o main.o \
 	$(MINIZIP_ROOT)/unzip.o $(MINIZIP_ROOT)/ioapi.o \
 	$(RGBSERVER_ROOT)/rgbserver.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
