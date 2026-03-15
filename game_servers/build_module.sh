@@ -10,8 +10,8 @@ cd $MODULE_NAME
 
 case "$MODULE_NAME" in
     bluemsx)
-        make && \
-            echo "done:bluemsx Machines launch.sh stop.sh"
+        make -f Makefile.libretro && \
+            echo "done:bluemsx_libretro.so"
         ;;
     chocolate-doom)
         if [ ! -f Makefile ]; then
@@ -65,10 +65,6 @@ case "$MODULE_NAME" in
         cd build && \
             make && \
             echo "done:build/mgba_libretro.so"
-        ;;
-    lr-bluemsx)
-        make -f Makefile.libretro && \
-            echo "done:bluemsx_libretro.so"
         ;;
     *)
         echo "Unknown module: $MODULE_NAME" >&2

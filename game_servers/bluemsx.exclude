@@ -1,3 +1,5 @@
-Doc/
+*.txt
 *.md
 COPYING
+jni/
+system/
