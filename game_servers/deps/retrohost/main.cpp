@@ -211,7 +211,10 @@ static void dump_env()
     }
 
     fprintf(stdout, "  av_info:\n");
-    fprintf(stdout, "    geometry: %ux%u\n", av_info.geometry.base_width, av_info.geometry.base_height);
+    fprintf(stdout, "    geometry: %ux%u (aspect_ratio: %.02f)\n",
+        av_info.geometry.base_width,
+        av_info.geometry.base_height,
+        av_info.geometry.aspect_ratio);
     fprintf(stdout, "    fps: %.02f\n", av_info.timing.fps);
     fprintf(stdout, "    sample_rate: %.02f\n", av_info.timing.sample_rate);
     fprintf(stdout, "    pixel_format: %s\n",

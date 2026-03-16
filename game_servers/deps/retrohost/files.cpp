@@ -32,7 +32,7 @@ extern struct retro_game_info_ext *game_info_ext;
 
 static bool is_extension_supported(const char *path);
 static bool has_extension(const char *path, const char *ext);
-static bool load_zip(const char *path, bool disable_preloading);
+static bool load_zip(const char *path);
 static bool load_direct(const char *path, bool disable_preloading);
 static bool extension_list_contains(const char *ext_delim, const char *ext);
 
@@ -77,7 +77,7 @@ static bool has_extension(const char *path, const char *ext)
     return file_ext && strcasecmp(file_ext + 1, ext) == 0;
 }
 
-static bool load_zip(const char *path, bool disable_preloading)
+static bool load_zip(const char *path)
 {
     static struct retro_game_info info_local;
     static struct retro_game_info_ext info_local_ext;

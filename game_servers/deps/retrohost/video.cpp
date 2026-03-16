@@ -19,6 +19,9 @@
 #include "rgbcommon.h"
 #include "video.h"
 
+#define MIN(a,b) ((a)<(b)?(a):(b))
+#define MAX(a,b) ((a)>(b)?(a):(b))
+
 #define RED_RGB565(c) (int)((((c)>>11)&0x1f)*(255.0f/31))
 #define GREEN_RGB565(c) (int)((((c)>>5)&0x3f)*(255.0f/63))
 #define BLUE_RGB565(c) (int)(((c)&0x1f)*(255.0f/31))
@@ -212,8 +215,14 @@ static void blit_scale(
     unsigned char *dst = (unsigned char *) video_buffer.data;
     const unsigned char *src = (const unsigned char *) data;
 
-    int offset_y = (video_buffer.height - (int) dest_height) / 2;
-    int offset_x = (video_buffer.width - (int) dest_width) / 2;
+    // clamp dimensions
+    dest_width = MIN(dest_width, video_buffer.width);
+    dest_height = MIN(dest_height, video_buffer.height);
+
+    // clamp offsets
+    int offset_y = MAX((video_buffer.height - (int) dest_height) / 2, 0);
+    int offset_x = MAX((video_buffer.width - (int) dest_width) / 2, 0);
+
     int src_width = width;
     int src_height = height;
     int bpp = video_buffer.bpp;
