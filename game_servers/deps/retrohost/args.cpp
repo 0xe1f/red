@@ -107,6 +107,8 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
             temp[eq - kv] = '\0';
 
             kvstore_put(kv_store, temp, eq + 1);
+        } else if (strcmp(*arg, "--disable-preloading") == 0 || strcmp(*arg, "-np") == 0) {
+            opts->disable_preloading = true;
         } else if (**arg == '-') {
             fprintf(stderr, "Unrecognized switch: %s\n", *arg);
             return false;

@@ -32,8 +32,8 @@ extern struct retro_game_info_ext *game_info_ext;
 
 static bool is_extension_supported(const char *path);
 static bool has_extension(const char *path, const char *ext);
-static bool load_zip(const char *path);
-static bool load_direct(const char *path);
+static bool load_zip(const char *path, bool disable_preloading);
+static bool load_direct(const char *path, bool disable_preloading);
 static bool extension_list_contains(const char *ext_delim, const char *ext);
 
 static bool extension_list_contains(const char *ext_delim, const char *ext)
@@ -77,7 +77,7 @@ static bool has_extension(const char *path, const char *ext)
     return file_ext && strcasecmp(file_ext + 1, ext) == 0;
 }
 
-static bool load_zip(const char *path)
+static bool load_zip(const char *path, bool disable_preloading)
 {
     static struct retro_game_info info_local;
     static struct retro_game_info_ext info_local_ext;
@@ -172,7 +172,7 @@ static bool load_zip(const char *path)
     return true;
 }
 
-static bool load_direct(const char *path)
+static bool load_direct(const char *path, bool disable_preloading)
 {
     static struct retro_game_info info_local;
     static struct retro_game_info_ext info_local_ext;
@@ -183,57 +183,64 @@ static bool load_direct(const char *path)
     static char filename[512];
     static char ext[512];
 
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        fprintf(stderr, "Failed to read file: %s\n", path);
-        return false;
-    }
-
-    fseek(f, 0, SEEK_END);
-    size_t size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    void *data = malloc(size);
-    if (!data) {
-        fprintf(stderr, "Failed to allocate %zu bytes for %s\n", size, path);
+    const char *slash = strrchr(path, '/');
+    if (slash) {
+        strncat(dir, path, slash - path);
+        strncat(filename, slash + 1, sizeof(filename) - 1);
     } else {
-        fread(data, 1, size, f);
-
-        const char *slash = strrchr(path, '/');
-        if (slash) {
-            strncat(dir, path, slash - path);
-            strncat(filename, slash + 1, sizeof(filename) - 1);
-        } else {
-            strncat(dir, ".", sizeof(dir) - 1);
-            strncat(filename, path, sizeof(filename) - 1);
-        }
-
-        char *dot = strrchr(filename, '.');
-        if (dot) {
-            *dot = '\0';
-            strncat(ext, dot + 1, sizeof(ext) - 1);
-        } else {
-            strncat(ext, "", sizeof(ext) - 1);
-        }
-
-        info_local = (struct retro_game_info){ path, data, size, NULL };
-        info_local_ext = (struct retro_game_info_ext){
-            /* full_path */ path,
-            /* archive_path */ NULL,
-            /* archive_file */ NULL,
-            /* dir */ dir,
-            /* name */ filename,
-            /* ext */ ext,
-            /* meta */ NULL,
-            /* data */ data,
-            /* size */ size,
-            /* file_in_archive */ false,
-            /* persistent_data */ true
-        };
+        strncat(dir, ".", sizeof(dir) - 1);
+        strncat(filename, path, sizeof(filename) - 1);
     }
-    fclose(f);
 
-    if (!info_local.data) {
+    char *dot = strrchr(filename, '.');
+    if (dot) {
+        *dot = '\0';
+        strncat(ext, dot + 1, sizeof(ext) - 1);
+    } else {
+        strncat(ext, "", sizeof(ext) - 1);
+    }
+
+    void *data = NULL;
+    size_t size = 0;
+
+    if (!disable_preloading) {
+        FILE *f = fopen(path, "rb");
+        if (!f) {
+            fprintf(stderr, "Failed to read file: %s\n", path);
+            return false;
+        }
+
+        fseek(f, 0, SEEK_END);
+        size_t size = ftell(f);
+        fseek(f, 0, SEEK_SET);
+
+        data = malloc(size);
+        if (!data) {
+            fprintf(stderr, "Failed to allocate %zu bytes for %s\n", size, path);
+        } else {
+            fread(data, 1, size, f);
+        }
+        fclose(f);
+    }
+
+    info_local = (struct retro_game_info){ path, data, size, NULL };
+    info_local_ext = (struct retro_game_info_ext){
+        /* full_path */ path,
+        /* archive_path */ NULL,
+        /* archive_file */ NULL,
+        /* dir */ dir,
+        /* name */ filename,
+        /* ext */ ext,
+        /* meta */ NULL,
+        /* data */ data,
+        /* size */ size,
+        /* file_in_archive */ false,
+        /* persistent_data */ true
+    };
+
+    if (!disable_preloading && !info_local.data) {
+        // preload failed
+        fprintf(stderr, "Preload failed\n");
         return false;
     }
 
@@ -243,10 +250,10 @@ static bool load_direct(const char *path)
     return true;
 }
 
-bool files_load(const char *path)
+bool files_load(const char *path, bool disable_preloading)
 {
     if (is_extension_supported(path)) {
-        return load_direct(path);
+        return load_direct(path, disable_preloading);
     }
     if (has_extension(path, "zip")) {
         return load_zip(path);

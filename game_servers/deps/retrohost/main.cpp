@@ -479,6 +479,12 @@ static bool callback_environment_set(unsigned cmd, void *data)
         }
         supports_no_game = *(bool *)data;
         break;
+    case RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK:
+        if (args.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK\n");
+        }
+        // struct retro_frame_time_callback *frame_time = (struct retro_frame_time_callback *)data;
+        return false;
     default:
         fprintf(stderr, "W: retro_environment_set(): unrecognized cmd=%1$u (0x%1$x)\n", cmd);
         return false;
@@ -663,7 +669,7 @@ int main(int argc, const char **argv)
     
     retro_init();
 
-    if (!files_load(args.rom_path)) {
+    if (!files_load(args.rom_path, args.disable_preloading)) {
         fprintf(stderr, "Failed to load file '%s'\n", args.rom_path);
         if (args.verbose) {
             dump_env();

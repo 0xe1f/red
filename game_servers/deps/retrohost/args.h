@@ -35,6 +35,7 @@ typedef struct {
     int output_height;
     enum Verbosity verbose;
     enum ScaleMode scale_mode;
+    bool disable_preloading;
 } ArgsOptions;
 
 bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_store);
