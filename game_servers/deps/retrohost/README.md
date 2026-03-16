@@ -9,21 +9,22 @@ application (largely via command-line).
 
 ## Building
 
-    ```sh
-    cd game_servers/deps/retrohost
-    make
-    ```
+```sh
+cd game_servers/deps/retrohost
+make
+```
 
 ## Running
 
 Example command line:
 
 ```sh
-./rh -c bluemsx/bluemsx_libretro.so \
+./rh \
     bluemsx/roms/monty.rom \
+    -c bluemsx/bluemsx_libretro.so \
     -v \
     -fps \
-    --output-dims=320x256 \
+    --output-dims 320x256 \
     -kv "bluemsx_msxtype=MSX2 - Yamaha YIS805-128R2"
 ```
 
@@ -42,3 +43,4 @@ Example command line:
 | `--verbose` | `-v` | None | Enable normal verbosity logging. |
 | `--verbose-extra` | `-v2` | None | Enable extra verbosity logging. |
 | `--keyvalue` | `-kv` | `<key=value>` | Set a core option key/value pair (can be reused, usage core-dependent). |
+| `--disable-preloading` | `-np` | None | Disable content preloading (non-archive files). |
