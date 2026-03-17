@@ -70,6 +70,7 @@ static bool is_running = true;
 static ArgsOptions args;
 static KvStore kv_store = {0};
 static retro_core_options_update_display_callback_t core_options_update_display_callback = NULL;
+static retro_keyboard_event_t keyboard_event_callback = NULL;
 static bool supports_no_game = false;
 
 static void set_core_options(const struct retro_core_option_definition *option_defs);
@@ -167,7 +168,8 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
 
 static void callback_audio_sample(int16_t left, int16_t right)
 {
-    fprintf(stderr, "audio_sample: left=%d right=%d\n", left, right);
+    int16_t data[2] = { left, right };
+    sound_queue.Write((int16_t *) data, 2, true);
 }
 
 static size_t callback_audio_sample_batch(const int16_t *data, size_t frames)
@@ -442,6 +444,12 @@ static bool callback_environment_set(unsigned cmd, void *data)
         }
         // struct retro_disk_control_callback *disk_interface = (struct retro_disk_control_callback *)data;
         break;
+    case RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION:
+        if (args.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION\n");
+        }
+        *(unsigned *)data = 0;
+        return false;
     case RETRO_ENVIRONMENT_GET_GAME_INFO_EXT:
         if (args.verbose) {
             fprintf(stderr, "RETRO_ENVIRONMENT_GET_GAME_INFO_EXT\n");
@@ -488,6 +496,18 @@ static bool callback_environment_set(unsigned cmd, void *data)
         }
         // struct retro_frame_time_callback *frame_time = (struct retro_frame_time_callback *)data;
         return false;
+    case RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY:
+        if (args.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY\n");
+        }
+        *(char **)data = NULL;
+        break;
+    case RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK:
+        if (args.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK\n");
+        }
+        keyboard_event_callback = ((struct retro_keyboard_callback *)data)->callback;
+        break;
     default:
         fprintf(stderr, "W: retro_environment_set(): unrecognized cmd=%1$u (0x%1$x)\n", cmd);
         return false;

@@ -66,6 +66,10 @@ case "$MODULE_NAME" in
             make && \
             echo "done:build/mgba_libretro.so"
         ;;
+    atari800)
+        make && \
+            echo "done:atari800_libretro.so"
+        ;;
     *)
         echo "Unknown module: $MODULE_NAME" >&2
         exit 1
