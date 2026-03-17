@@ -27,6 +27,7 @@
 #include "args.h"
 #include "files.h"
 #include "video.h"
+#include "input.h"
 
 static void *solib = NULL;
 
@@ -58,11 +59,11 @@ VideoBuffer video_buffer = {0};
 struct retro_system_av_info av_info;
 Rotation rotation = ROTATE_NONE;
 unsigned char pixel_format = PIXEL_FORMAT_UNKNOWN; // default is 1555
+struct retro_input_descriptor *input_descriptors = NULL;
 
 static unsigned int api_version = 0;
 static struct retro_controller_info *ports;
 static struct retro_core_options_v2_intl core_options_v2_intl;
-static struct retro_input_descriptor *input_descriptors = NULL;
 static const struct retro_subsystem_info *subsystem_info;
 static SoundQueue sound_queue;
 static struct FrameGeometry geometry;
@@ -180,13 +181,7 @@ static size_t callback_audio_sample_batch(const int16_t *data, size_t frames)
 
 static void callback_input_poll()
 {
-    // fprintf(stderr, "input_poll\n");
-}
-
-static int16_t callback_input_state(unsigned port, unsigned device, unsigned index, unsigned id)
-{
-    // fprintf(stderr, "input_state: port=%u device=%u index=%u id=%u\n", port, device, index, id);
-    return 0;
+    input_poll();
 }
 
 static void dump_env()
@@ -311,6 +306,7 @@ static bool callback_environment_set(unsigned cmd, void *data)
         if (args.verbose) {
             fprintf(stderr, "RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS\n");
         }
+
         struct retro_input_descriptor *desc = (struct retro_input_descriptor *)data;
 
         // FIXME: is this right?
@@ -564,9 +560,11 @@ static void clean_up()
     dlclose(solib);
     free(video_buffer.data);
     video_buffer.data = NULL;
+    free(input_descriptors);
+    input_descriptors = NULL;
     kvstore_free(&kv_store);
-
     files_clean_up();
+    input_clean_up();
 }
 
 static void sigint_handler(int s)
@@ -718,6 +716,8 @@ int main(int argc, const char **argv)
         dump_env();
         kvstore_dump(&kv_store);
     }
+
+    input_init();
 
     signal(SIGINT, sigint_handler);
     while (is_running) {

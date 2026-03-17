@@ -30,7 +30,7 @@ EXE=rh
 
 all: $(EXE)
 
-$(EXE): kv_store.o args.o files.o sound_queue.o video.o main.o \
+$(EXE): kv_store.o args.o files.o sound_queue.o video.o input.o main.o \
 	$(MINIZIP_ROOT)/unzip.o $(MINIZIP_ROOT)/ioapi.o \
 	$(UN7Z_ROOT)/un7z.o \
 	$(LIB7Z_ROOT)/7zStream.o $(LIB7Z_ROOT)/7zCrc.o $(LIB7Z_ROOT)/7zArcIn.o \
