@@ -17,6 +17,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include "unzip.h"
+#include "un7z.h"
 #include "libretro.h"
 #include "files.h"
 
@@ -33,6 +34,7 @@ extern struct retro_game_info_ext *game_info_ext;
 static bool is_extension_supported(const char *path);
 static bool has_extension(const char *path, const char *ext);
 static bool load_zip(const char *path);
+static bool load_7z(const char *path);
 static bool load_direct(const char *path, bool disable_preloading);
 static bool extension_list_contains(const char *ext_delim, const char *ext);
 
@@ -90,11 +92,19 @@ static bool load_zip(const char *path)
         return false;
     }
 
-    static char archived_path[512];
+    static char archived_path[1024];
     static char archived_filename[512];
     static char archived_ext[512];
-    static char dir[512];
+    static char dir[1024];
     void *data = NULL;
+
+    const char *slash = strrchr(path, '/');
+    if (slash) {
+        strncat(dir, path, slash - path);
+    } else {
+        strncat(dir, ".", sizeof(dir) - 1);
+    }
+
     unz_file_info info;
     int ret = unzGoToFirstFile(fd);
     while (ret == UNZ_OK) {
@@ -110,13 +120,6 @@ static bool load_zip(const char *path)
 
                     if ((ret = unzReadCurrentFile(fd, data, size)) == (int) size) {
                         fprintf(stderr, "Loaded '%s'\n", archived_path);
-
-                        const char *slash = strrchr(path, '/');
-                        if (slash) {
-                            strncat(dir, path, slash - path);
-                        } else {
-                            strncat(dir, ".", sizeof(dir) - 1);
-                        }
 
                         const char *archived_slash = strrchr(archived_path, '/');
                         if (archived_slash) {
@@ -162,7 +165,122 @@ static bool load_zip(const char *path)
     unzClose(fd);
 
     if (!info_local.data) {
-        fprintf(stderr, "Nothing loaded from zip: %s\n", path);
+        fprintf(stderr, "Nothing loaded from archive: %s\n", path);
+        return false;
+    }
+
+    game_info = &info_local;
+    game_info_ext = &info_local_ext;
+
+    return true;
+}
+
+static bool load_7z(const char *path)
+{
+    static struct retro_game_info info_local;
+    static struct retro_game_info_ext info_local_ext;
+    info_local = (struct retro_game_info){ 0 };
+    info_local_ext = (struct retro_game_info_ext){ 0 };
+
+    _7z_file *z7 = NULL;
+    _7z_error z7_err;
+
+    z7_err = _7z_file_open(path, &z7);
+    if (z7_err != _7ZERR_NONE) {
+        return false;
+    }
+
+    static char archived_path[1024];
+    static char archived_filename[512];
+    static char archived_ext[512];
+    static char dir[1024];
+
+    const char *slash = strrchr(path, '/');
+    if (slash) {
+        strncat(dir, path, slash - path);
+    } else {
+        strncat(dir, ".", sizeof(dir) - 1);
+    }
+
+    unsigned short name_utf16[2048];
+
+    for (int i = 0, n = z7->db.NumFiles; i < n; i++) {
+        size_t len = SzArEx_GetFileNameUtf16(&z7->db, i, NULL);
+        if (len > sizeof(name_utf16)) {
+            fprintf(stderr, "File name at index %d too long (%zu chars)\n", i, len);
+            continue;
+        }
+
+        SzArEx_GetFileNameUtf16(&z7->db, i, name_utf16);
+        for (size_t j = 0, size = sizeof(archived_path) - 1; j < len && j < size; j++) {
+            archived_path[j] = name_utf16[j] & 0xff;
+        }
+        archived_path[len] = '\0';
+
+        if (is_extension_supported(archived_path)) {
+            unsigned long size = SzArEx_GetFileSize(&z7->db, i);
+            void *data = malloc(size);
+            if (!data) {
+                fprintf(stderr, "Failed to allocate %zu bytes for %s\n", size, archived_path);
+                continue;
+            }
+
+            z7->curr_file_idx = i;
+            unsigned int wrote = 0;
+
+            z7_err = _7z_file_decompress(z7, data, size, &wrote);
+            if (z7_err != _7ZERR_NONE) {
+                free(data);
+                fprintf(stderr, "Failed to decompress '%s' (err: %d)\n", archived_path, z7_err);
+                continue;
+            }
+
+            unsigned int crc = crc32(0, (unsigned char *) data, wrote);
+            if (crc != z7->db.CRCs.Vals[i]) {
+                free(data);
+                fprintf(stderr, "CRC mismatch for '%s' (expected: %08x, got: %08x)\n",
+                    archived_path, z7->db.CRCs.Vals[i], crc);
+                continue;
+            }
+
+            const char *archived_slash = strrchr(archived_path, '/');
+            if (archived_slash) {
+                strncat(archived_filename, archived_slash + 1, sizeof(archived_filename) - 1);
+            } else {
+                strncat(archived_filename, archived_path, sizeof(archived_filename) - 1);
+            }
+
+            char *archived_dot = strrchr(archived_filename, '.');
+            if (archived_dot) {
+                *archived_dot = '\0';
+                strncat(archived_ext, archived_dot + 1, sizeof(archived_ext) - 1);
+            } else {
+                strncat(archived_ext, "", sizeof(archived_ext) - 1);
+            }
+
+            info_local = (struct retro_game_info){ path, data, size, NULL };
+            info_local_ext = (struct retro_game_info_ext){
+                /* full_path */ NULL,
+                /* archive_path */ path,
+                /* archive_file */ archived_path,
+                /* dir */ dir,
+                /* name */ archived_filename,
+                /* ext */ archived_ext,
+                /* meta */ NULL,
+                /* data */ data,
+                /* size */ size,
+                /* file_in_archive */ true,
+                /* persistent_data */ true
+            };
+
+            break;
+        }
+    }
+
+    _7z_file_close(z7);
+
+    if (!info_local.data) {
+        fprintf(stderr, "Nothing loaded from archive: %s\n", path);
         return false;
     }
 
@@ -254,11 +372,13 @@ bool files_load(const char *path, bool disable_preloading)
 {
     if (is_extension_supported(path)) {
         return load_direct(path, disable_preloading);
-    }
-    if (has_extension(path, "zip")) {
+    } else if (has_extension(path, "7z")) {
+        return load_7z(path);
+    } else if (has_extension(path, "zip")) {
         return load_zip(path);
+    } else {
+        return false;
     }
-    return false;
 }
 
 void files_mkdirs(const char *base_path)
