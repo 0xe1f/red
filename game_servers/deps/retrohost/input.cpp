@@ -19,27 +19,17 @@
 #include "libretro.h"
 #include "input.h"
 
-#define MAX_JOYSTICKS 16
-#define JOY_DEADZONE  0x4000
+#define MAX_JOYSTICKS  16
+#define LAST_BUTTON_ID RETRO_DEVICE_ID_JOYPAD_R3
+#define JOY_DEADZONE   0x4000
 
-struct InputState {
-    bool joypad_left;
-    bool joypad_right;
-    bool joypad_up;
-    bool joypad_down;
-    bool joypad_a;
-    bool joypad_b;
-    bool joypad_x;
-    bool joypad_y;
-    bool joypad_l;
-    bool joypad_r;
-    bool joypad_start;
-    bool joypad_select;
+struct GamepadState {
+    bool buttons[LAST_BUTTON_ID + 1];
 };
 
 extern struct retro_input_descriptor *input_descriptors;
 
-static struct InputState input_states[MAX_JOYSTICKS] = { 0 };
+static struct GamepadState input_states[MAX_JOYSTICKS] = { 0 };
 static SDL_Joystick *joysticks[MAX_JOYSTICKS] = { NULL };
 static int joystick_count = 0;
 
@@ -60,28 +50,32 @@ void input_init()
 
 void input_poll()
 {
-	SDL_JoystickUpdate();
+    SDL_JoystickUpdate();
 
     for (int joy = 0; joy < joystick_count; joy++) {
-		SDL_Joystick *joystick = joysticks[joy];
+        SDL_Joystick *joystick = joysticks[joy];
 
-		int x = SDL_JoystickGetAxis(joystick, 0);
-		int y = SDL_JoystickGetAxis(joystick, 1);
+        int x = SDL_JoystickGetAxis(joystick, 0);
+        int y = SDL_JoystickGetAxis(joystick, 1);
 
-        struct InputState *state = &input_states[joy];
-		// Directions
-        state->joypad_up = (y < -JOY_DEADZONE);
-        state->joypad_right = (x > JOY_DEADZONE);
-        state->joypad_down = (y > JOY_DEADZONE);
-        state->joypad_left = (x < -JOY_DEADZONE);
-        state->joypad_a = SDL_JoystickGetButton(joystick, 0);
-        state->joypad_b = SDL_JoystickGetButton(joystick, 1);
-        state->joypad_x = SDL_JoystickGetButton(joystick, 2);
-        state->joypad_y = SDL_JoystickGetButton(joystick, 3);
-        state->joypad_l = SDL_JoystickGetButton(joystick, 4);
-        state->joypad_r = SDL_JoystickGetButton(joystick, 5);
-        state->joypad_start = SDL_JoystickGetButton(joystick, 6);
-        state->joypad_select = SDL_JoystickGetButton(joystick, 7);
+        struct GamepadState *state = &input_states[joy];
+
+        state->buttons[RETRO_DEVICE_ID_JOYPAD_UP] = (y < -JOY_DEADZONE);
+        state->buttons[RETRO_DEVICE_ID_JOYPAD_RIGHT] = (x > JOY_DEADZONE);
+        state->buttons[RETRO_DEVICE_ID_JOYPAD_DOWN] = (y > JOY_DEADZONE);
+        state->buttons[RETRO_DEVICE_ID_JOYPAD_LEFT] = (x < -JOY_DEADZONE);
+        state->buttons[RETRO_DEVICE_ID_JOYPAD_A] = SDL_JoystickGetButton(joystick, 0);
+        state->buttons[RETRO_DEVICE_ID_JOYPAD_B] = SDL_JoystickGetButton(joystick, 1);
+        state->buttons[RETRO_DEVICE_ID_JOYPAD_X] = SDL_JoystickGetButton(joystick, 2);
+        state->buttons[RETRO_DEVICE_ID_JOYPAD_Y] = SDL_JoystickGetButton(joystick, 3);
+        state->buttons[RETRO_DEVICE_ID_JOYPAD_L] = SDL_JoystickGetButton(joystick, 4);
+        state->buttons[RETRO_DEVICE_ID_JOYPAD_R] = SDL_JoystickGetButton(joystick, 5);
+        state->buttons[RETRO_DEVICE_ID_JOYPAD_START] = SDL_JoystickGetButton(joystick, 6);
+        state->buttons[RETRO_DEVICE_ID_JOYPAD_SELECT] = SDL_JoystickGetButton(joystick, 7);
+        state->buttons[RETRO_DEVICE_ID_JOYPAD_L2] = SDL_JoystickGetButton(joystick, 8);
+        state->buttons[RETRO_DEVICE_ID_JOYPAD_R2] = SDL_JoystickGetButton(joystick, 9);
+        state->buttons[RETRO_DEVICE_ID_JOYPAD_L3] = SDL_JoystickGetButton(joystick, 10);
+        state->buttons[RETRO_DEVICE_ID_JOYPAD_R3] = SDL_JoystickGetButton(joystick, 11);
     }
 }
 
@@ -90,39 +84,29 @@ int16_t callback_input_state(unsigned port, unsigned device, unsigned index, uns
     if (port >= MAX_JOYSTICKS) {
         return 0;
     }
-    struct InputState *state = &input_states[port];
-    if (device == RETRO_DEVICE_JOYPAD) {
-        switch (id) {
-            case RETRO_DEVICE_ID_JOYPAD_UP:
-                return state->joypad_up;
-            case RETRO_DEVICE_ID_JOYPAD_RIGHT:
-                return state->joypad_right;
-            case RETRO_DEVICE_ID_JOYPAD_DOWN:
-                return state->joypad_down;
-            case RETRO_DEVICE_ID_JOYPAD_LEFT:
-                return state->joypad_left;
-            case RETRO_DEVICE_ID_JOYPAD_A:
-                return state->joypad_a;
-            case RETRO_DEVICE_ID_JOYPAD_B:
-                return state->joypad_b;
-            case RETRO_DEVICE_ID_JOYPAD_X:
-                return state->joypad_x;
-            case RETRO_DEVICE_ID_JOYPAD_Y:
-                return state->joypad_y;
-            case RETRO_DEVICE_ID_JOYPAD_L:
-                return state->joypad_l;
-            case RETRO_DEVICE_ID_JOYPAD_R:
-                return state->joypad_r;
-            case RETRO_DEVICE_ID_JOYPAD_START:
-                return state->joypad_start;
-            case RETRO_DEVICE_ID_JOYPAD_SELECT:
-                return state->joypad_select;
-            default:
-                return 0;
-        }
-    }
 
-    return 0;
+    const struct GamepadState *state = &input_states[port];
+    unsigned short ret = 0;
+
+    switch (device) {
+        case RETRO_DEVICE_JOYPAD:
+            switch (id) {
+                case RETRO_DEVICE_ID_JOYPAD_MASK:
+                    for (int i = 0; i <= LAST_BUTTON_ID; i++) {
+                        if (state->buttons[i]) {
+                            ret |= (1 << i);
+                        }
+                    }
+                    break;
+                default:
+                    if (id <= LAST_BUTTON_ID) {
+                        ret = state->buttons[id];
+                    }
+                    break;
+            }
+            break;
+    }
+    return ret;
 }
 
 void input_clean_up()

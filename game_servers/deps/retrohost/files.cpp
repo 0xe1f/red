@@ -329,7 +329,7 @@ static bool load_direct(const char *path, bool disable_preloading)
         }
 
         fseek(f, 0, SEEK_END);
-        size_t size = ftell(f);
+        size = ftell(f);
         fseek(f, 0, SEEK_SET);
 
         data = malloc(size);
