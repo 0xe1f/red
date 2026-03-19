@@ -14,6 +14,7 @@
 
 #include <dlfcn.h>
 #include <libgen.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -22,7 +23,7 @@
 #include <time.h>
 #include <unistd.h>
 #include "libretro.h"
-#include "sound_queue.h"
+#include "audio.h"
 #include "rgbserver.h"
 #include "args.h"
 #include "files.h"
@@ -66,7 +67,7 @@ static unsigned int api_version = 0;
 static struct retro_controller_info *ports;
 static struct retro_core_options_v2_intl core_options_v2_intl;
 static const struct retro_subsystem_info *subsystem_info;
-static SoundQueue sound_queue;
+static Audio audio;
 static struct FrameGeometry geometry;
 static bool is_running = true;
 static KvStore kv_store = {0};
@@ -170,12 +171,12 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
 static void callback_audio_sample(int16_t left, int16_t right)
 {
     int16_t data[2] = { left, right };
-    sound_queue.Write((int16_t *) data, 2, true);
+    audio_write(&audio, data, 2, true);
 }
 
 static size_t callback_audio_sample_batch(const int16_t *data, size_t frames)
 {
-    sound_queue.Write((int16_t *) data, frames * 2, true);
+    audio_write(&audio, data, frames * 2, true);
     return frames;
 }
 
@@ -565,6 +566,7 @@ static void clean_up()
     kvstore_free(&kv_store);
     files_clean_up();
     input_clean_up();
+    audio_cleanup(&audio);
     args_free(&args);
 }
 
@@ -576,8 +578,8 @@ static void sigint_handler(int s)
 
 static void reset_audio()
 {
-    sound_queue.Stop();
-    sound_queue.Start(av_info.timing.sample_rate, 2);
+    audio_stop(&audio);
+    audio_start(&audio, av_info.timing.sample_rate, 2);
 }
 
 static void set_variables(struct retro_variable *vars)
@@ -666,6 +668,7 @@ int main(int argc, const char **argv)
     LOAD_SYMBOL(retro_deinit)
     LOAD_SYMBOL(retro_get_system_av_info)
 
+    audio_init(&audio);
     files_mkdirs(dirname((char *)args.so_path));
     rgbs_start();
 
