@@ -70,6 +70,10 @@ case "$MODULE_NAME" in
         make && \
             echo "done:atari800_libretro.so"
         ;;
+    picodrive)
+        make -f Makefile.libretro && \
+            echo "done:picodrive_libretro.so"
+        ;;
     *)
         echo "Unknown module: $MODULE_NAME" >&2
         exit 1

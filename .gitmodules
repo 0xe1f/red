@@ -28,3 +28,6 @@
 [submodule "atari800"]
 	path = game_servers/atari800
 	url = https://github.com/libretro/libretro-atari800.git
+[submodule "game_servers/picodrive"]
+	path = game_servers/picodrive
+	url = https://github.com/libretro/picodrive.git
