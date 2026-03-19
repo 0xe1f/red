@@ -25,7 +25,7 @@ if [ -f "$SO_FILE" ]; then
     ROM_PATH="$(find -L $APP_ID/roms -name "$TITLE_ID.*" | head -1)"
     shift
     if [ -z "$ROM_PATH" ]; then
-        echo "No ROM file found for $TITLE_ID" >&2
+        echo "No ROM file found for $TITLE_ID" >> log.txt
         exit 1
     fi
     echo ./rh -c "$SO_FILE" "$ROM_PATH" "$@" >> log.txt
