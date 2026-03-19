@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef LRHOST_INPUT_H__
-#define LRHOST_INPUT_H__
+#ifndef __INPUT_H__
+#define __INPUT_H__
 
 #include <stdint.h>
 
@@ -22,4 +22,4 @@ void input_poll();
 void input_clean_up();
 int16_t callback_input_state(unsigned port, unsigned device, unsigned index, unsigned id);
 
-#endif // LRHOST_INPUT_H__
+#endif // __INPUT_H__

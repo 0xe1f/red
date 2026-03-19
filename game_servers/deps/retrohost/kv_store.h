@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef KVSTORE_H__
-#define KVSTORE_H__
+#ifndef __KV_STORE_H__
+#define __KV_STORE_H__
 
 typedef struct KvPair {
     char *key;
@@ -31,4 +31,4 @@ void kvstore_dump(const KvStore *kv_store);
 const char* kvstore_get(const KvStore *kv_store, const char *key);
 void kvstore_put(KvStore *kv_store, const char *key, const char *value);
 
-#endif // KVSTORE_H__
+#endif // __KV_STORE_H__

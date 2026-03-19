@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef LRHOST_VIDEO_H__
-#define LRHOST_VIDEO_H__
+#ifndef __VIDEO_H__
+#define __VIDEO_H__
 
 enum Rotation {
     ROTATE_NONE   = 0,
@@ -47,4 +47,4 @@ void blit(
     const unsigned char **out, size_t *out_size
 );
 
-#endif // LRHOST_VIDEO_H__
+#endif // __VIDEO_H__

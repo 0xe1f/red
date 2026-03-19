@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef LRHOST_FILES_H__
-#define LRHOST_FILES_H__
+#ifndef __FILES_H__
+#define __FILES_H__
 
 const char* files_system_path();
 const char* files_save_path();
@@ -22,4 +22,4 @@ bool files_load(const char *path, bool disable_preloading = false);
 void files_mkdirs(const char *base_path);
 void files_clean_up();
 
-#endif // LRHOST_FILES_H__
+#endif // __FILES_H__

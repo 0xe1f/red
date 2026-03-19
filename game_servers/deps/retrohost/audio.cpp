@@ -135,7 +135,7 @@ void audio_write(Audio *audio, const short *samples, int count, bool sync)
         if (audio->write_position >= audio->buffer_size) {
             audio->write_position = 0;
             audio->write_buffer = (audio->write_buffer + 1) % audio->buffer_count;
-            
+
             if (audio->sync_output) {
                 SDL_SemWait((SDL_sem *) audio->free_sem);
             }
