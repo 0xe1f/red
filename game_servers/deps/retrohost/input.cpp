@@ -16,13 +16,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <SDL.h>
+#include "args.h"
 #include "libretro.h"
 #include "input.h"
 
-#define MAX_DEVICES    16
-#define LAST_BUTTON_ID RETRO_DEVICE_ID_JOYPAD_R3
+#define MAX_DEVICES           16
+#define LAST_BUTTON_ID        RETRO_DEVICE_ID_JOYPAD_R3
 #define EMULATED_BUTTON_COUNT (LAST_BUTTON_ID - 3)
-#define JOY_DEADZONE   0x4000
+#define JOY_DEADZONE          0x4000
+#define DEFAULT_CONFIG        "y,x,l,b,a,r,start,select,l2,r2,l3,r3"
+
+extern ArgsOptions args;
 
 static void setup_joystick(struct InputDevice *device, SDL_Joystick *joystick);
 
@@ -77,7 +81,10 @@ void input_poll()
         state->input_ids[RETRO_DEVICE_ID_JOYPAD_LEFT] = (x < -JOY_DEADZONE);
 
         for (int i = 0; i < EMULATED_BUTTON_COUNT; i++) {
-            state->input_ids[device->emulated_buttons[i]] = SDL_JoystickGetButton(joystick, i);
+            unsigned short button_id = device->emulated_buttons[i];
+            if (button_id >= 0 && button_id <= LAST_BUTTON_ID) {
+                state->input_ids[button_id] = SDL_JoystickGetButton(joystick, i);
+            }
         }
     }
 }
@@ -131,17 +138,54 @@ static void setup_joystick(struct InputDevice *device, SDL_Joystick *joystick)
         device->guid,
         sizeof(device->guid));
     device->name = SDL_JoystickName(device->joystick);
+    fprintf(stderr, "input: Setting up %s (GUID %s)\n", device->name, device->guid);
 
-    device->emulated_buttons[0] = RETRO_DEVICE_ID_JOYPAD_Y;
-    device->emulated_buttons[1] = RETRO_DEVICE_ID_JOYPAD_X;
-    device->emulated_buttons[2] = RETRO_DEVICE_ID_JOYPAD_L;
-    device->emulated_buttons[3] = RETRO_DEVICE_ID_JOYPAD_B;
-    device->emulated_buttons[4] = RETRO_DEVICE_ID_JOYPAD_A;
-    device->emulated_buttons[5] = RETRO_DEVICE_ID_JOYPAD_R;
-    device->emulated_buttons[6] = RETRO_DEVICE_ID_JOYPAD_START;
-    device->emulated_buttons[7] = RETRO_DEVICE_ID_JOYPAD_SELECT;
-    device->emulated_buttons[8] = RETRO_DEVICE_ID_JOYPAD_L2;
-    device->emulated_buttons[9] = RETRO_DEVICE_ID_JOYPAD_R2;
-    device->emulated_buttons[10] = RETRO_DEVICE_ID_JOYPAD_L3;
-    device->emulated_buttons[11] = RETRO_DEVICE_ID_JOYPAD_R3;
+    char buffer[512];
+    const char *spec = kvstore_get(&args.input_configs, device->guid);
+    if (spec) {
+        strncpy(buffer, spec, sizeof(buffer) - 1);
+    } else {
+        fprintf(stderr, "input: No config found; will use defaults\n");
+        strcpy(buffer, DEFAULT_CONFIG);
+    }
+
+    const char *token = strtok(buffer, ",");
+    int button_index;
+    for (button_index = 0; button_index < EMULATED_BUTTON_COUNT && token; button_index++) {
+        if (strcmp(token, "y") == 0) {
+            device->emulated_buttons[button_index] = RETRO_DEVICE_ID_JOYPAD_Y;
+        } else if (strcmp(token, "x") == 0) {
+            device->emulated_buttons[button_index] = RETRO_DEVICE_ID_JOYPAD_X;
+        } else if (strcmp(token, "l") == 0) {
+            device->emulated_buttons[button_index] = RETRO_DEVICE_ID_JOYPAD_L;
+        } else if (strcmp(token, "b") == 0) {
+            device->emulated_buttons[button_index] = RETRO_DEVICE_ID_JOYPAD_B;
+        } else if (strcmp(token, "a") == 0) {
+            device->emulated_buttons[button_index] = RETRO_DEVICE_ID_JOYPAD_A;
+        } else if (strcmp(token, "r") == 0) {
+            device->emulated_buttons[button_index] = RETRO_DEVICE_ID_JOYPAD_R;
+        } else if (strcmp(token, "start") == 0) {
+            device->emulated_buttons[button_index] = RETRO_DEVICE_ID_JOYPAD_START;
+        } else if (strcmp(token, "select") == 0) {
+            device->emulated_buttons[button_index] = RETRO_DEVICE_ID_JOYPAD_SELECT;
+        } else if (strcmp(token, "l2") == 0) {
+            device->emulated_buttons[button_index] = RETRO_DEVICE_ID_JOYPAD_L2;
+        } else if (strcmp(token, "r2") == 0) {
+            device->emulated_buttons[button_index] = RETRO_DEVICE_ID_JOYPAD_R2;
+        } else if (strcmp(token, "l3") == 0) {
+            device->emulated_buttons[button_index] = RETRO_DEVICE_ID_JOYPAD_L3;
+        } else if (strcmp(token, "r3") == 0) {
+            device->emulated_buttons[button_index] = RETRO_DEVICE_ID_JOYPAD_R3;
+        } else if (strcmp(token, "_") == 0 || strcmp(token, "none") == 0) {
+            device->emulated_buttons[button_index] = 65535;
+        } else {
+            fprintf(stderr, "input: Unrecognized button '%s' in input config for '%s'\n",
+                token, device->name);
+            device->emulated_buttons[button_index] = 65535;
+        }
+        token = strtok(NULL, ",");
+    }
+    for (; button_index < EMULATED_BUTTON_COUNT; button_index++) {
+        device->emulated_buttons[button_index] = 65535;
+    }
 }

@@ -28,7 +28,7 @@ typedef struct {
 
 void kvstore_free(KvStore *kv_store);
 void kvstore_dump(const KvStore *kv_store);
-const char* kvstore_find_value(const KvStore *kv_store, const char *key);
+const char* kvstore_get(const KvStore *kv_store, const char *key);
 void kvstore_put(KvStore *kv_store, const char *key, const char *value);
 
 #endif // KVSTORE_H__

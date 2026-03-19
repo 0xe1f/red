@@ -46,7 +46,7 @@ void kvstore_dump(const KvStore *kv_store)
     fprintf(stderr, "  %d key/value pair(s)\n", kv_store->count);
 }
 
-const char* kvstore_find_value(const KvStore *kv_store, const char *key)
+const char* kvstore_get(const KvStore *kv_store, const char *key)
 {
     const KvPair *kvpair = kvstore_find_pair(kv_store, key);
     return kvpair ? kvpair->value : NULL;

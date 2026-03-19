@@ -60,6 +60,7 @@ struct retro_system_av_info av_info;
 Rotation rotation = ROTATE_NONE;
 unsigned char pixel_format = PIXEL_FORMAT_UNKNOWN; // default is 1555
 struct retro_input_descriptor *input_descriptors = NULL;
+ArgsOptions args;
 
 static unsigned int api_version = 0;
 static struct retro_controller_info *ports;
@@ -68,7 +69,6 @@ static const struct retro_subsystem_info *subsystem_info;
 static SoundQueue sound_queue;
 static struct FrameGeometry geometry;
 static bool is_running = true;
-static ArgsOptions args;
 static KvStore kv_store = {0};
 static retro_core_options_update_display_callback_t core_options_update_display_callback = NULL;
 static retro_keyboard_event_t keyboard_event_callback = NULL;
@@ -375,7 +375,7 @@ static bool callback_environment_set(unsigned cmd, void *data)
         return false;
     case RETRO_ENVIRONMENT_GET_VARIABLE: {
         struct retro_variable *var = (struct retro_variable *)data;
-        var->value = kvstore_find_value(&kv_store, var->key);
+        var->value = kvstore_get(&kv_store, var->key);
         if (args.verbose == VERBOSITY_EXTRA) {
             fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE: %s = %s\n", var->key, var->value);
         }
@@ -565,6 +565,7 @@ static void clean_up()
     kvstore_free(&kv_store);
     files_clean_up();
     input_clean_up();
+    args_free(&args);
 }
 
 static void sigint_handler(int s)
@@ -596,7 +597,7 @@ static void set_variables(struct retro_variable *vars)
             strncpy(value_buf, value_start, sizeof(value_buf) - 1);
             value_buf[sizeof(value_buf) - 1] = '\0';
         }
-        if (!kvstore_find_value(&kv_store, v->key)) {
+        if (!kvstore_get(&kv_store, v->key)) {
             kvstore_put(&kv_store, v->key, value_buf);
         }
     }
@@ -606,7 +607,7 @@ static void set_core_options(const struct retro_core_option_definition *option_d
 {
     for (const retro_core_option_definition *def = option_defs; def->key; def++) {
         // Don't override existing values
-        if (def->default_value && !kvstore_find_value(&kv_store, def->key)) {
+        if (def->default_value && !kvstore_get(&kv_store, def->key)) {
             kvstore_put(&kv_store, def->key, def->default_value);
         }
     }

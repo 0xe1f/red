@@ -36,8 +36,10 @@ typedef struct {
     enum Verbosity verbose;
     enum ScaleMode scale_mode;
     bool disable_preloading;
+    KvStore input_configs;
 } ArgsOptions;
 
 bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_store);
+void args_free(ArgsOptions *opts);
 
 #endif // LRHOST_ARGS_H__

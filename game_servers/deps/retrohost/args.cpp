@@ -34,7 +34,7 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
     opts->max_clients = -1;
     opts->scale_mode = SCALE_MODE_NONE;
     opts->verbose = VERBOSITY_NONE;
-    char temp[512];
+    char temp[1024];
     for (i = 1, arg = argv + 1; i < argc; i++, arg++) {
         if (strcmp(*arg, "--help") == 0 || strcmp(*arg, "-h") == 0) {
             args_usage(*argv);
@@ -109,6 +109,22 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
             kvstore_put(kv_store, temp, eq + 1);
         } else if (strcmp(*arg, "--disable-preloading") == 0 || strcmp(*arg, "-np") == 0) {
             opts->disable_preloading = true;
+        } else if (strcmp(*arg, "--input-config") == 0 || strcmp(*arg, "-ic") == 0) {
+            if (++i >= argc) {
+                fprintf(stderr, "Missing argument for %s\n", *arg);
+                return false;
+            }
+
+            const char *value = *(++arg);
+            const char *sep = strchr(value, ':');
+            if (!sep) {
+                fprintf(stderr, "Invalid input config: '%s'\n", value);
+                return false;
+            }
+
+            strncpy(temp, value, sep - value);
+            temp[sep - value] = '\0';
+            kvstore_put(&opts->input_configs, temp, sep + 1);
         } else if (**arg == '-') {
             fprintf(stderr, "Unrecognized switch: %s\n", *arg);
             return false;
@@ -121,4 +137,9 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
     }
 
     return true;
+}
+
+void args_free(ArgsOptions *opts)
+{
+    kvstore_free(&opts->input_configs);
 }
