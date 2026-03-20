@@ -19,7 +19,10 @@
 #include "unzip.h"
 #include "un7z.h"
 #include "libretro.h"
+#include "log.h"
 #include "files.h"
+
+#define LOG_TAG "files"
 
 static const char *system_path_name = "bios";
 static const char *save_path_name = "save";
@@ -55,7 +58,7 @@ static bool is_extension_supported(const char *path)
 {
     const char *ext = strrchr(path, '.');
     if (!ext) {
-        fprintf(stderr, "No file extension found: %s\n", path);
+        log_w(LOG_TAG, "No file extension found: %s\n", path);
         return false;
     }
     ext++; // skip the dot
@@ -88,7 +91,7 @@ static bool load_zip(const char *path)
 
     unzFile fd = unzOpen(path);
     if (!fd) {
-        fprintf(stderr, "Failed to open zip: %s\n", path);
+        log_e(LOG_TAG, "Failed to open zip: %s\n", path);
         return false;
     }
 
@@ -113,13 +116,13 @@ static bool load_zip(const char *path)
                 if ((ret = unzOpenCurrentFile(fd)) == UNZ_OK) {
                     size_t size = info.uncompressed_size;
                     if (!(data = malloc(size))) {
-                        fprintf(stderr, "Failed to allocate %zu bytes for %s\n", size, archived_path);
+                        log_e(LOG_TAG, "Failed to allocate %zu bytes for %s\n", size, archived_path);
                         unzCloseCurrentFile(fd);
                         continue;
                     }
 
                     if ((ret = unzReadCurrentFile(fd, data, size)) == (int) size) {
-                        fprintf(stderr, "Loaded '%s'\n", archived_path);
+                        log_i(LOG_TAG, "Loaded '%s'\n", archived_path);
 
                         const char *archived_slash = strrchr(archived_path, '/');
                         if (archived_slash) {
@@ -165,7 +168,7 @@ static bool load_zip(const char *path)
     unzClose(fd);
 
     if (!info_local.data) {
-        fprintf(stderr, "Nothing loaded from archive: %s\n", path);
+        log_w(LOG_TAG, "Nothing loaded from archive: %s\n", path);
         return false;
     }
 
@@ -207,7 +210,7 @@ static bool load_7z(const char *path)
     for (int i = 0, n = z7->db.NumFiles; i < n; i++) {
         size_t len = SzArEx_GetFileNameUtf16(&z7->db, i, NULL);
         if (len > sizeof(name_utf16)) {
-            fprintf(stderr, "File name at index %d too long (%zu chars)\n", i, len);
+            log_e(LOG_TAG, "File name at index %d too long (%zu chars)\n", i, len);
             continue;
         }
 
@@ -221,7 +224,7 @@ static bool load_7z(const char *path)
             unsigned long size = SzArEx_GetFileSize(&z7->db, i);
             void *data = malloc(size);
             if (!data) {
-                fprintf(stderr, "Failed to allocate %zu bytes for %s\n", size, archived_path);
+                log_e(LOG_TAG, "Failed to allocate %zu bytes for %s\n", size, archived_path);
                 continue;
             }
 
@@ -231,14 +234,14 @@ static bool load_7z(const char *path)
             z7_err = _7z_file_decompress(z7, data, size, &wrote);
             if (z7_err != _7ZERR_NONE) {
                 free(data);
-                fprintf(stderr, "Failed to decompress '%s' (err: %d)\n", archived_path, z7_err);
+                log_e(LOG_TAG, "Failed to decompress '%s' (err: %d)\n", archived_path, z7_err);
                 continue;
             }
 
             unsigned int crc = crc32(0, (unsigned char *) data, wrote);
             if (crc != z7->db.CRCs.Vals[i]) {
                 free(data);
-                fprintf(stderr, "CRC mismatch for '%s' (expected: %08x, got: %08x)\n",
+                log_e(LOG_TAG, "CRC mismatch for '%s' (expected: %08x, got: %08x)\n",
                     archived_path, z7->db.CRCs.Vals[i], crc);
                 continue;
             }
@@ -280,7 +283,7 @@ static bool load_7z(const char *path)
     _7z_file_close(z7);
 
     if (!info_local.data) {
-        fprintf(stderr, "Nothing loaded from archive: %s\n", path);
+        log_w(LOG_TAG, "Nothing loaded from archive: %s\n", path);
         return false;
     }
 
@@ -324,7 +327,7 @@ static bool load_direct(const char *path, bool disable_preloading)
     if (!disable_preloading) {
         FILE *f = fopen(path, "rb");
         if (!f) {
-            fprintf(stderr, "Failed to read file: %s\n", path);
+            log_e(LOG_TAG, "Failed to read file: %s\n", path);
             return false;
         }
 
@@ -334,7 +337,7 @@ static bool load_direct(const char *path, bool disable_preloading)
 
         data = malloc(size);
         if (!data) {
-            fprintf(stderr, "Failed to allocate %zu bytes for %s\n", size, path);
+            log_e(LOG_TAG, "Failed to allocate %zu bytes for %s\n", size, path);
         } else {
             fread(data, 1, size, f);
         }
@@ -358,7 +361,7 @@ static bool load_direct(const char *path, bool disable_preloading)
 
     if (!disable_preloading && !info_local.data) {
         // preload failed
-        fprintf(stderr, "Preload failed\n");
+        log_e(LOG_TAG, "Preload failed\n");
         return false;
     }
 

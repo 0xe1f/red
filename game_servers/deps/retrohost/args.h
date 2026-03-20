@@ -17,12 +17,7 @@
 
 #include "kv_store.h"
 #include "video.h"
-
-enum Verbosity {
-    VERBOSITY_NONE   = 0,
-    VERBOSITY_NORMAL = 1,
-    VERBOSITY_EXTRA  = 2
-};
+#include "log.h"
 
 typedef struct {
     const char *rom_path;
@@ -33,8 +28,8 @@ typedef struct {
     int max_clients;
     int output_width;
     int output_height;
-    enum Verbosity verbose;
-    enum ScaleMode scale_mode;
+    LogLevel log_level;
+    ScaleMode scale_mode;
     bool disable_preloading;
     KvStore input_configs;
 } ArgsOptions;

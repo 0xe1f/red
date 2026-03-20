@@ -15,8 +15,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-
+#include "log.h"
 #include "kv_store.h"
+
+#define LOG_TAG "kv_store"
 
 #define KVPAIR_INITIAL_CAPACITY 100
 #define KVPAIR_GROW_SIZE 100
@@ -41,9 +43,9 @@ void kvstore_dump(const KvStore *kv_store)
 {
     for (int i = 0; i < kv_store->count; i++) {
         const KvPair *pair = &kv_store->pairs[i];
-        fprintf(stderr, "'%s': '%s'\n", pair->key, pair->value);
+        log_d(LOG_TAG, "'%s': '%s'\n", pair->key, pair->value);
     }
-    fprintf(stderr, "  %d key/value pair(s)\n", kv_store->count);
+    log_i(LOG_TAG, "  %d key/value pair(s)\n", kv_store->count);
 }
 
 const char* kvstore_get(const KvStore *kv_store, const char *key)

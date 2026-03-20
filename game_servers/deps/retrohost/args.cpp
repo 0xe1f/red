@@ -16,13 +16,16 @@
 #include <string.h>
 #include <stdlib.h>
 #include "libretro.h"
+#include "log.h"
 #include "args.h"
+
+#define LOG_TAG "args"
 
 static void args_usage(const char *progname);
 
 static void args_usage(const char *progname)
 {
-    fprintf(stderr, "Usage: %s <game>\n", progname);
+    printf("Usage: %s <game>\n", progname);
 }
 
 bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_store)
@@ -33,7 +36,7 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
     opts->output_height = 0;
     opts->max_clients = -1;
     opts->scale_mode = SCALE_MODE_NONE;
-    opts->verbose = VERBOSITY_NONE;
+    opts->log_level = LOG_INFO;
     char temp[1024];
     for (i = 1, arg = argv + 1; i < argc; i++, arg++) {
         if (strcmp(*arg, "--help") == 0 || strcmp(*arg, "-h") == 0) {
@@ -41,13 +44,13 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
             exit(0);
         } else if (strcmp(*arg, "--core") == 0 || strcmp(*arg, "-c") == 0) {
             if (++i >= argc) {
-                fprintf(stderr, "Missing argument for %s\n", *arg);
+                log_e(LOG_TAG, "Missing argument for %s\n", *arg);
                 return false;
             }
             opts->so_path = *(++arg);
         } else if (strcmp(*arg, "--output-dims") == 0 || strcmp(*arg, "-wxh") == 0) {
             if (++i >= argc) {
-                fprintf(stderr, "Missing argument for %s\n", *arg);
+                log_e(LOG_TAG, "Missing argument for %s\n", *arg);
                 return false;
             }
             const char *value = *(++arg);
@@ -60,12 +63,12 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
             }
 
             if (opts->output_width <= 0 || opts->output_height <= 0) {
-                fprintf(stderr, "Invalid output dimensions: '%s'\n", value);
+                log_e(LOG_TAG, "Invalid output dimensions: '%s'\n", value);
                 return false;
             }
         } else if (strcmp(*arg, "--scale-mode") == 0 || strcmp(*arg, "-sm") == 0) {
             if (++i >= argc) {
-                fprintf(stderr, "Missing argument for %s\n", *arg);
+                log_e(LOG_TAG, "Missing argument for %s\n", *arg);
                 return false;
             }
             const char *value = *(++arg);
@@ -78,27 +81,66 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
             } else if (strcmp(value, "none") == 0) {
                 opts->scale_mode = SCALE_MODE_NONE;
             } else {
-                fprintf(stderr, "Invalid scale mode: '%s'\n", value);
+                log_e(LOG_TAG, "Invalid scale mode: '%s'\n", value);
                 return false;
             }
         } else if (strncmp(*arg, "--max-clients=", 14) == 0 || strncmp(*arg, "-mc=", 4) == 0) {
             const char *eq = strchr(*arg, '=') + 1;
             opts->max_clients = atoi(eq);
             if (opts->max_clients <= 0) {
-                fprintf(stderr, "Invalid max clients: '%s'\n", eq);
+                log_e(LOG_TAG, "Invalid max clients: '%s'\n", eq);
                 return false;
             }
         } else if (strcmp(*arg, "--background") == 0 || strcmp(*arg, "-background") == 0) {
             opts->background = true;
         } else if (strcmp(*arg, "--show-fps") == 0 || strcmp(*arg, "-fps") == 0) {
             opts->show_fps = true;
-        } else if (strcmp(*arg, "--verbose") == 0 || strcmp(*arg, "-v") == 0) {
-            opts->verbose = VERBOSITY_NORMAL;
-        } else if (strcmp(*arg, "--verbose-extra") == 0 || strcmp(*arg, "-v2") == 0) {
-            opts->verbose = VERBOSITY_EXTRA;
+        } else if (strcmp(*arg, "--log-level") == 0) {
+            if (++i >= argc) {
+                log_e(LOG_TAG, "Missing argument for %s\n", *arg);
+                return false;
+            }
+            const char *level = *(++arg);
+            if (strcmp(level, "fatal") == 0) {
+                opts->log_level = LOG_FATAL;
+            } else if (strcmp(level, "error") == 0) {
+                opts->log_level = LOG_ERROR;
+            } else if (strcmp(level, "warn") == 0) {
+                opts->log_level = LOG_WARN;
+            } else if (strcmp(level, "info") == 0) {
+                opts->log_level = LOG_INFO;
+            } else if (strcmp(level, "debug") == 0) {
+                opts->log_level = LOG_DEBUG;
+            } else if (strcmp(level, "verbose") == 0) {
+                opts->log_level = LOG_VERBOSE;
+            } else {
+                log_e(LOG_TAG, "Invalid log level: '%s'\n", level);
+                return false;
+            }
+        } else if (strncmp(*arg, "-l", 2) == 0) {
+            const char *level = *arg + 2;
+            if (strcmp(level, "f") == 0) {
+                opts->log_level = LOG_FATAL;
+            } else if (strcmp(level, "e") == 0) {
+                opts->log_level = LOG_ERROR;
+            } else if (strcmp(level, "w") == 0) {
+                opts->log_level = LOG_WARN;
+            } else if (strcmp(level, "i") == 0) {
+                opts->log_level = LOG_INFO;
+            } else if (strcmp(level, "d") == 0) {
+                opts->log_level = LOG_DEBUG;
+            } else if (strcmp(level, "v") == 0) {
+                opts->log_level = LOG_VERBOSE;
+            } else if (strcmp(level, "") == 0) {
+                log_e(LOG_TAG, "Log level unspecified\n");
+                return false;
+            } else {
+                log_e(LOG_TAG, "Invalid log level: '%s'\n", level);
+                return false;
+            }
         } else if (strcmp(*arg, "--keyvalue") == 0 || strcmp(*arg, "-kv") == 0) {
             if (++i >= argc) {
-                fprintf(stderr, "Missing argument for %s\n", *arg);
+                log_e(LOG_TAG, "Missing argument for %s\n", *arg);
                 return false;
             }
             const char *kv = *(++arg);
@@ -111,14 +153,14 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
             opts->disable_preloading = true;
         } else if (strcmp(*arg, "--input-config") == 0 || strcmp(*arg, "-ic") == 0) {
             if (++i >= argc) {
-                fprintf(stderr, "Missing argument for %s\n", *arg);
+                log_e(LOG_TAG, "Missing argument for %s\n", *arg);
                 return false;
             }
 
             const char *value = *(++arg);
             const char *sep = strchr(value, ':');
             if (!sep) {
-                fprintf(stderr, "Invalid input config: '%s'\n", value);
+                log_e(LOG_TAG, "Invalid input config: '%s'\n", value);
                 return false;
             }
 
@@ -126,12 +168,12 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
             temp[sep - value] = '\0';
             kvstore_put(&opts->input_configs, temp, sep + 1);
         } else if (**arg == '-') {
-            fprintf(stderr, "Unrecognized switch: %s\n", *arg);
+            log_e(LOG_TAG, "Unrecognized switch: %s\n", *arg);
             return false;
         } else if (opts->rom_path == NULL) {
             opts->rom_path = *arg;
         } else {
-            fprintf(stderr, "Unrecognized argument: %s\n", *arg);
+            log_e(LOG_TAG, "Unrecognized argument: %s\n", *arg);
             return false;
         }
     }

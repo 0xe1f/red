@@ -29,8 +29,12 @@
 #include "files.h"
 #include "video.h"
 #include "input.h"
+#include "log.h"
 
 static void *solib = NULL;
+
+#define LOG_TAG  "host"
+#define LOG_CORE "core"
 
 #define DEFINE_SYMBOL(name, ret_type, ...) \
     typedef ret_type (*name##_t)(__VA_ARGS__);
@@ -82,23 +86,17 @@ static void set_variables(const struct retro_variable *vars, bool single = false
 
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
-    time_t now = time(NULL);
-    struct tm tm = *localtime(&now);
-    FILE *out = (level == RETRO_LOG_ERROR) ? stderr : stdout;
-    fprintf(out, "%d-%02d-%02d %02d:%02d:%02d ", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
-
-    if (level == RETRO_LOG_DEBUG) {
-        fprintf(out, "D ");
-    } else if (level == RETRO_LOG_INFO) {
-        fprintf(out, "I ");
-    } else if (level == RETRO_LOG_WARN) {
-        fprintf(out, "W ");
-    } else if (level == RETRO_LOG_ERROR) {
-        fprintf(out, "E ");
-    }
     va_list va;
     va_start(va, fmt);
-    vfprintf(out, fmt, va);
+    if (level == RETRO_LOG_DEBUG) {
+        vlog_d(LOG_CORE, fmt, va);
+    } else if (level == RETRO_LOG_INFO) {
+        vlog_i(LOG_CORE, fmt, va);
+    } else if (level == RETRO_LOG_WARN) {
+        vlog_w(LOG_CORE, fmt, va);
+    } else if (level == RETRO_LOG_ERROR) {
+        vlog_e(LOG_CORE, fmt, va);
+    }
     va_end(va);
 }
 
@@ -113,7 +111,7 @@ static void realloc_buffer_if_needed()
         video_buffer.width = args.output_width;
         video_buffer.height = args.output_height;
         video_buffer.bpp = PIXEL_FORMAT_BPP(pixel_format);
-        fprintf(stderr, "Creating interim buffer of size %ux%u (bpp=%d)\n",
+        log_d(LOG_TAG, "Creating interim buffer of size %ux%u (bpp=%d)\n",
             video_buffer.width, video_buffer.height, video_buffer.bpp);
         video_buffer.pitch = video_buffer.width * video_buffer.bpp;
         video_buffer.size = video_buffer.pitch * video_buffer.height;
@@ -131,7 +129,7 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
     static size_t pp = 0;
     bool dims_changed = false;
     if (pw != width || ph != height || pp != pitch) {
-        fprintf(stderr, "size changed: %ux%u pitch=%zu => %ux%u pitch=%zu\n", pw, ph, pp, width, height, pitch);
+        log_d(LOG_TAG, "size changed: %ux%u pitch=%zu => %ux%u pitch=%zu\n", pw, ph, pp, width, height, pitch);
         pw = width;
         ph = height;
         pp = pitch;
@@ -189,39 +187,43 @@ static void callback_input_poll()
 
 static void dump_env()
 {
-    fprintf(stdout, "----\n");
-    fprintf(stdout, "%s %s (api v.%u)\n",
+    if (args.log_level < LogLevel::LOG_DEBUG) {
+        return;
+    }
+
+    log_d(LOG_TAG, "----\n");
+    log_d(LOG_TAG, "%s %s (api v.%u)\n",
         system_info.library_name, system_info.library_version, api_version);
-    fprintf(stdout, "  extensions: %s\n", system_info.valid_extensions);
+    log_d(LOG_TAG, "  extensions: %s\n", system_info.valid_extensions);
 
     if (content_info) {
-        fprintf(stdout, "  content_info_override:\n");
+        log_d(LOG_TAG, "  content_info_override:\n");
         for (const struct retro_system_content_info_override *info = content_info; info->extensions; info++) {
-            fprintf(stdout, "    %s (need_fullpath=%s)\n",
+            log_d(LOG_TAG, "    %s (need_fullpath=%s)\n",
                 info->extensions,
                 info->need_fullpath ? "true" : "false");
         }
     }
 
     if (subsystem_info) {
-        fprintf(stdout, "  subsystem_info:\n");
+        log_d(LOG_TAG, "  subsystem_info:\n");
         for (const struct retro_subsystem_info *info = subsystem_info; info->ident; info++) {
-            fprintf(stdout, "    %s (%s)\n", info->desc, info->ident);
+            log_d(LOG_TAG, "    %s (%s)\n", info->desc, info->ident);
         }
     }
 
-    fprintf(stdout, "  av_info:\n");
-    fprintf(stdout, "    geometry: %ux%u (aspect_ratio: %.02f)\n",
+    log_d(LOG_TAG, "  av_info:\n");
+    log_d(LOG_TAG, "    geometry: %ux%u (aspect_ratio: %.02f)\n",
         av_info.geometry.base_width,
         av_info.geometry.base_height,
         av_info.geometry.aspect_ratio);
-    fprintf(stdout, "    fps: %.02f\n", av_info.timing.fps);
-    fprintf(stdout, "    sample_rate: %.02f\n", av_info.timing.sample_rate);
-    fprintf(stdout, "    pixel_format: %s\n",
+    log_d(LOG_TAG, "    fps: %.02f\n", av_info.timing.fps);
+    log_d(LOG_TAG, "    sample_rate: %.02f\n", av_info.timing.sample_rate);
+    log_d(LOG_TAG, "    pixel_format: %s\n",
         pixel_format == PIXEL_FORMAT_ARGB8888 ? "ARGB8888" :
         pixel_format == PIXEL_FORMAT_RGB565 ? "RGB565" :
         "UNKNOWN");
-    fprintf(stdout, "----\n");
+    log_d(LOG_TAG, "----\n");
 }
 
 static bool callback_environment_set(unsigned cmd, void *data)
@@ -229,86 +231,58 @@ static bool callback_environment_set(unsigned cmd, void *data)
     switch (cmd) {
     case RETRO_ENVIRONMENT_SET_ROTATION:
         rotation = (Rotation)(*(unsigned *)data);
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_ROTATION: %d\n", rotation);
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_ROTATION: %d\n", rotation);
         break;
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK\n");
         core_options_update_display_callback = ((retro_core_options_update_display_callback *)data)->callback;
         break;
     case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION\n");
         *((unsigned *)data) = 1;
         break;
     case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_CONTROLLER_INFO\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_CONTROLLER_INFO\n");
         ports = (struct retro_controller_info *)data;
         break;
     case RETRO_ENVIRONMENT_GET_LOG_INTERFACE:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_LOG_INTERFACE\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_LOG_INTERFACE\n");
         ((struct retro_log_callback *)data)->log = callback_log;
         break;
     case RETRO_ENVIRONMENT_GET_INPUT_BITMASKS:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_INPUT_BITMASKS\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_INPUT_BITMASKS\n");
         return true;
     case RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION\n");
         *(unsigned *)data = 1;
         break;
     case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL: %d\n", *(unsigned *)data);
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL: %d\n", *(unsigned *)data);
         break;
     case RETRO_ENVIRONMENT_GET_LANGUAGE:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_LANGUAGE\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_LANGUAGE\n");
         *((unsigned *)data) = RETRO_LANGUAGE_ENGLISH;
         break;
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL: {
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL\n");
         const struct retro_core_options_intl *opts = (struct retro_core_options_intl *)data;
         set_core_options(opts->local ? opts->local : opts->us);
         break;
     }
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS\n");
         set_core_options((struct retro_core_option_definition *)data);
         break;
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL\n");
         core_options_v2_intl = *(struct retro_core_options_v2_intl *)data;
         break;
     case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS\n");
         // bool support_achievements = *(bool *)data;
         break;
     case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: {
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS\n");
 
         struct retro_input_descriptor *desc = (struct retro_input_descriptor *)data;
 
@@ -326,21 +300,15 @@ static bool callback_environment_set(unsigned cmd, void *data)
         break;
     }
     case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY\n");
         *(const char **)data = files_system_path();
         break;
     case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY\n");
         *(const char **)data = files_save_path();
         break;
     case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_PIXEL_FORMAT\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_PIXEL_FORMAT\n");
         switch (*(enum retro_pixel_format *)data) {
         case RETRO_PIXEL_FORMAT_XRGB8888:
             pixel_format = PIXEL_FORMAT_ARGB8888;
@@ -350,49 +318,37 @@ static bool callback_environment_set(unsigned cmd, void *data)
             break;
         default:
             pixel_format = PIXEL_FORMAT_UNKNOWN;
-            fprintf(stderr, "Unsupported pixel format: %d\n",
+            log_d(LOG_TAG, "Unsupported pixel format: %d\n",
                 *(enum retro_pixel_format *)data);
             return false;
         }
         realloc_buffer_if_needed();
         break;
     case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO\n");
         av_info = *(struct retro_system_av_info *)data;
         break;
     case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_MEMORY_MAPS\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_MEMORY_MAPS\n");
         // const struct retro_memory_map *maps = (struct retro_memory_map *)data;
         break;
     case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE\n");
         // struct retro_rumble_interface *rumble = (struct retro_rumble_interface *)data;
         return false;
     case RETRO_ENVIRONMENT_GET_VARIABLE: {
         struct retro_variable *var = (struct retro_variable *)data;
         var->value = kvstore_get(&kv_store, var->key);
-        if (args.verbose == VERBOSITY_EXTRA) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE: %s = %s\n", var->key, var->value);
-        }
+        log_v(LOG_TAG, "RETRO_ENVIRONMENT_GET_VARIABLE: %s = %s\n", var->key, var->value);
         variables_updated = false;
         return var->value != NULL;
     }
     case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
-        if (args.verbose == VERBOSITY_EXTRA) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE\n");
-        }
+        log_v(LOG_TAG, "RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE\n");
         *((bool *)data) = variables_updated;
         break;
     case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE:
-        if (args.verbose == VERBOSITY_EXTRA) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE\n");
-        }
+        log_v(LOG_TAG, "RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE\n");
         // 0x01: Enable Video
         // 0x02: Enable Audio
         // 0x04: Use Fast Savestates.
@@ -400,124 +356,88 @@ static bool callback_environment_set(unsigned cmd, void *data)
         *((unsigned *)data) = 0x3;
         break;
     case RETRO_ENVIRONMENT_SET_VARIABLES:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_VARIABLES\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_VARIABLES\n");
         set_variables((struct retro_variable *)data);
         break;
     case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
         subsystem_info = (const struct retro_subsystem_info *)data;
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO\n");
         break;
     case RETRO_ENVIRONMENT_SET_GEOMETRY:
         av_info = *(struct retro_system_av_info *)data;
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_GEOMETRY\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_GEOMETRY\n");
         break;
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: {
         struct retro_core_option_display *display = (struct retro_core_option_display *)data;
-        if (args.verbose == VERBOSITY_EXTRA) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: %s\n", display->key);
-        }
+        log_v(LOG_TAG, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: %s\n", display->key);
         return false;
     }
     case RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE:
         content_info = (const struct retro_system_content_info_override *)data;
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE\n");
         break;
     case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS\n");
         // uint64_t quirks = *(uint64_t *)data;
         break;
     case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE\n");
         // struct retro_disk_control_callback *disk_interface = (struct retro_disk_control_callback *)data;
         break;
     case RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION\n");
         *(unsigned *)data = 0;
         return false;
     case RETRO_ENVIRONMENT_GET_GAME_INFO_EXT:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_GAME_INFO_EXT\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_GAME_INFO_EXT\n");
         *(const struct retro_game_info_ext **)data = game_info_ext;
         break;
     case RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK\n");
         // FIXME
         // struct retro_audio_buffer_status_callback *audio_buffer_status = (struct retro_audio_buffer_status_callback *)data;
         return false;
     case RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY\n");
         // FIXME
         // unsigned latency = *(unsigned *)data;
         return false;
     case RETRO_ENVIRONMENT_GET_VFS_INTERFACE:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_VFS_INTERFACE\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_VFS_INTERFACE\n");
         // FIXME
         // struct retro_vfs_interface_info *vfs = (struct retro_vfs_interface_info *)data;
         return false;
     case RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT\n");
         // FIXME
         // struct retro_savestate_context *savestate = (struct retro_savestate_context *)data;
         return false;
     case RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME\n");
         supports_no_game = *(bool *)data;
         break;
     case RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK\n");
         // struct retro_frame_time_callback *frame_time = (struct retro_frame_time_callback *)data;
         return false;
     case RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY\n");
         *(char **)data = NULL;
         break;
     case RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK\n");
         keyboard_event_callback = ((struct retro_keyboard_callback *)data)->callback;
         break;
     case RETRO_ENVIRONMENT_GET_FASTFORWARDING:
-        if (args.verbose == VERBOSITY_EXTRA) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_FASTFORWARDING\n");
-        }
+        log_v(LOG_TAG, "RETRO_ENVIRONMENT_GET_FASTFORWARDING\n");
         *((bool *)data) = false;
         break;
     case RETRO_ENVIRONMENT_SET_VARIABLE: {
         const struct retro_variable *v = (struct retro_variable *)data;
-        if (args.verbose && v) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_VARIABLE: %s=%s\n", v->key, v->value);
-        } else if (!v) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_VARIABLE: (null)\n");
+        if (v) {
+            log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_VARIABLE: %s=%s\n", v->key, v->value);
+        } else {
+            log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_VARIABLE: (null)\n");
             break;
         }
         set_variables(v, true);
@@ -525,21 +445,15 @@ static bool callback_environment_set(unsigned cmd, void *data)
         break;
     }
     case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE\n");
         disk_ext_interface = (struct retro_disk_control_ext_callback *)data;
         break;
     case RETRO_ENVIRONMENT_GET_PERF_INTERFACE:
-        if (args.verbose) {
-            fprintf(stderr, "RETRO_ENVIRONMENT_GET_PERF_INTERFACE\n");
-        }
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_PERF_INTERFACE\n");
         // struct retro_perf_callback *perf = (struct retro_perf_callback *)data;
         return false;
     default:
-        if (args.verbose) {
-            fprintf(stderr, "W: retro_environment_set(): unrecognized cmd=%1$u (0x%1$x)\n", cmd);
-        }
+        log_w(LOG_TAG, "retro_environment_set(): unrecognized cmd=%1$u (0x%1$x)\n", cmd);
         return false;
     }
 
@@ -582,7 +496,7 @@ static void throttle(bool show_fps)
 
     // Calculate (and optionally display) FPS every second
     if (args.show_fps && now_ms - start_ms >= 1000000.0) {
-        fprintf(stdout, "FPS: %u\n", frame_count);
+        log_d(LOG_TAG, "FPS: %u\n", frame_count);
         frame_count = 0;
         start_ms = now_ms;
     }
@@ -605,7 +519,7 @@ static void clean_up()
 
 static void sigint_handler(int s)
 {
-    fprintf(stderr, "Caught SIGINT, shutting down...\n");
+    log_i(LOG_TAG, "Caught SIGINT, shutting down...\n");
     is_running = false;
 }
 
@@ -654,22 +568,24 @@ static void set_core_options(const struct retro_core_option_definition *option_d
 int main(int argc, const char **argv)
 {
     if (!args_parse(argc, argv, &args, &kv_store)) {
+        log_f(LOG_TAG, "Argument parsing failed\n");
         return 1;
     }
+    log_set_level(args.log_level);
 
     if (!args.rom_path) {
-        fprintf(stderr, "Missing rom path\n");
+        log_f(LOG_TAG, "Missing rom path\n");
         return 1;
     } else if (!args.so_path || access(args.so_path, F_OK) == -1) {
-        fprintf(stderr, "Missing or invalid core\n");
+        log_f(LOG_TAG, "Missing or invalid core\n");
         return 1;
     }
 
     if (args.background) {
-        fprintf(stdout, "Entering background mode...\n");
+        log_i(LOG_TAG, "Entering background mode...\n");
         pid_t pid = fork();
         if (pid < 0) {
-            fprintf(stderr, "fork() failed\n");
+            log_e(LOG_TAG, "fork() failed\n");
             clean_up();
             return 1;
         } else if (pid == 0) {
@@ -678,14 +594,14 @@ int main(int argc, const char **argv)
             freopen("/dev/null", "w", stdout);
             freopen("/dev/null", "w", stderr);
         } else {
-            fprintf(stdout, "Continuing in background as pid %d\n", pid);
+            log_i(LOG_TAG, "Continuing in background as pid %d\n", pid);
             clean_up();
             return 0;
         }
     }
 
     if (!(solib = dlopen(args.so_path, RTLD_NOW))) {
-        fprintf(stderr, "Failed to load libretro core: %s\n", dlerror());
+        log_f(LOG_TAG, "Failed to load libretro core: %s\n", dlerror());
         return 1;
     }
 
@@ -731,28 +647,24 @@ int main(int argc, const char **argv)
     retro_init();
 
     if (!files_load(args.rom_path, args.disable_preloading)) {
-        fprintf(stderr, "Failed to load file '%s'\n", args.rom_path);
-        if (args.verbose) {
-            dump_env();
-        }
+        log_f(LOG_TAG, "Failed to load file '%s'\n", args.rom_path);
+        dump_env();
         clean_up();
         return 1;
     }
 
     if (!retro_load_game(game_info)) {
-        fprintf(stderr, "Failed to load '%s'\n", args.rom_path);
-        if (args.verbose) {
-            dump_env();
-        }
+        log_f(LOG_TAG, "Failed to load '%s'\n", args.rom_path);
+        dump_env();
         clean_up();
         return 1;
     }
-    fprintf(stdout, "Successfully loaded: %s\n", args.rom_path);
+    log_i(LOG_TAG, "Successfully loaded: %s\n", args.rom_path);
 
     retro_get_system_av_info(&av_info);
     reset_audio();
 
-    if (args.verbose) {
+    if (args.log_level >= LogLevel::LOG_DEBUG) {
         dump_env();
         kvstore_dump(&kv_store);
     }

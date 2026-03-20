@@ -16,9 +16,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <SDL.h>
-#include "args.h"
 #include "libretro.h"
+#include "args.h"
+#include "log.h"
 #include "input.h"
+
+#define LOG_TAG "input"
 
 #define MAX_DEVICES           16
 #define LAST_BUTTON_ID        RETRO_DEVICE_ID_JOYPAD_R3
@@ -65,7 +68,7 @@ void input_poll()
     }
 
     if (joy_count != last_joy_count) {
-        fprintf(stderr, "input: Joystick count changed (%d=>%d); reinitializing\n",
+        log_i(LOG_TAG, "Joystick count changed (%d=>%d); reinitializing\n",
             last_joy_count, joy_count);
         deinit_joysticks();
         init_joysticks();
@@ -139,14 +142,14 @@ static void setup_joystick(struct InputDevice *device, SDL_Joystick *joystick)
         device->guid,
         sizeof(device->guid));
     device->name = SDL_JoystickName(device->joystick);
-    fprintf(stderr, "input: Setting up %s (GUID %s)\n", device->name, device->guid);
+    log_i(LOG_TAG, "Setting up %s (GUID %s)\n", device->name, device->guid);
 
     char buffer[512];
     const char *spec = kvstore_get(&args.input_configs, device->guid);
     if (spec) {
         strncpy(buffer, spec, sizeof(buffer) - 1);
     } else {
-        fprintf(stderr, "input: No config found; will use defaults\n");
+        log_i(LOG_TAG, "No config found; will use defaults\n");
         strcpy(buffer, DEFAULT_CONFIG);
     }
 
@@ -180,7 +183,7 @@ static void setup_joystick(struct InputDevice *device, SDL_Joystick *joystick)
         } else if (strcmp(token, "_") == 0 || strcmp(token, "none") == 0) {
             device->emulated_buttons[button_index] = 65535;
         } else {
-            fprintf(stderr, "input: Unrecognized button '%s' in input config for '%s'\n",
+            log_w(LOG_TAG, "Unrecognized button '%s' in input config for '%s'\n",
                 token, device->name);
             device->emulated_buttons[button_index] = 65535;
         }

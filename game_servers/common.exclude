@@ -3,7 +3,6 @@
 *.so.1
 *.a
 *.chm
-*.html
 *.yml
 *.zip
 *.ignore

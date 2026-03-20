@@ -22,8 +22,10 @@
 #include <stdlib.h>
 #include <SDL.h>
 #include "libretro.h"
+#include "log.h"
 #include "audio.h"
 
+#define LOG_TAG "audio"
 #define BUFFER_SIZE  2048
 #define BUFFER_COUNT 3
 
@@ -38,7 +40,7 @@ void audio_init(Audio* audio)
     audio->sync_output = true;
 
     if (SDL_Init(SDL_INIT_AUDIO) < 0) {
-        fprintf(stderr, "audio: init() failed\n");
+        log_e(LOG_TAG, "init() failed\n");
     }
 }
 
@@ -64,7 +66,7 @@ bool audio_start(Audio *audio, int sample_rate, int channel_count)
 
     audio->free_sem = SDL_CreateSemaphore(audio->buffer_count - 1);
     if (!audio->free_sem) {
-        fprintf(stderr, "audio: Couldn't create semaphore\n");
+        log_e(LOG_TAG, "Couldn't create semaphore\n");
         return false;
     }
 
@@ -79,11 +81,11 @@ bool audio_start(Audio *audio, int sample_rate, int channel_count)
     spec.userdata = audio;
 
     if (SDL_OpenAudio(&spec, NULL) < 0) {
-        fprintf(stderr, "audio: Couldn't open SDL audio\n");
+        log_e(LOG_TAG, "Couldn't open SDL audio\n");
         return false;
     }
 
-    fprintf(stderr, "audio: frequency: %dHz; channels: %d; samples: %d\n",
+    log_i(LOG_TAG, "Frequency: %dHz; channels: %d; samples: %d\n",
         spec.freq, spec.channels, spec.samples);
 
     SDL_PauseAudio(false);
