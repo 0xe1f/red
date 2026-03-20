@@ -1,0 +1,14 @@
+ChangeLog
+*.md
+*.txt
+jni/
+platform/gizmondo/
+platform/gp2x/
+platform/linux/
+platform/miyoo/
+platform/opendingux/
+platform/pandora/
+platform/ps2/
+platform/psp/
+platform/win32/
+tools/
