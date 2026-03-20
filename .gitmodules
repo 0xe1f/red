@@ -31,3 +31,6 @@
 [submodule "game_servers/picodrive"]
 	path = game_servers/picodrive
 	url = https://github.com/libretro/picodrive.git
+[submodule "game_servers/dosbox"]
+	path = game_servers/dosbox
+	url = https://github.com/libretro/dosbox-core.git

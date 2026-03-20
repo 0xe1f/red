@@ -74,9 +74,11 @@ static KvStore kv_store = {0};
 static retro_core_options_update_display_callback_t core_options_update_display_callback = NULL;
 static retro_keyboard_event_t keyboard_event_callback = NULL;
 static bool supports_no_game = false;
+static bool variables_updated = false;
+struct retro_disk_control_ext_callback *disk_ext_interface;
 
 static void set_core_options(const struct retro_core_option_definition *option_defs);
-static void set_variables(struct retro_variable *vars);
+static void set_variables(const struct retro_variable *vars, bool single = false);
 
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
@@ -358,10 +360,8 @@ static bool callback_environment_set(unsigned cmd, void *data)
         if (args.verbose) {
             fprintf(stderr, "RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO\n");
         }
-        // FIXME!! this can fire within retro_run()
-        // av_info = *(struct retro_system_av_info *)data;
-        // break;
-        return false;
+        av_info = *(struct retro_system_av_info *)data;
+        break;
     case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
         if (args.verbose) {
             fprintf(stderr, "RETRO_ENVIRONMENT_SET_MEMORY_MAPS\n");
@@ -380,13 +380,14 @@ static bool callback_environment_set(unsigned cmd, void *data)
         if (args.verbose == VERBOSITY_EXTRA) {
             fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE: %s = %s\n", var->key, var->value);
         }
+        variables_updated = false;
         return var->value != NULL;
     }
     case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
         if (args.verbose == VERBOSITY_EXTRA) {
             fprintf(stderr, "RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE\n");
         }
-        *((bool *)data) = false;
+        *((bool *)data) = variables_updated;
         break;
     case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE:
         if (args.verbose == VERBOSITY_EXTRA) {
@@ -505,8 +506,40 @@ static bool callback_environment_set(unsigned cmd, void *data)
         }
         keyboard_event_callback = ((struct retro_keyboard_callback *)data)->callback;
         break;
+    case RETRO_ENVIRONMENT_GET_FASTFORWARDING:
+        if (args.verbose == VERBOSITY_EXTRA) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_FASTFORWARDING\n");
+        }
+        *((bool *)data) = false;
+        break;
+    case RETRO_ENVIRONMENT_SET_VARIABLE: {
+        const struct retro_variable *v = (struct retro_variable *)data;
+        if (args.verbose && v) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_VARIABLE: %s=%s\n", v->key, v->value);
+        } else if (!v) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_VARIABLE: (null)\n");
+            break;
+        }
+        set_variables(v, true);
+        variables_updated = true;
+        break;
+    }
+    case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE:
+        if (args.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE\n");
+        }
+        disk_ext_interface = (struct retro_disk_control_ext_callback *)data;
+        break;
+    case RETRO_ENVIRONMENT_GET_PERF_INTERFACE:
+        if (args.verbose) {
+            fprintf(stderr, "RETRO_ENVIRONMENT_GET_PERF_INTERFACE\n");
+        }
+        // struct retro_perf_callback *perf = (struct retro_perf_callback *)data;
+        return false;
     default:
-        fprintf(stderr, "W: retro_environment_set(): unrecognized cmd=%1$u (0x%1$x)\n", cmd);
+        if (args.verbose) {
+            fprintf(stderr, "W: retro_environment_set(): unrecognized cmd=%1$u (0x%1$x)\n", cmd);
+        }
         return false;
     }
 
@@ -582,7 +615,7 @@ static void reset_audio()
     audio_start(&audio, av_info.timing.sample_rate, 2);
 }
 
-static void set_variables(struct retro_variable *vars)
+static void set_variables(const struct retro_variable *vars, bool single)
 {
     static char value_buf[1024];
     for (const struct retro_variable *v = vars; v->key; v++) {
@@ -601,6 +634,9 @@ static void set_variables(struct retro_variable *vars)
         }
         if (!kvstore_get(&kv_store, v->key)) {
             kvstore_put(&kv_store, v->key, value_buf);
+        }
+        if (single) {
+            break;
         }
     }
 }

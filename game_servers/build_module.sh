@@ -74,6 +74,12 @@ case "$MODULE_NAME" in
         make -f Makefile.libretro && \
             echo "done:picodrive_libretro.so"
         ;;
+    dosbox)
+        cd libretro && \
+            make BUNDLED_AUDIO_CODECS=1 BUNDLED_LIBSNDFILE=1 BUNDLED_SDL=1 WITH_DYNAREC=arm64 deps && \
+            make BUNDLED_AUDIO_CODECS=1 BUNDLED_LIBSNDFILE=1 BUNDLED_SDL=1 WITH_DYNAREC=arm64 -j`nproc` && \
+            echo "done:libretro/dosbox_core_libretro.so"
+        ;;
     *)
         echo "Unknown module: $MODULE_NAME" >&2
         exit 1
