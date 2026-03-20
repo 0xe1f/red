@@ -29,6 +29,8 @@
 extern ArgsOptions args;
 
 static void setup_joystick(struct InputDevice *device, SDL_Joystick *joystick);
+static void init_joysticks();
+static void deinit_joysticks();
 
 struct InputDevice {
     SDL_Joystick *joystick;
@@ -45,20 +47,11 @@ extern struct retro_input_descriptor *input_descriptors;
 
 static struct InputState input_states[MAX_DEVICES] = { 0 };
 static struct InputDevice input_devices[MAX_DEVICES] = { 0 };
-static int device_count = 0;
+static int last_joy_count = 0;
 
 void input_init()
 {
     SDL_InitSubSystem(SDL_INIT_JOYSTICK);
-
-    device_count = SDL_NumJoysticks();
-    if (device_count > MAX_DEVICES) {
-        device_count = MAX_DEVICES;
-    }
-
-    for (int i = 0; i < device_count; i++) {
-        setup_joystick(&input_devices[i], SDL_JoystickOpen(i));
-	}
 	SDL_JoystickEventState(SDL_IGNORE);
 }
 
@@ -66,7 +59,19 @@ void input_poll()
 {
     SDL_JoystickUpdate();
 
-    for (int joy = 0; joy < device_count; joy++) {
+    int joy_count = SDL_NumJoysticks();
+    if (joy_count > MAX_DEVICES) {
+        joy_count = MAX_DEVICES;
+    }
+
+    if (joy_count != last_joy_count) {
+        fprintf(stderr, "input: Joystick count changed (%d=>%d); reinitializing\n",
+            last_joy_count, joy_count);
+        deinit_joysticks();
+        init_joysticks();
+    }
+
+    for (int joy = 0; joy < joy_count; joy++) {
         const struct InputDevice *device = &input_devices[joy];
         SDL_Joystick *joystick = device->joystick;
 
@@ -87,6 +92,7 @@ void input_poll()
             }
         }
     }
+    last_joy_count = joy_count;
 }
 
 int16_t callback_input_state(unsigned port, unsigned device, unsigned index, unsigned id)
@@ -121,12 +127,7 @@ int16_t callback_input_state(unsigned port, unsigned device, unsigned index, uns
 
 void input_clean_up()
 {
-    for (int i = 0; i < device_count; i++) {
-        if (input_devices[i].joystick) {
-            SDL_JoystickClose(input_devices[i].joystick);
-            input_devices[i].joystick = NULL;
-        }
-    }
+    deinit_joysticks();
     SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
 }
 
@@ -187,5 +188,31 @@ static void setup_joystick(struct InputDevice *device, SDL_Joystick *joystick)
     }
     for (; button_index < EMULATED_BUTTON_COUNT; button_index++) {
         device->emulated_buttons[button_index] = 65535;
+    }
+}
+
+static void init_joysticks()
+{
+    int joy_count = SDL_NumJoysticks();
+    if (joy_count > MAX_DEVICES) {
+        joy_count = MAX_DEVICES;
+    }
+
+    for (int i = 0; i < joy_count; i++) {
+        setup_joystick(&input_devices[i], SDL_JoystickOpen(i));
+    }
+}
+
+static void deinit_joysticks()
+{
+    for (int i = 0; i < MAX_DEVICES; i++) {
+        struct InputDevice *device = &input_devices[i];
+        if (device->joystick) {
+            SDL_JoystickClose(device->joystick);
+            device->joystick = NULL;
+            device->name = NULL;
+            device->guid[0] = '\0';
+            memset(device->emulated_buttons, 0, sizeof(device->emulated_buttons));
+        }
     }
 }
