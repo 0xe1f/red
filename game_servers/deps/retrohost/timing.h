@@ -12,22 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __INPUT_H__
-#define __INPUT_H__
+#ifndef __TIMING_H__
+#define __TIMING_H__
 
-#include <stdint.h>
+double micros();
+unsigned int timing_fps();
+void timing_throttle(double target_fps);
 
-typedef struct {
-    unsigned long delay_ms;
-    unsigned long duration_ms;
-    unsigned int keycode;
-} DeferredKeypress;
-
-void input_init();
-void input_poll();
-void input_clean_up();
-int16_t callback_input_state(unsigned port, unsigned device, unsigned index, unsigned id);
-bool input_parse_deferred_keypress(const char *spec, DeferredKeypress *out);
-void input_schedule_keypress(const DeferredKeypress *keypress);
-
-#endif // __INPUT_H__
+#endif // __TIMING_H__

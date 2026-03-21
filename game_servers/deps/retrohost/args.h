@@ -17,6 +17,7 @@
 
 #include "kv_store.h"
 #include "video.h"
+#include "input.h"
 #include "log.h"
 
 typedef struct {
@@ -34,6 +35,7 @@ typedef struct {
     ScaleMode scale_mode;
     bool disable_preloading;
     KvStore input_configs;
+    DeferredKeypress *autopress;
 } ArgsOptions;
 
 bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_store);

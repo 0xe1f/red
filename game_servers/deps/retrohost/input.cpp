@@ -19,6 +19,7 @@
 #include "libretro.h"
 #include "args.h"
 #include "log.h"
+#include "timing.h"
 #include "input.h"
 
 #define LOG_TAG "input"
@@ -30,6 +31,7 @@
 #define DEFAULT_CONFIG        "y,x,l,b,a,r,start,select,l2,r2,l3,r3"
 
 extern ArgsOptions args;
+extern retro_keyboard_event_t keyboard_event_callback;
 
 static void setup_joystick(struct InputDevice *device, SDL_Joystick *joystick);
 static void init_joysticks();
@@ -51,6 +53,9 @@ extern struct retro_input_descriptor *input_descriptors;
 static struct InputState input_states[MAX_DEVICES] = { 0 };
 static struct InputDevice input_devices[MAX_DEVICES] = { 0 };
 static int last_joy_count = 0;
+static double press_us = 0;
+static double release_us = 0;
+static unsigned int keycode = 0;
 
 void input_init()
 {
@@ -60,6 +65,17 @@ void input_init()
 
 void input_poll()
 {
+    double now_us = micros();
+    if (press_us > 0 && now_us >= press_us) {
+        log_d(LOG_TAG, "Autopress: pressing keycode %d\n", keycode);
+        keyboard_event_callback(true, keycode, 0, 0);
+        press_us = 0;
+    } else if (release_us > 0 && now_us >= release_us) {
+        log_d(LOG_TAG, "Autopress: releasing keycode %d\n", keycode);
+        keyboard_event_callback(false, keycode, 0, 0);
+        release_us = 0;
+    }
+
     SDL_JoystickUpdate();
 
     int joy_count = SDL_NumJoysticks();
@@ -108,6 +124,9 @@ int16_t callback_input_state(unsigned port, unsigned device, unsigned index, uns
     unsigned short ret = 0;
 
     switch (device) {
+        case RETRO_DEVICE_KEYBOARD:
+            // log_d(LOG_TAG, "keycode %d\n", id);
+            break;
         case RETRO_DEVICE_JOYPAD:
             switch (id) {
                 case RETRO_DEVICE_ID_JOYPAD_MASK:
@@ -132,6 +151,57 @@ void input_clean_up()
 {
     deinit_joysticks();
     SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
+}
+
+bool input_parse_deferred_keypress(const char *spec, DeferredKeypress *out)
+{
+    if (strlen(spec) >= 512) {
+        return false;
+    }
+
+    char buffer[512];
+    strncpy(buffer, spec, sizeof(buffer) - 1);
+    char *token = strtok(buffer, ":");
+    if (!token) {
+        log_e(LOG_TAG, "Missing delay\n");
+        return false;
+    }
+    out->delay_ms = (unsigned long)(atof(token) * 1000);
+
+    token = strtok(NULL, ":");
+    if (!token) {
+        log_e(LOG_TAG, "Missing keycode\n");
+        return false;
+    }
+    out->keycode = atoi(token);
+    if (out->keycode <= 0) {
+        log_e(LOG_TAG, "Invalid keycode: %d\n", out->keycode);
+        return false;
+    }
+
+    token = strtok(NULL, ":");
+    if (!token) {
+        log_e(LOG_TAG, "Missing duration\n");
+        return false;
+    }
+    out->duration_ms = (unsigned long)(atof(token) * 1000);
+
+    if (out->duration_ms == 0) {
+        log_e(LOG_TAG, "Duration must be greater than 0\n");
+        return false;
+    }
+
+    return true;
+}
+
+void input_schedule_keypress(const DeferredKeypress *keypress)
+{
+    double now_us = micros();
+    press_us = now_us + keypress->delay_ms * 1000;
+    release_us = press_us + keypress->duration_ms * 1000;
+    keycode = keypress->keycode;
+    fprintf(stderr, "Scheduled autopress of keycode %d in %lu ms for duration %lu ms\n",
+        keycode, keypress->delay_ms, keypress->duration_ms);
 }
 
 static void setup_joystick(struct InputDevice *device, SDL_Joystick *joystick)

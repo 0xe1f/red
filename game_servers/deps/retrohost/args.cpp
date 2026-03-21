@@ -41,6 +41,7 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
     opts->background = false;
     opts->show_fps = false;
     char temp[1024];
+    static DeferredKeypress dk;
     for (i = 1, arg = argv + 1; i < argc; i++, arg++) {
         if (strcmp(*arg, "--help") == 0 || strcmp(*arg, "-h") == 0) {
             args_usage(*argv);
@@ -178,6 +179,16 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
             opts->log_path = *(++arg);
         } else if (strcmp(*arg, "--output-overwrite") == 0 || strcmp(*arg, "-oo") == 0) {
             opts->log_overwrite = true;
+        } else if (strcmp(*arg, "--autopress") == 0 || strcmp(*arg, "-ap") == 0) {
+            if (++i >= argc) {
+                log_e(LOG_TAG, "Missing argument for %s\n", *arg);
+                return false;
+            }
+            if (!input_parse_deferred_keypress(*(++arg), &dk)) {
+                log_e(LOG_TAG, "Invalid autopress spec: '%s'\n", *arg);
+                return false;
+            }
+            opts->autopress = &dk;
         } else if (**arg == '-') {
             log_e(LOG_TAG, "Unrecognized switch: %s\n", *arg);
             return false;

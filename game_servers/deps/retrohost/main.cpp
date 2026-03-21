@@ -19,9 +19,6 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>
-#include <time.h>
-#include <unistd.h>
 #include "libretro.h"
 #include "audio.h"
 #include "rgbserver.h"
@@ -30,6 +27,7 @@
 #include "video.h"
 #include "input.h"
 #include "log.h"
+#include "timing.h"
 
 static void *solib = NULL;
 
@@ -66,6 +64,7 @@ Rotation rotation = ROTATE_NONE;
 unsigned char pixel_format = PIXEL_FORMAT_UNKNOWN; // default is 1555
 struct retro_input_descriptor *input_descriptors = NULL;
 ArgsOptions args;
+retro_keyboard_event_t keyboard_event_callback = NULL;
 
 static unsigned int api_version = 0;
 static struct retro_controller_info *ports;
@@ -76,7 +75,6 @@ static struct FrameGeometry geometry;
 static bool is_running = true;
 static KvStore kv_store = {0};
 static retro_core_options_update_display_callback_t core_options_update_display_callback = NULL;
-static retro_keyboard_event_t keyboard_event_callback = NULL;
 static bool supports_no_game = false;
 static bool variables_updated = false;
 struct retro_disk_control_ext_callback *disk_ext_interface;
@@ -135,6 +133,10 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
         ph = height;
         pp = pitch;
         dims_changed = true;
+        if (video_buffer.data) {
+            // clear buffer to avoid artifacts when size changes
+            memset(video_buffer.data, 0, video_buffer.size);
+        }
     }
 
     if (video_buffer.data && geometry.bitmap_width == 0) {
@@ -461,48 +463,6 @@ static bool callback_environment_set(unsigned cmd, void *data)
     return true;
 }
 
-static double nanos()
-{
-    struct timeval tp;
-    gettimeofday(&tp, NULL);
-    return tp.tv_sec * 1000000.0 + tp.tv_usec;
-}
-
-static void throttle(bool show_fps)
-{
-    if (av_info.timing.fps <= 0.01) {
-        return;
-    }
-
-    double now_ms = nanos();
-    static uint32_t frame_count = 0;
-    frame_count++;
-    static double start_ms = 0;
-    static double next_frame_ms = 0;
-    double target_frame_time_ms = 1000000.0 / (av_info.timing.fps);
-
-    if (next_frame_ms <= 0) {
-        next_frame_ms = now_ms + target_frame_time_ms;
-    } else {
-        if (now_ms < next_frame_ms) {
-            usleep((int)(next_frame_ms - now_ms));
-            now_ms = nanos();
-        }
-
-        while (next_frame_ms <= now_ms) {
-            next_frame_ms += target_frame_time_ms;
-        }
-    }
-    now_ms = nanos();
-
-    // Calculate (and optionally display) FPS every second
-    if (args.show_fps && now_ms - start_ms >= 1000000.0) {
-        log_d(LOG_TAG, "FPS: %u\n", frame_count);
-        frame_count = 0;
-        start_ms = now_ms;
-    }
-}
-
 static void clean_up()
 {
     rgbs_end();
@@ -689,11 +649,22 @@ int main(int argc, const char **argv)
     }
 
     input_init();
+    if (args.autopress) {
+        input_schedule_keypress(args.autopress);
+    }
 
     signal(SIGINT, sigint_handler);
     while (is_running) {
         retro_run();
-        throttle(true);
+        timing_throttle(av_info.timing.fps);
+        if (args.show_fps) {
+            static double last_us = 0;
+            double current_us = micros();
+            if (current_us - last_us >= 1000000.0) {
+                log_i(LOG_TAG, "FPS: %u\n", timing_fps());
+                last_us = current_us;
+            }
+        }
     }
 
     retro_unload_game();

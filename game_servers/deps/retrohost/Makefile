@@ -17,7 +17,8 @@ LIB7Z_ROOT=lib7z
 UN7Z_ROOT=un7z
 LIBRETRO_ROOT=libretro-common
 RGBSERVER_ROOT=../rgbserver
-INCLUDE=-I$(LIBRETRO_ROOT)/include \
+INCLUDE=\
+	-I$(LIBRETRO_ROOT)/include \
 	-I$(MINIZIP_ROOT) \
 	-I$(LIB7Z_ROOT) \
 	-I$(UN7Z_ROOT) \
@@ -30,7 +31,8 @@ EXE=rh
 
 all: $(EXE)
 
-$(EXE): kv_store.o args.o files.o video.o input.o audio.o main.o log.o \
+$(EXE): \
+	kv_store.o args.o files.o video.o input.o audio.o log.o timing.o main.o \
 	$(MINIZIP_ROOT)/unzip.o $(MINIZIP_ROOT)/ioapi.o \
 	$(UN7Z_ROOT)/un7z.o \
 	$(LIB7Z_ROOT)/7zStream.o $(LIB7Z_ROOT)/7zCrc.o $(LIB7Z_ROOT)/7zArcIn.o \
