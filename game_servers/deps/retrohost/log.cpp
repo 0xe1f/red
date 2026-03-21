@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <stdarg.h>
+#include <unistd.h>
 #include "log.h"
 
 #define KRED  "\x1B[31m"
@@ -27,8 +28,18 @@ static FILE *log_file = stderr;
 
 static LogLevel current_level = LogLevel::LOG_INFO;
 static bool enable_color = false;
+static int pid = 0;
 
 static void vlog(const char *tag, LogLevel level, const char *fmt, va_list args);
+
+void log_set_fd(FILE *fd)
+{
+    if (fd == NULL) {
+        log_file = stderr;
+    } else {
+        log_file = fd;
+    }
+}
 
 void log_set_color(bool enable)
 {
@@ -133,6 +144,10 @@ static void vlog(const char *tag, LogLevel level, const char *fmt, va_list args)
     time_t now = time(NULL);
     struct tm tm = *localtime(&now);
 
+    if (pid == 0) {
+        pid = getpid();
+    }
+
     const char *lname;
     switch (level) {
         case LOG_VERBOSE: lname = "V"; break;
@@ -153,9 +168,10 @@ static void vlog(const char *tag, LogLevel level, const char *fmt, va_list args)
     }
 
     fprintf(log_file,
-        "%d-%02d-%02d %02d:%02d:%02d %s %-8s ",
+        "%d-%02d-%02d %02d:%02d:%02d %8d %s %-8s ",
         tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
         tm.tm_hour, tm.tm_min, tm.tm_sec,
+        pid,
         lname,
         tag);
     vfprintf(log_file, fmt, args);
@@ -163,4 +179,5 @@ static void vlog(const char *tag, LogLevel level, const char *fmt, va_list args)
     if (enable_color) {
         fprintf(log_file, KNRM);
     }
+    fflush(log_file);
 }

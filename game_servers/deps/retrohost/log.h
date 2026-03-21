@@ -24,6 +24,7 @@ enum LogLevel {
     LOG_VERBOSE = 5
 };
 
+void log_set_fd(FILE *fd);
 void log_set_color(bool enable);
 void log_set_level(LogLevel level);
 void vlog_d(const char *tag, const char *fmt, va_list args);

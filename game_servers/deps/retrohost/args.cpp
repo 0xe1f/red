@@ -37,6 +37,9 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
     opts->max_clients = -1;
     opts->scale_mode = SCALE_MODE_NONE;
     opts->log_level = LOG_INFO;
+    opts->log_overwrite = false;
+    opts->background = false;
+    opts->show_fps = false;
     char temp[1024];
     for (i = 1, arg = argv + 1; i < argc; i++, arg++) {
         if (strcmp(*arg, "--help") == 0 || strcmp(*arg, "-h") == 0) {
@@ -167,6 +170,14 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
             strncpy(temp, value, sep - value);
             temp[sep - value] = '\0';
             kvstore_put(&opts->input_configs, temp, sep + 1);
+        } else if (strcmp(*arg, "--output") == 0 || strcmp(*arg, "-o") == 0) {
+            if (++i >= argc) {
+                log_e(LOG_TAG, "Missing argument for %s\n", *arg);
+                return false;
+            }
+            opts->log_path = *(++arg);
+        } else if (strcmp(*arg, "--output-overwrite") == 0 || strcmp(*arg, "-oo") == 0) {
+            opts->log_overwrite = true;
         } else if (**arg == '-') {
             log_e(LOG_TAG, "Unrecognized switch: %s\n", *arg);
             return false;

@@ -80,6 +80,7 @@ static retro_keyboard_event_t keyboard_event_callback = NULL;
 static bool supports_no_game = false;
 static bool variables_updated = false;
 struct retro_disk_control_ext_callback *disk_ext_interface;
+static FILE *log_file = NULL;
 
 static void set_core_options(const struct retro_core_option_definition *option_defs);
 static void set_variables(const struct retro_variable *vars, bool single = false);
@@ -515,6 +516,10 @@ static void clean_up()
     input_clean_up();
     audio_cleanup(&audio);
     args_free(&args);
+    if (log_file) {
+        fclose(log_file);
+        log_file = NULL;
+    }
 }
 
 static void sigint_handler(int s)
@@ -585,7 +590,7 @@ int main(int argc, const char **argv)
         log_i(LOG_TAG, "Entering background mode...\n");
         pid_t pid = fork();
         if (pid < 0) {
-            log_e(LOG_TAG, "fork() failed\n");
+            log_f(LOG_TAG, "fork() failed\n");
             clean_up();
             return 1;
         } else if (pid == 0) {
@@ -598,6 +603,20 @@ int main(int argc, const char **argv)
             clean_up();
             return 0;
         }
+    }
+
+    if (args.log_path) {
+        FILE *f = fopen(args.log_path, args.log_overwrite ? "w" : "a");
+        if (!f) {
+            log_f(LOG_TAG, "Failed to open log file '%s'\n", args.log_path);
+            clean_up();
+            return 1;
+        }
+        log_file = f;
+        log_set_fd(f);
+
+        log_i(LOG_TAG, "%s output to '%s'\n",
+            args.log_overwrite ? "Writing" : "Appending", args.log_path);
     }
 
     if (!(solib = dlopen(args.so_path, RTLD_NOW))) {

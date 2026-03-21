@@ -5,8 +5,6 @@ wiki/
 builds/
 sdl/
 *.yml
-LICENSE.txt
-HISTORY.txt
 Makefile.gc
 Makefile.gc.low-mem
 Makefile.wii

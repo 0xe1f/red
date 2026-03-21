@@ -19,10 +19,10 @@ set -o pipefail
 
 echo "Launching $APP_ID/$TITLE_ID..." >> log.txt
 
-SO_FILE=`find $APP_ID/ -maxdepth 1 -name '*_libretro.so'`
+SO_FILE=`find $APP_ID/ -maxdepth 1 -type f -name '*_libretro.so'`
 if [ -f "$SO_FILE" ]; then
     echo "Found core: $SO_FILE..." >> log.txt
-    ROM_PATH="$(find -L $APP_ID/roms -name "$TITLE_ID.*" | head -1)"
+    ROM_PATH="$(find -L $APP_ID/roms -maxdepth 1 -type f -name "$TITLE_ID.*" | head -1)"
     shift
     if [ -z "$ROM_PATH" ]; then
         echo "No ROM file found for $TITLE_ID" >> log.txt

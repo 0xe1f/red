@@ -23,6 +23,8 @@ typedef struct {
     const char *rom_path;
     const char *so_path;
     const char *bios_path;
+    const char *log_path;
+    bool log_overwrite;
     bool background;
     bool show_fps;
     int max_clients;

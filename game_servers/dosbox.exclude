@@ -1,0 +1,6 @@
+*.rc
+/docs/
+/scripts/
+/visualc_net/
+/platform/
+/libretro/jni/
