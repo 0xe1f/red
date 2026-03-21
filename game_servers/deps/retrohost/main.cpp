@@ -622,7 +622,7 @@ int main(int argc, const char **argv)
     // size_t retro_get_memory_size(unsigned id)
     // void retro_cheat_reset(void)
     // void retro_cheat_set(unsigned index, bool enabled, const char *code)
-    
+
     retro_init();
 
     if (!files_load(args.rom_path, args.disable_preloading)) {
@@ -633,7 +633,7 @@ int main(int argc, const char **argv)
     }
 
     if (!retro_load_game(game_info)) {
-        log_f(LOG_TAG, "Failed to load '%s'\n", args.rom_path);
+        log_f(LOG_TAG, "Core returned error while loading '%s'\n", args.rom_path);
         dump_env();
         clean_up();
         return 1;

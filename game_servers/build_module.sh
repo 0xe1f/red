@@ -20,11 +20,6 @@ case "$MODULE_NAME" in
         make && \
                 echo "done:src/chocolate-doom src/chocolate-heretic src/chocolate-hexen src/chocolate-strife launch.sh stop.sh"
         ;;
-    wolf4sdl)
-        touch version.h && make CONFIG=config.ssw RGBS_DIR=../deps/rgbserver && \
-            touch version.h && make CONFIG=config.sss RGBS_DIR=../deps/rgbserver && \
-            echo "done:wolf3d spear launch.sh stop.sh"
-        ;;
     fbneo)
         cd src/burner/libretro/ && make && \
             echo "done:src/burner/libretro/fbneo_libretro.so"
