@@ -43,11 +43,11 @@ $(EXE): \
 	$(RGBSERVER_ROOT)/rgbserver.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-%.o: %.cpp
-	$(CXX) $(INCLUDE) $(DEFINE) $(CXXFLAGS) -c $< -o $@
-
 %.o: %.c
 	$(CC) $(INCLUDE) $(DEFINE) $(CFLAGS) -c $< -o $@
+
+%.o: %.cpp
+	$(CXX) $(INCLUDE) $(DEFINE) $(CXXFLAGS) -c $< -o $@
 
 clean:
 	@rm -rf *.o $(EXE)

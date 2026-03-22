@@ -33,16 +33,16 @@
 extern ArgsOptions args;
 extern retro_keyboard_event_t keyboard_event_callback;
 
-static void setup_joystick(struct InputDevice *device, SDL_Joystick *joystick);
-static void init_joysticks();
-static void deinit_joysticks();
-
 struct InputDevice {
     SDL_Joystick *joystick;
     unsigned short emulated_buttons[EMULATED_BUTTON_COUNT];
     char guid[33];
     const char *name;
 };
+
+static void setup_joystick(struct InputDevice *device, SDL_Joystick *joystick);
+static void init_joysticks();
+static void deinit_joysticks();
 
 struct InputState {
     bool input_ids[LAST_BUTTON_ID + 1];

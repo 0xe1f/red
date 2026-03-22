@@ -15,14 +15,16 @@
 #ifndef __LOG_H__
 #define __LOG_H__
 
-enum LogLevel {
+#include <stdbool.h>
+
+typedef enum {
     LOG_FATAL   = 0,
     LOG_ERROR   = 1,
     LOG_WARN    = 2,
     LOG_INFO    = 3,
     LOG_DEBUG   = 4,
     LOG_VERBOSE = 5
-};
+} LogLevel;
 
 void log_set_fd(FILE *fd);
 void log_set_color(bool enable);

@@ -19,6 +19,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "libretro.h"
 #include "audio.h"
 #include "rgbserver.h"
@@ -81,7 +82,7 @@ struct retro_disk_control_ext_callback *disk_ext_interface;
 static FILE *log_file = NULL;
 
 static void set_core_options(const struct retro_core_option_definition *option_defs);
-static void set_variables(const struct retro_variable *vars, bool single = false);
+static void set_variables(const struct retro_variable *vars, bool single);
 
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
@@ -190,7 +191,7 @@ static void callback_input_poll()
 
 static void dump_env()
 {
-    if (args.log_level < LogLevel::LOG_DEBUG) {
+    if (args.log_level < LOG_DEBUG) {
         return;
     }
 
@@ -238,7 +239,7 @@ static bool callback_environment_set(unsigned cmd, void *data)
         break;
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK\n");
-        core_options_update_display_callback = ((retro_core_options_update_display_callback *)data)->callback;
+        core_options_update_display_callback = ((struct retro_core_options_update_display_callback *)data)->callback;
         break;
     case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION\n");
@@ -360,7 +361,7 @@ static bool callback_environment_set(unsigned cmd, void *data)
         break;
     case RETRO_ENVIRONMENT_SET_VARIABLES:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_VARIABLES\n");
-        set_variables((struct retro_variable *)data);
+        set_variables((struct retro_variable *)data, false);
         break;
     case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
         subsystem_info = (const struct retro_subsystem_info *)data;
@@ -455,6 +456,11 @@ static bool callback_environment_set(unsigned cmd, void *data)
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_PERF_INTERFACE\n");
         // struct retro_perf_callback *perf = (struct retro_perf_callback *)data;
         return false;
+    case RETRO_ENVIRONMENT_SHUTDOWN:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SHUTDOWN\n");
+        log_f(LOG_TAG, "Shutdown requested by core\n");
+        is_running = false;
+        break;
     default:
         log_w(LOG_TAG, "retro_environment_set(): unrecognized cmd=%1$u (0x%1$x)\n", cmd);
         return false;
@@ -522,7 +528,7 @@ static void set_variables(const struct retro_variable *vars, bool single)
 
 static void set_core_options(const struct retro_core_option_definition *option_defs)
 {
-    for (const retro_core_option_definition *def = option_defs; def->key; def++) {
+    for (const struct retro_core_option_definition *def = option_defs; def->key; def++) {
         // Don't override existing values
         if (def->default_value && !kvstore_get(&kv_store, def->key)) {
             kvstore_put(&kv_store, def->key, def->default_value);
@@ -643,7 +649,7 @@ int main(int argc, const char **argv)
     retro_get_system_av_info(&av_info);
     reset_audio();
 
-    if (args.log_level >= LogLevel::LOG_DEBUG) {
+    if (args.log_level >= LOG_DEBUG) {
         dump_env();
         kvstore_dump(&kv_store);
     }

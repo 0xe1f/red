@@ -15,30 +15,30 @@
 #ifndef __VIDEO_H__
 #define __VIDEO_H__
 
-enum Rotation {
+typedef enum {
     ROTATE_NONE   = 0,
     ROTATE_CCW90  = 1,
     ROTATE_CCW180 = 2,
     ROTATE_CCW270 = 3
-};
+} Rotation;
 
 #define IS_LANDSCAPE(rot) (((rot)&1) == 0)
 #define IS_PORTRAIT(rot)  (((rot)&1) != 0)
 
-enum ScaleMode {
+typedef enum {
     SCALE_MODE_NONE            = 0,
     SCALE_MODE_SHORTESTXASPECT = 1,
     SCALE_MODE_FIT             = 2,
     SCALE_MODE_HALF            = 3
-};
+} ScaleMode;
 
 typedef struct {
     void *data;
-    unsigned short width = 0;
-    unsigned short height = 0;
-    unsigned short bpp = 0;
-    unsigned short pitch = 0;
-    unsigned int size = 0;
+    unsigned short width;
+    unsigned short height;
+    unsigned short bpp;
+    unsigned short pitch;
+    unsigned int size;
 } VideoBuffer;
 
 void blit(

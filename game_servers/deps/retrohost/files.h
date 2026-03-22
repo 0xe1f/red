@@ -18,7 +18,7 @@
 const char* files_system_path();
 const char* files_save_path();
 
-bool files_load(const char *path, bool disable_preloading = false);
+bool files_load(const char *path, bool disable_preloading);
 void files_mkdirs(const char *base_path);
 void files_clean_up();
 

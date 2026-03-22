@@ -10,6 +10,7 @@ typedef signed int			INT32;
 typedef unsigned long long	UINT64;
 typedef long long			INT64;
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 

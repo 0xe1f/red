@@ -24,9 +24,9 @@
 #define KBLU  "\x1B[34m"
 #define KNRM  "\x1B[0m"
 
-static FILE *log_file = stderr;
+static FILE *log_file = NULL;
 
-static LogLevel current_level = LogLevel::LOG_INFO;
+static LogLevel current_level = LOG_INFO;
 static bool enable_color = false;
 static int pid = 0;
 
@@ -34,11 +34,7 @@ static void vlog(const char *tag, LogLevel level, const char *fmt, va_list args)
 
 void log_set_fd(FILE *fd)
 {
-    if (fd == NULL) {
-        log_file = stderr;
-    } else {
-        log_file = fd;
-    }
+    log_file = fd;
 }
 
 void log_set_color(bool enable)
@@ -53,88 +49,88 @@ void log_set_level(LogLevel level)
 
 void vlog_d(const char *tag, const char *fmt, va_list args)
 {
-    if (current_level >= LogLevel::LOG_DEBUG) {
-        vlog(tag, LogLevel::LOG_DEBUG, fmt, args);
+    if (current_level >= LOG_DEBUG) {
+        vlog(tag, LOG_DEBUG, fmt, args);
     }
 }
 
 void vlog_i(const char *tag, const char *fmt, va_list args)
 {
-    if (current_level >= LogLevel::LOG_INFO) {
-        vlog(tag, LogLevel::LOG_INFO, fmt, args);
+    if (current_level >= LOG_INFO) {
+        vlog(tag, LOG_INFO, fmt, args);
     }
 }
 
 void vlog_w(const char *tag, const char *fmt, va_list args)
 {
-    if (current_level >= LogLevel::LOG_WARN) {
-        vlog(tag, LogLevel::LOG_WARN, fmt, args);
+    if (current_level >= LOG_WARN) {
+        vlog(tag, LOG_WARN, fmt, args);
     }
 }
 
 void vlog_e(const char *tag, const char *fmt, va_list args)
 {
-    if (current_level >= LogLevel::LOG_ERROR) {
-        vlog(tag, LogLevel::LOG_ERROR, fmt, args);
+    if (current_level >= LOG_ERROR) {
+        vlog(tag, LOG_ERROR, fmt, args);
     }
 }
 
 void log_v(const char *tag, const char *fmt, ...)
 {
-    if (current_level >= LogLevel::LOG_VERBOSE) {
+    if (current_level >= LOG_VERBOSE) {
         va_list va;
         va_start(va, fmt);
-        vlog(tag, LogLevel::LOG_VERBOSE, fmt, va);
+        vlog(tag, LOG_VERBOSE, fmt, va);
         va_end(va);
     }
 }
 
 void log_d(const char *tag, const char *fmt, ...)
 {
-    if (current_level >= LogLevel::LOG_DEBUG) {
+    if (current_level >= LOG_DEBUG) {
         va_list va;
         va_start(va, fmt);
-        vlog(tag, LogLevel::LOG_DEBUG, fmt, va);
+        vlog(tag, LOG_DEBUG, fmt, va);
         va_end(va);
     }
 }
 
 void log_i(const char *tag, const char *fmt, ...)
 {
-    if (current_level >= LogLevel::LOG_INFO) {
+    if (current_level >= LOG_INFO) {
         va_list va;
         va_start(va, fmt);
-        vlog(tag, LogLevel::LOG_INFO, fmt, va);
+        vlog(tag, LOG_INFO, fmt, va);
         va_end(va);
     }
 }
 
 void log_w(const char *tag, const char *fmt, ...)
 {
-    if (current_level >= LogLevel::LOG_WARN) {
+    if (current_level >= LOG_WARN) {
         va_list va;
         va_start(va, fmt);
-        vlog(tag, LogLevel::LOG_WARN, fmt, va);
+        vlog(tag, LOG_WARN, fmt, va);
         va_end(va);
     }
 }
 
 void log_e(const char *tag, const char *fmt, ...)
 {
-    if (current_level >= LogLevel::LOG_ERROR) {
+    if (current_level >= LOG_ERROR) {
         va_list va;
         va_start(va, fmt);
-        vlog(tag, LogLevel::LOG_ERROR, fmt, va);
+        vlog(tag, LOG_ERROR, fmt, va);
         va_end(va);
     }
 }
 
 void log_f(const char *tag, const char *fmt, ...)
 {
-    if (current_level >= LogLevel::LOG_FATAL) {
+    if (current_level >= LOG_FATAL) {
         va_list va;
         va_start(va, fmt);
-        vlog(tag, LogLevel::LOG_FATAL, fmt, va);
+        vlog(tag, LOG_FATAL, fmt, va);
         va_end(va);
     }
 }
@@ -159,25 +155,26 @@ static void vlog(const char *tag, LogLevel level, const char *fmt, va_list args)
         default:          lname = "?"; break;
     }
 
+    FILE *fd = log_file ? log_file : stderr;
     if (enable_color) {
         switch(level) {
-            case LOG_WARN: fprintf(log_file, KYEL); break;
-            case LOG_ERROR: fprintf(log_file, KRED); break;
+            case LOG_WARN: fprintf(fd, KYEL); break;
+            case LOG_ERROR: fprintf(fd, KRED); break;
             default: break;
         }
     }
 
-    fprintf(log_file,
+    fprintf(fd,
         "%d-%02d-%02d %02d:%02d:%02d %8d %s %-8s ",
         tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
         tm.tm_hour, tm.tm_min, tm.tm_sec,
         pid,
         lname,
         tag);
-    vfprintf(log_file, fmt, args);
+    vfprintf(fd, fmt, args);
 
     if (enable_color) {
-        fprintf(log_file, KNRM);
+        fprintf(fd, KNRM);
     }
-    fflush(log_file);
+    fflush(fd);
 }
