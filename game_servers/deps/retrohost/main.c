@@ -233,57 +233,138 @@ static void dump_env()
 static bool callback_environment_set(unsigned cmd, void *data)
 {
     switch (cmd) {
-    case RETRO_ENVIRONMENT_SET_ROTATION:
-        rotation = (Rotation)(*(unsigned *)data);
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_ROTATION: %d\n", rotation);
+    case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE:
+        log_v(LOG_TAG, "RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE\n");
+        // 0x01: Enable Video
+        // 0x02: Enable Audio
+        // 0x04: Use Fast Savestates.
+        // 0x08: Hard Disable Audio
+        *((unsigned *)data) = 0x3;
         break;
-    case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK\n");
-        core_options_update_display_callback = ((struct retro_core_options_update_display_callback *)data)->callback;
+    case RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY\n");
+        *(char **)data = NULL;
         break;
     case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION\n");
         *((unsigned *)data) = 1;
         break;
-    case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_CONTROLLER_INFO\n");
-        ports = (struct retro_controller_info *)data;
+    case RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION\n");
+        *(unsigned *)data = 0;
+        return false;
+    case RETRO_ENVIRONMENT_GET_FASTFORWARDING:
+        log_v(LOG_TAG, "RETRO_ENVIRONMENT_GET_FASTFORWARDING\n");
+        *((bool *)data) = false;
+        break;
+    case RETRO_ENVIRONMENT_GET_GAME_INFO_EXT:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_GAME_INFO_EXT\n");
+        *(const struct retro_game_info_ext **)data = game_info_ext;
+        break;
+    case RETRO_ENVIRONMENT_GET_INPUT_BITMASKS:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_INPUT_BITMASKS\n");
+        return true;
+    case RETRO_ENVIRONMENT_GET_LANGUAGE:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_LANGUAGE\n");
+        *((unsigned *)data) = RETRO_LANGUAGE_ENGLISH;
         break;
     case RETRO_ENVIRONMENT_GET_LOG_INTERFACE:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_LOG_INTERFACE\n");
         ((struct retro_log_callback *)data)->log = callback_log;
         break;
-    case RETRO_ENVIRONMENT_GET_INPUT_BITMASKS:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_INPUT_BITMASKS\n");
-        return true;
     case RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION\n");
         *(unsigned *)data = 1;
         break;
-    case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL: %d\n", *(unsigned *)data);
+    case RETRO_ENVIRONMENT_GET_PERF_INTERFACE:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_PERF_INTERFACE\n");
+        // struct retro_perf_callback *perf = (struct retro_perf_callback *)data;
+        return false;
+    case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE\n");
+        // struct retro_rumble_interface *rumble = (struct retro_rumble_interface *)data;
+        return false;
+    case RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT\n");
+        // FIXME
+        // struct retro_savestate_context *savestate = (struct retro_savestate_context *)data;
+        return false;
+    case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY\n");
+        *(const char **)data = files_save_path();
         break;
-    case RETRO_ENVIRONMENT_GET_LANGUAGE:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_LANGUAGE\n");
-        *((unsigned *)data) = RETRO_LANGUAGE_ENGLISH;
+    case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY\n");
+        *(const char **)data = files_system_path();
         break;
+    case RETRO_ENVIRONMENT_GET_VARIABLE: {
+        struct retro_variable *var = (struct retro_variable *)data;
+        var->value = kvstore_get(&kv_store, var->key);
+        log_v(LOG_TAG, "RETRO_ENVIRONMENT_GET_VARIABLE: %s = %s\n", var->key, var->value);
+        variables_updated = false;
+        return var->value != NULL;
+    }
+    case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
+        log_v(LOG_TAG, "RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE\n");
+        *((bool *)data) = variables_updated;
+        break;
+    case RETRO_ENVIRONMENT_GET_VFS_INTERFACE:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_VFS_INTERFACE\n");
+        // FIXME
+        // struct retro_vfs_interface_info *vfs = (struct retro_vfs_interface_info *)data;
+        return false;
+    case RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK\n");
+        // FIXME
+        // struct retro_audio_buffer_status_callback *audio_buffer_status = (struct retro_audio_buffer_status_callback *)data;
+        return false;
+    case RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE:
+        content_info = (const struct retro_system_content_info_override *)data;
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE\n");
+        break;
+    case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_CONTROLLER_INFO\n");
+        ports = (struct retro_controller_info *)data;
+        break;
+    case RETRO_ENVIRONMENT_SET_CORE_OPTIONS:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS\n");
+        set_core_options((struct retro_core_option_definition *)data);
+        break;
+    case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: {
+        struct retro_core_option_display *display = (struct retro_core_option_display *)data;
+        log_v(LOG_TAG, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: %s\n", display->key);
+        return false;
+    }
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL: {
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL\n");
         const struct retro_core_options_intl *opts = (struct retro_core_options_intl *)data;
         set_core_options(opts->local ? opts->local : opts->us);
         break;
     }
-    case RETRO_ENVIRONMENT_SET_CORE_OPTIONS:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS\n");
-        set_core_options((struct retro_core_option_definition *)data);
+    case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK\n");
+        core_options_update_display_callback = ((struct retro_core_options_update_display_callback *)data)->callback;
         break;
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL\n");
         core_options_v2_intl = *(struct retro_core_options_v2_intl *)data;
         break;
-    case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS\n");
-        // bool support_achievements = *(bool *)data;
+    case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE\n");
+        disk_ext_interface = (struct retro_disk_control_ext_callback *)data;
+        break;
+    case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE\n");
+        // struct retro_disk_control_callback *disk_interface = (struct retro_disk_control_callback *)data;
+        break;
+    case RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK\n");
+        // struct retro_frame_time_callback *frame_time = (struct retro_frame_time_callback *)data;
+        return false;
+    case RETRO_ENVIRONMENT_SET_GEOMETRY:
+        av_info = *(struct retro_system_av_info *)data;
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_GEOMETRY (%dx%d)\n",
+            av_info.geometry.base_width, av_info.geometry.base_height);
         break;
     case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: {
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS\n");
@@ -303,13 +384,21 @@ static bool callback_environment_set(unsigned cmd, void *data)
         }
         break;
     }
-    case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY\n");
-        *(const char **)data = files_system_path();
+    case RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK\n");
+        keyboard_event_callback = ((struct retro_keyboard_callback *)data)->callback;
         break;
-    case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY\n");
-        *(const char **)data = files_save_path();
+    case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_MEMORY_MAPS\n");
+        // const struct retro_memory_map *maps = (struct retro_memory_map *)data;
+        break;
+    case RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY\n");
+        // FIXME
+        // unsigned latency = *(unsigned *)data;
+        return false;
+    case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL: %d\n", *(unsigned *)data);
         break;
     case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_PIXEL_FORMAT\n");
@@ -328,113 +417,30 @@ static bool callback_environment_set(unsigned cmd, void *data)
         }
         realloc_buffer_if_needed();
         break;
-    case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO\n");
-        av_info = *(struct retro_system_av_info *)data;
-        break;
-    case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_MEMORY_MAPS\n");
-        // const struct retro_memory_map *maps = (struct retro_memory_map *)data;
-        break;
-    case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE\n");
-        // struct retro_rumble_interface *rumble = (struct retro_rumble_interface *)data;
-        return false;
-    case RETRO_ENVIRONMENT_GET_VARIABLE: {
-        struct retro_variable *var = (struct retro_variable *)data;
-        var->value = kvstore_get(&kv_store, var->key);
-        log_v(LOG_TAG, "RETRO_ENVIRONMENT_GET_VARIABLE: %s = %s\n", var->key, var->value);
-        variables_updated = false;
-        return var->value != NULL;
-    }
-    case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
-        log_v(LOG_TAG, "RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE\n");
-        *((bool *)data) = variables_updated;
-        break;
-    case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE:
-        log_v(LOG_TAG, "RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE\n");
-        // 0x01: Enable Video
-        // 0x02: Enable Audio
-        // 0x04: Use Fast Savestates.
-        // 0x08: Hard Disable Audio
-        *((unsigned *)data) = 0x3;
-        break;
-    case RETRO_ENVIRONMENT_SET_VARIABLES:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_VARIABLES\n");
-        set_variables((struct retro_variable *)data, false);
-        break;
-    case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
-        subsystem_info = (const struct retro_subsystem_info *)data;
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO\n");
-        break;
-    case RETRO_ENVIRONMENT_SET_GEOMETRY:
-        av_info = *(struct retro_system_av_info *)data;
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_GEOMETRY\n");
-        break;
-    case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: {
-        struct retro_core_option_display *display = (struct retro_core_option_display *)data;
-        log_v(LOG_TAG, "RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: %s\n", display->key);
-        return false;
-    }
-    case RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE:
-        content_info = (const struct retro_system_content_info_override *)data;
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE\n");
+    case RETRO_ENVIRONMENT_SET_ROTATION:
+        rotation = (Rotation)(*(unsigned *)data);
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_ROTATION: %d\n", rotation);
         break;
     case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS\n");
         // uint64_t quirks = *(uint64_t *)data;
         break;
-    case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE\n");
-        // struct retro_disk_control_callback *disk_interface = (struct retro_disk_control_callback *)data;
+    case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
+        subsystem_info = (const struct retro_subsystem_info *)data;
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO\n");
         break;
-    case RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION\n");
-        *(unsigned *)data = 0;
-        return false;
-    case RETRO_ENVIRONMENT_GET_GAME_INFO_EXT:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_GAME_INFO_EXT\n");
-        *(const struct retro_game_info_ext **)data = game_info_ext;
+    case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS\n");
+        // bool support_achievements = *(bool *)data;
         break;
-    case RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK\n");
-        // FIXME
-        // struct retro_audio_buffer_status_callback *audio_buffer_status = (struct retro_audio_buffer_status_callback *)data;
-        return false;
-    case RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY\n");
-        // FIXME
-        // unsigned latency = *(unsigned *)data;
-        return false;
-    case RETRO_ENVIRONMENT_GET_VFS_INTERFACE:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_VFS_INTERFACE\n");
-        // FIXME
-        // struct retro_vfs_interface_info *vfs = (struct retro_vfs_interface_info *)data;
-        return false;
-    case RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT\n");
-        // FIXME
-        // struct retro_savestate_context *savestate = (struct retro_savestate_context *)data;
-        return false;
     case RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME\n");
         supports_no_game = *(bool *)data;
         break;
-    case RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK\n");
-        // struct retro_frame_time_callback *frame_time = (struct retro_frame_time_callback *)data;
-        return false;
-    case RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY\n");
-        *(char **)data = NULL;
-        break;
-    case RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK\n");
-        keyboard_event_callback = ((struct retro_keyboard_callback *)data)->callback;
-        break;
-    case RETRO_ENVIRONMENT_GET_FASTFORWARDING:
-        log_v(LOG_TAG, "RETRO_ENVIRONMENT_GET_FASTFORWARDING\n");
-        *((bool *)data) = false;
+    case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO:
+        av_info = *(struct retro_system_av_info *)data;
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO (%dx%d)\n",
+            av_info.geometry.base_width, av_info.geometry.base_height);
         break;
     case RETRO_ENVIRONMENT_SET_VARIABLE: {
         const struct retro_variable *v = (struct retro_variable *)data;
@@ -448,14 +454,10 @@ static bool callback_environment_set(unsigned cmd, void *data)
         variables_updated = true;
         break;
     }
-    case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE\n");
-        disk_ext_interface = (struct retro_disk_control_ext_callback *)data;
+    case RETRO_ENVIRONMENT_SET_VARIABLES:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_VARIABLES\n");
+        set_variables((struct retro_variable *)data, false);
         break;
-    case RETRO_ENVIRONMENT_GET_PERF_INTERFACE:
-        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_PERF_INTERFACE\n");
-        // struct retro_perf_callback *perf = (struct retro_perf_callback *)data;
-        return false;
     case RETRO_ENVIRONMENT_SHUTDOWN:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SHUTDOWN\n");
         log_f(LOG_TAG, "Shutdown requested by core\n");
