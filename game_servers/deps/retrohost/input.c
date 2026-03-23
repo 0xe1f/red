@@ -15,6 +15,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <linux/input.h>
+#include <unistd.h>
 #include <SDL.h>
 #include "libretro.h"
 #include "args.h"
@@ -33,6 +37,14 @@
 extern ArgsOptions args;
 extern retro_keyboard_event_t keyboard_event_callback;
 
+struct MouseState {
+    int x_delta;
+    int y_delta;
+    bool left_button;
+    bool middle_button;
+    bool right_button;
+};
+
 struct InputDevice {
     SDL_Joystick *joystick;
     unsigned short emulated_buttons[EMULATED_BUTTON_COUNT];
@@ -43,6 +55,16 @@ struct InputDevice {
 static void setup_joystick(struct InputDevice *device, SDL_Joystick *joystick);
 static void init_joysticks();
 static void deinit_joysticks();
+static void poll_joysticks();
+static short get_joystick_state(unsigned int port, unsigned int id);
+
+static void init_mouse();
+static void deinit_mouse();
+static void poll_mouse();
+static short get_mouse_state(unsigned int port, unsigned int id);
+
+static void poll_keyboard();
+static unsigned short get_keyboard_state(unsigned int port, unsigned int id);
 
 struct InputState {
     bool input_ids[LAST_BUTTON_ID + 1];
@@ -52,10 +74,11 @@ extern struct retro_input_descriptor *input_descriptors;
 
 static struct InputState input_states[MAX_DEVICES] = { 0 };
 static struct InputDevice input_devices[MAX_DEVICES] = { 0 };
-static int last_joy_count = 0;
+static struct MouseState mouse_state = { 0 };
 static double press_us = 0;
 static double release_us = 0;
 static unsigned int keycode = 0;
+static int mouse_input_fd = -1;
 
 void input_init()
 {
@@ -63,94 +86,35 @@ void input_init()
 	SDL_JoystickEventState(SDL_IGNORE);
 }
 
-void input_poll()
-{
-    double now_us = micros();
-    if (press_us > 0 && now_us >= press_us) {
-        log_d(LOG_TAG, "Autopress: pressing keycode %d\n", keycode);
-        keyboard_event_callback(true, keycode, 0, 0);
-        press_us = 0;
-    } else if (release_us > 0 && now_us >= release_us) {
-        log_d(LOG_TAG, "Autopress: releasing keycode %d\n", keycode);
-        keyboard_event_callback(false, keycode, 0, 0);
-        release_us = 0;
-    }
-
-    SDL_JoystickUpdate();
-
-    int joy_count = SDL_NumJoysticks();
-    if (joy_count > MAX_DEVICES) {
-        joy_count = MAX_DEVICES;
-    }
-
-    if (joy_count != last_joy_count) {
-        log_i(LOG_TAG, "Joystick count changed (%d=>%d); reinitializing\n",
-            last_joy_count, joy_count);
-        deinit_joysticks();
-        init_joysticks();
-    }
-
-    for (int joy = 0; joy < joy_count; joy++) {
-        const struct InputDevice *device = &input_devices[joy];
-        SDL_Joystick *joystick = device->joystick;
-
-        int x = SDL_JoystickGetAxis(joystick, 0);
-        int y = SDL_JoystickGetAxis(joystick, 1);
-
-        struct InputState *state = &input_states[joy];
-
-        state->input_ids[RETRO_DEVICE_ID_JOYPAD_UP] = (y < -JOY_DEADZONE);
-        state->input_ids[RETRO_DEVICE_ID_JOYPAD_RIGHT] = (x > JOY_DEADZONE);
-        state->input_ids[RETRO_DEVICE_ID_JOYPAD_DOWN] = (y > JOY_DEADZONE);
-        state->input_ids[RETRO_DEVICE_ID_JOYPAD_LEFT] = (x < -JOY_DEADZONE);
-
-        for (int i = 0; i < EMULATED_BUTTON_COUNT; i++) {
-            unsigned short button_id = device->emulated_buttons[i];
-            if (button_id >= 0 && button_id <= LAST_BUTTON_ID) {
-                state->input_ids[button_id] = SDL_JoystickGetButton(joystick, i);
-            }
-        }
-    }
-    last_joy_count = joy_count;
-}
-
-int16_t callback_input_state(unsigned port, unsigned device, unsigned index, unsigned id)
-{
-    if (port >= MAX_DEVICES) {
-        return 0;
-    }
-
-    const struct InputState *state = &input_states[port];
-    unsigned short ret = 0;
-
-    switch (device) {
-        case RETRO_DEVICE_KEYBOARD:
-            // log_d(LOG_TAG, "keycode %d\n", id);
-            break;
-        case RETRO_DEVICE_JOYPAD:
-            switch (id) {
-                case RETRO_DEVICE_ID_JOYPAD_MASK:
-                    for (int i = 0; i <= LAST_BUTTON_ID; i++) {
-                        if (state->input_ids[i]) {
-                            ret |= (1 << i);
-                        }
-                    }
-                    break;
-                default:
-                    if (id <= LAST_BUTTON_ID) {
-                        ret = state->input_ids[id];
-                    }
-                    break;
-            }
-            break;
-    }
-    return ret;
-}
-
 void input_clean_up()
 {
     deinit_joysticks();
+    deinit_mouse();
     SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
+}
+
+void input_poll()
+{
+    poll_joysticks();
+    poll_keyboard();
+    poll_mouse();
+}
+
+int16_t callback_input_state(unsigned int port, unsigned int device, unsigned int index, unsigned int id)
+{
+    unsigned short ret = 0;
+    switch (device) {
+        case RETRO_DEVICE_JOYPAD:
+            ret = get_joystick_state(port, id);
+            break;
+        case RETRO_DEVICE_KEYBOARD:
+            ret = get_keyboard_state(port, id);
+            break;
+        case RETRO_DEVICE_MOUSE:
+            ret = get_mouse_state(port, id);
+            break;
+    }
+    return ret;
 }
 
 bool input_parse_deferred_keypress(const char *spec, DeferredKeypress *out)
@@ -200,7 +164,7 @@ void input_schedule_keypress(const DeferredKeypress *keypress)
     press_us = now_us + keypress->delay_ms * 1000;
     release_us = press_us + keypress->duration_ms * 1000;
     keycode = keypress->keycode;
-    fprintf(stderr, "Scheduled autopress of keycode %d in %lu ms for duration %lu ms\n",
+    log_v(LOG_TAG, "Scheduled autopress of keycode %d in %lu ms for duration %lu ms\n",
         keycode, keypress->delay_ms, keypress->duration_ms);
 }
 
@@ -288,4 +252,180 @@ static void deinit_joysticks()
             memset(device->emulated_buttons, 0, sizeof(device->emulated_buttons));
         }
     }
+}
+
+static void poll_joysticks()
+{
+    SDL_JoystickUpdate();
+
+    int joy_count = SDL_NumJoysticks();
+    if (joy_count > MAX_DEVICES) {
+        joy_count = MAX_DEVICES;
+    }
+
+    static int last_joy_count = 0;
+    if (joy_count != last_joy_count) {
+        log_i(LOG_TAG, "Joystick count changed (%d=>%d); reinitializing\n",
+            last_joy_count, joy_count);
+        deinit_joysticks();
+        init_joysticks();
+    }
+
+    for (int joy = 0; joy < joy_count; joy++) {
+        const struct InputDevice *device = &input_devices[joy];
+        SDL_Joystick *joystick = device->joystick;
+
+        int x = SDL_JoystickGetAxis(joystick, 0);
+        int y = SDL_JoystickGetAxis(joystick, 1);
+
+        struct InputState *state = &input_states[joy];
+
+        state->input_ids[RETRO_DEVICE_ID_JOYPAD_UP] = (y < -JOY_DEADZONE);
+        state->input_ids[RETRO_DEVICE_ID_JOYPAD_RIGHT] = (x > JOY_DEADZONE);
+        state->input_ids[RETRO_DEVICE_ID_JOYPAD_DOWN] = (y > JOY_DEADZONE);
+        state->input_ids[RETRO_DEVICE_ID_JOYPAD_LEFT] = (x < -JOY_DEADZONE);
+
+        for (int i = 0; i < EMULATED_BUTTON_COUNT; i++) {
+            unsigned short button_id = device->emulated_buttons[i];
+            if (button_id >= 0 && button_id <= LAST_BUTTON_ID) {
+                state->input_ids[button_id] = SDL_JoystickGetButton(joystick, i);
+            }
+        }
+    }
+    last_joy_count = joy_count;
+}
+
+static short get_joystick_state(unsigned int port, unsigned int id)
+{
+    if (port >= MAX_DEVICES) {
+        return 0;
+    }
+
+    const struct InputState *state = &input_states[port];
+    unsigned short ret = 0;
+    switch (id) {
+        case RETRO_DEVICE_ID_JOYPAD_MASK:
+            for (int i = 0; i <= LAST_BUTTON_ID; i++) {
+                if (state->input_ids[i]) {
+                    ret |= (1 << i);
+                }
+            }
+            break;
+        default:
+            if (id <= LAST_BUTTON_ID) {
+                ret = state->input_ids[id];
+            }
+            break;
+    }
+    return ret;
+}
+
+static void init_mouse()
+{
+    if (mouse_input_fd >= 0) {
+        return;
+    }
+
+    // FIXME: path should be configurable
+    mouse_input_fd = open("/dev/input/event1", O_RDONLY | O_NONBLOCK);
+    if (mouse_input_fd < 0) {
+        log_w(LOG_TAG, "Unable to open mouse input device: %s\n", strerror(errno));
+    }
+}
+
+static void deinit_mouse()
+{
+    if (mouse_input_fd >= 0) {
+        close(mouse_input_fd);
+        mouse_input_fd = -1;
+    }
+}
+
+static void poll_mouse()
+{
+    static bool initialized = false;
+    if (!initialized) {
+        init_mouse();
+        initialized = true;
+    }
+
+    if (mouse_input_fd < 0) {
+        return;
+    }
+
+    mouse_state.x_delta = 0;
+    mouse_state.y_delta = 0;
+
+    static struct input_event event;
+    ssize_t bytes_read;
+    while ((bytes_read = read(mouse_input_fd, &event, sizeof(event))) == sizeof(event)) {
+        switch (event.type) {
+            case EV_REL:
+                if (event.code == REL_X) {
+                    mouse_state.x_delta = event.value;
+                } else if (event.code == REL_Y) {
+                    mouse_state.y_delta = event.value;
+                }
+                break;
+            case EV_KEY:
+                if (event.code == BTN_LEFT) {
+                    mouse_state.left_button = event.value;
+                } else if (event.code == BTN_RIGHT) {
+                    mouse_state.right_button = event.value;
+                } else if (event.code == BTN_MIDDLE) {
+                    mouse_state.middle_button = event.value;
+                }
+                break;
+            default:
+                log_v(LOG_TAG, "Mouse event: type=0x%x code=0x%x value=0x%x\n",
+                    event.type, event.code, event.value);
+                break;
+        }
+    }
+}
+
+static short get_mouse_state(unsigned int port, unsigned int id)
+{
+    unsigned short ret = 0;
+    switch (id) {
+    case RETRO_DEVICE_ID_MOUSE_X:
+        ret = (short) mouse_state.x_delta;
+        break;
+    case RETRO_DEVICE_ID_MOUSE_Y:
+        ret = (short) mouse_state.y_delta;
+        break;
+    case RETRO_DEVICE_ID_MOUSE_LEFT:
+        ret = mouse_state.left_button;
+        break;
+    case RETRO_DEVICE_ID_MOUSE_MIDDLE:
+        ret = mouse_state.middle_button;
+        break;
+    case RETRO_DEVICE_ID_MOUSE_RIGHT:
+        ret = mouse_state.right_button;
+        break;
+    default:
+        log_v(LOG_TAG, "callback_input_state(RETRO_DEVICE_MOUSE, ? %d)\n", id);
+        break;
+    }
+    return ret;
+}
+
+static void poll_keyboard()
+{
+    double now_us = micros();
+    if (press_us > 0 && now_us >= press_us) {
+        log_d(LOG_TAG, "Autopress: pressing keycode %d\n", keycode);
+        keyboard_event_callback(true, keycode, 0, 0);
+        press_us = 0;
+    } else if (release_us > 0 && now_us >= release_us) {
+        log_d(LOG_TAG, "Autopress: releasing keycode %d\n", keycode);
+        keyboard_event_callback(false, keycode, 0, 0);
+        release_us = 0;
+    }
+}
+
+static unsigned short get_keyboard_state(unsigned int port, unsigned int id)
+{
+    log_v(LOG_TAG, "callback_input_state(RETRO_DEVICE_KEYBOARD): %d\n", id);
+    return 0;
 }
