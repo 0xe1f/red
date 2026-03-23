@@ -323,13 +323,20 @@ static short get_joystick_state(unsigned int port, unsigned int id)
 static void init_mouse()
 {
     if (mouse_input_fd >= 0) {
+        log_d(LOG_TAG, "Mouse input already initialized\n");
         return;
     }
 
-    // FIXME: path should be configurable
-    mouse_input_fd = open("/dev/input/event1", O_RDONLY | O_NONBLOCK);
-    if (mouse_input_fd < 0) {
-        log_w(LOG_TAG, "Unable to open mouse input device: %s\n", strerror(errno));
+    const char *device_path = args.mouse_device_path;
+    if (!device_path) {
+        log_w(LOG_TAG, "Mouse input device path not specified\n");
+        return;
+    }
+
+    // Open the mouse input device in non-blocking mode
+    if ((mouse_input_fd = open(device_path, O_RDONLY | O_NONBLOCK)) < 0) {
+        log_w(LOG_TAG, "Unable to open mouse input device '%s': %s\n",
+            device_path, strerror(errno));
     }
 }
 

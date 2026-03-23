@@ -88,14 +88,18 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
                 log_e(LOG_TAG, "Invalid scale mode: '%s'\n", value);
                 return false;
             }
-        } else if (strncmp(*arg, "--max-clients=", 14) == 0 || strncmp(*arg, "-mc=", 4) == 0) {
-            const char *eq = strchr(*arg, '=') + 1;
-            opts->max_clients = atoi(eq);
-            if (opts->max_clients <= 0) {
-                log_e(LOG_TAG, "Invalid max clients: '%s'\n", eq);
+        } else if (strcmp(*arg, "--max-clients") == 0 || strcmp(*arg, "-mc") == 0) {
+            if (++i >= argc) {
+                log_e(LOG_TAG, "Missing argument for %s\n", *arg);
                 return false;
             }
-        } else if (strcmp(*arg, "--background") == 0 || strcmp(*arg, "-background") == 0) {
+            const char *value = *(++arg);
+            opts->max_clients = atoi(value);
+            if (opts->max_clients <= 0) {
+                log_e(LOG_TAG, "Invalid max clients: '%s'\n", value);
+                return false;
+            }
+        } else if (strcmp(*arg, "--background") == 0 || strcmp(*arg, "-bg") == 0) {
             opts->background = true;
         } else if (strcmp(*arg, "--show-fps") == 0 || strcmp(*arg, "-fps") == 0) {
             opts->show_fps = true;
@@ -189,6 +193,12 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
                 return false;
             }
             opts->autopress = &dk;
+        } else if (strcmp(*arg, "--mouse-device") == 0 || strcmp(*arg, "-mouse") == 0) {
+            if (++i >= argc) {
+                log_e(LOG_TAG, "Missing argument for %s\n", *arg);
+                return false;
+            }
+            opts->mouse_device_path = *(++arg);
         } else if (**arg == '-') {
             log_e(LOG_TAG, "Unrecognized switch: %s\n", *arg);
             return false;
