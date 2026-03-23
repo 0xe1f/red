@@ -37,12 +37,8 @@
 extern ArgsOptions args;
 extern retro_keyboard_event_t keyboard_event_callback;
 
-struct MouseState {
-    int x_delta;
-    int y_delta;
-    bool left_button;
-    bool middle_button;
-    bool right_button;
+struct InputState {
+    bool input_ids[LAST_BUTTON_ID + 1];
 };
 
 struct InputDevice {
@@ -52,12 +48,21 @@ struct InputDevice {
     const char *name;
 };
 
+struct MouseState {
+    int x_delta;
+    int y_delta;
+    bool left_button;
+    bool middle_button;
+    bool right_button;
+};
+
 static void setup_joystick(struct InputDevice *device, SDL_Joystick *joystick);
 static void init_joysticks();
 static void deinit_joysticks();
 static void poll_joysticks();
 static short get_joystick_state(unsigned int port, unsigned int id);
 
+static const char* find_mouse_device();
 static void init_mouse();
 static void deinit_mouse();
 static void poll_mouse();
@@ -65,10 +70,6 @@ static short get_mouse_state(unsigned int port, unsigned int id);
 
 static void poll_keyboard();
 static unsigned short get_keyboard_state(unsigned int port, unsigned int id);
-
-struct InputState {
-    bool input_ids[LAST_BUTTON_ID + 1];
-};
 
 extern struct retro_input_descriptor *input_descriptors;
 
@@ -320,6 +321,36 @@ static short get_joystick_state(unsigned int port, unsigned int id)
     return ret;
 }
 
+static const char* find_mouse_device()
+{
+    FILE *f = fopen("/proc/bus/input/devices", "r");
+    if (!f) {
+        log_e(LOG_TAG, "Unable to open /proc/bus/input/devices: %s\n", strerror(errno));
+        return NULL;
+    }
+
+    const char *match = NULL;
+    static char line[1024];
+    while (fgets(line, sizeof(line), f) != NULL) {
+        if (strstr(line, "H: ") == line && strstr(line, "mouse")) {
+            const char *event_name = strstr(line, "event");
+            if (event_name) {
+                char *end = strpbrk(event_name, " \t\n");
+                if (end) {
+                    // Truncate at the end of the event name
+                    *end = '\0';
+                }
+                snprintf(line, sizeof(line), "/dev/input/%s", event_name);
+                match = line;
+                break;
+            }
+        }
+    }
+    fclose(f);
+
+    return match;
+}
+
 static void init_mouse()
 {
     if (mouse_input_fd >= 0) {
@@ -328,15 +359,17 @@ static void init_mouse()
     }
 
     const char *device_path = args.mouse_device_path;
-    if (!device_path) {
-        log_w(LOG_TAG, "Mouse input device path not specified\n");
+    if (!device_path && !(device_path = find_mouse_device())) {
+        log_w(LOG_TAG, "Mouse input device path not specified (and detection failed)\n");
         return;
     }
 
     // Open the mouse input device in non-blocking mode
     if ((mouse_input_fd = open(device_path, O_RDONLY | O_NONBLOCK)) < 0) {
-        log_w(LOG_TAG, "Unable to open mouse input device '%s': %s\n",
+        log_w(LOG_TAG, "Error loading mouse device '%s': %s\n",
             device_path, strerror(errno));
+    } else {
+        log_i(LOG_TAG, "Mouse input initialized using '%s'\n", device_path);
     }
 }
 
