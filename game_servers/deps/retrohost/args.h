@@ -26,6 +26,7 @@ typedef struct {
     const char *bios_path;
     const char *log_path;
     const char *mouse_device_path;
+    const char *keyboard_device_path;
     bool log_overwrite;
     bool background;
     bool show_fps;
