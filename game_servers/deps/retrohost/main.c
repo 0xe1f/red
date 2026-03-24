@@ -546,10 +546,7 @@ int main(int argc, const char **argv)
     }
     log_set_level(args.log_level);
 
-    if (!args.rom_path) {
-        log_f(LOG_TAG, "Missing rom path\n");
-        return 1;
-    } else if (!args.so_path || access(args.so_path, F_OK) == -1) {
+    if (!args.so_path || access(args.so_path, F_OK) == -1) {
         log_f(LOG_TAG, "Missing or invalid core\n");
         return 1;
     }
@@ -633,7 +630,12 @@ int main(int argc, const char **argv)
 
     retro_init();
 
-    if (!files_load(args.rom_path, args.disable_preloading)) {
+    if (!args.rom_path && !supports_no_game) {
+        log_f(LOG_TAG, "Missing rom path\n");
+        return 1;
+    }
+
+    if (args.rom_path && !files_load(args.rom_path, args.disable_preloading)) {
         log_f(LOG_TAG, "Failed to load file '%s'\n", args.rom_path);
         dump_env();
         clean_up();
@@ -646,7 +648,10 @@ int main(int argc, const char **argv)
         clean_up();
         return 1;
     }
-    log_i(LOG_TAG, "Successfully loaded: %s\n", args.rom_path);
+
+    if (args.rom_path) {
+        log_i(LOG_TAG, "Successfully loaded: %s\n", args.rom_path);
+    }
 
     retro_get_system_av_info(&av_info);
     reset_audio();
