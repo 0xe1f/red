@@ -1,5 +1,19 @@
 #!/bin/bash
 
+try_libretro_build() {
+    local makefile="$1"
+    local mf_dir
+
+    if [ -n "$makefile" ]; then
+        mf_dir=$(dirname "$makefile")
+        pushd "$mf_dir" > /dev/null && \
+            make -f "$(basename "$makefile")" && \
+            popd > /dev/null && \
+            echo "done:$(find "$mf_dir" -maxdepth 1 -type f -name '*_libretro.so')"
+        exit 0
+    fi
+}
+
 MODULE_NAME=$1
 if [ -z "$MODULE_NAME" ]; then
     echo "Error: module_name is missing" >&2
@@ -9,36 +23,12 @@ fi
 cd $MODULE_NAME
 
 case "$MODULE_NAME" in
-    bluemsx)
-        make -f Makefile.libretro && \
-            echo "done:bluemsx_libretro.so"
-        ;;
     chocolate-doom)
         if [ ! -f Makefile ]; then
             ./autogen.sh || exit 1
         fi
         make && \
                 echo "done:src/chocolate-doom src/chocolate-heretic src/chocolate-hexen src/chocolate-strife launch.sh stop.sh"
-        ;;
-    fbneo)
-        cd src/burner/libretro/ && make && \
-            echo "done:src/burner/libretro/fbneo_libretro.so"
-        ;;
-    nestopia)
-        cd libretro && make && \
-            echo "done:libretro/nestopia_libretro.so"
-        ;;
-    genplus-gx)
-        make -f Makefile.libretro && \
-            echo "done:genesis_plus_gx_libretro.so"
-        ;;
-    snes9x)
-        cd libretro && make && \
-            echo "done:libretro/snes9x_libretro.so"
-        ;;
-    geargrafx)
-        cd platforms/libretro && make && \
-            echo "done:platforms/libretro/geargrafx_libretro.so"
         ;;
     mgba)
         if [ ! -f build/Makefile ]; then
@@ -65,10 +55,6 @@ case "$MODULE_NAME" in
         make && \
             echo "done:atari800_libretro.so"
         ;;
-    picodrive)
-        make -f Makefile.libretro && \
-            echo "done:picodrive_libretro.so"
-        ;;
     dosbox)
         cd libretro && \
             make BUNDLED_AUDIO_CODECS=1 BUNDLED_LIBSNDFILE=1 BUNDLED_SDL=1 WITH_DYNAREC=arm64 deps && \
@@ -76,7 +62,13 @@ case "$MODULE_NAME" in
             echo "done:libretro/dosbox_core_libretro.so"
         ;;
     *)
-        echo "Unknown module: $MODULE_NAME" >&2
+        # See if there's a Makefile.libretro and build that
+        try_libretro_build `find . -type f -name "Makefile.libretro"`
+        # See if there's a Makefile in a libretro subdirectory and build that
+        try_libretro_build `find . -path '*/libretro/*' -name "Makefile" -type f | head -1`
+
+        # Well, shit...
+        echo "Unknown or unbuildable module: $MODULE_NAME" >&2
         exit 1
         ;;
 esac

@@ -2,8 +2,4 @@ cinema/
 doc/
 res/
 tools/
-*.md
-*.txt
 CHANGES
-LICENSE
-version.cmake
