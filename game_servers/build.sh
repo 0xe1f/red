@@ -23,10 +23,7 @@ shift 2
 
 # Make sure at least one project is specified
 ARGS="$@"
-if [ -z "$ARGS" ]; then
-    echo -e "${RED}Error: No projects specified for build.${PLAIN}" >&2
-    exit 1
-else
+if [ ! -z "$ARGS" ]; then
     # Check that all specified directories have a build.sh
     for DIR in $ARGS; do
         if [ ! -d "$DIR" ]; then

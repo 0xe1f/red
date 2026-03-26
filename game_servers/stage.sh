@@ -22,13 +22,9 @@ fi
 cd `dirname $(readlink -f $0)`
 shift 3
 
-# If no projects are specified, stage all directories
 ARGS="$@"
-if [ -z "$ARGS" ]; then
-    ARGS=$(find . -maxdepth 1 -type d -not -name '.*' -not -name deps | tr -s '[:space:]' ' ')
-fi
 
-# Check that all specified directories have a build.sh
+# Check that all specified directories are present and valid
 for DIR in $ARGS; do
     if [ ! -d "$DIR" ]; then
         echo -e "${RED}Error: $DIR is not a valid module${PLAIN}" >&2
