@@ -159,6 +159,8 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
             kvstore_put(kv_store, temp, eq + 1);
         } else if (strcmp(*arg, "--disable-preloading") == 0 || strcmp(*arg, "-np") == 0) {
             opts->disable_preloading = true;
+        } else if (strcmp(*arg, "--force-preloading") == 0 || strcmp(*arg, "-fp") == 0) {
+            opts->force_preloading = true;
         } else if (strcmp(*arg, "--input-config") == 0 || strcmp(*arg, "-ic") == 0) {
             if (++i >= argc) {
                 log_e(LOG_TAG, "Missing argument for %s\n", *arg);

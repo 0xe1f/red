@@ -19,11 +19,13 @@
 #include "unzip.h"
 #include "un7z.h"
 #include "libretro.h"
+#include "args.h"
 #include "log.h"
 #include "files.h"
 
 #define LOG_TAG "files"
 
+static const char *preload_blocklist = "iso|cue|mp3|chd";
 static const char *system_path_name = "bios";
 static const char *save_path_name = "save";
 static char system_path[1024];
@@ -33,15 +35,16 @@ extern struct retro_system_info system_info;
 extern const struct retro_system_content_info_override *content_info;
 extern struct retro_game_info *game_info;
 extern struct retro_game_info_ext *game_info_ext;
+extern ArgsOptions args;
 
-static bool is_extension_supported(const char *path);
+static bool is_path_supported(const char *path, const char *ext_delim);
 static bool has_extension(const char *path, const char *ext);
 static bool load_zip(const char *path);
 static bool load_7z(const char *path);
-static bool load_direct(const char *path, bool disable_preloading);
-static bool extension_list_contains(const char *ext_delim, const char *ext);
+static bool load_direct(const char *path);
+static bool extension_one_of(const char *ext, const char *ext_delim);
 
-static bool extension_list_contains(const char *ext_delim, const char *ext)
+static bool extension_one_of(const char *ext, const char *ext_delim)
 {
     for (const char *p = ext_delim; *p; p++) {
         if (strncmp(p, ext, strlen(ext)) == 0 &&
@@ -54,7 +57,7 @@ static bool extension_list_contains(const char *ext_delim, const char *ext)
     return false;
 }
 
-static bool is_extension_supported(const char *path)
+static bool is_path_supported(const char *path, const char *ext_delim)
 {
     const char *ext = strrchr(path, '.');
     if (!ext) {
@@ -63,12 +66,12 @@ static bool is_extension_supported(const char *path)
     }
     ext++; // skip the dot
 
-    if (system_info.valid_extensions && extension_list_contains(system_info.valid_extensions, ext)) {
+    if (ext_delim && extension_one_of(ext, ext_delim)) {
         return true;
     }
 
     for (const struct retro_system_content_info_override *info = content_info; info && info->extensions; info++) {
-        if (extension_list_contains(info->extensions, ext)) {
+        if (extension_one_of(ext, info->extensions)) {
             return true;
         }
     }
@@ -112,7 +115,7 @@ static bool load_zip(const char *path)
     int ret = unzGoToFirstFile(fd);
     while (ret == UNZ_OK) {
         if (unzGetCurrentFileInfo(fd, &info, archived_path, sizeof(archived_path), 0, 0, 0, 0) == UNZ_OK) {
-            if (is_extension_supported(archived_path)) {
+            if (is_path_supported(archived_path, system_info.valid_extensions)) {
                 if ((ret = unzOpenCurrentFile(fd)) == UNZ_OK) {
                     size_t size = info.uncompressed_size;
                     if (!(data = malloc(size))) {
@@ -220,7 +223,7 @@ static bool load_7z(const char *path)
         }
         archived_path[len] = '\0';
 
-        if (is_extension_supported(archived_path)) {
+        if (is_path_supported(archived_path, system_info.valid_extensions)) {
             unsigned long size = SzArEx_GetFileSize(&z7->db, i);
             void *data = malloc(size);
             if (!data) {
@@ -293,7 +296,7 @@ static bool load_7z(const char *path)
     return true;
 }
 
-static bool load_direct(const char *path, bool disable_preloading)
+static bool load_direct(const char *path)
 {
     static struct retro_game_info info_local;
     static struct retro_game_info_ext info_local_ext;
@@ -323,8 +326,11 @@ static bool load_direct(const char *path, bool disable_preloading)
 
     void *data = NULL;
     size_t size = 0;
+    bool preload = (!args.disable_preloading && !extension_one_of(ext, preload_blocklist))
+        || args.force_preloading;
+    log_d(LOG_TAG, "Preloading %s for '%s'\n", preload ? "enabled" : "disabled", path);
 
-    if (!disable_preloading) {
+    if (preload) {
         FILE *f = fopen(path, "rb");
         if (!f) {
             log_e(LOG_TAG, "Failed to read file: %s\n", path);
@@ -359,7 +365,7 @@ static bool load_direct(const char *path, bool disable_preloading)
         /* persistent_data */ true
     };
 
-    if (!disable_preloading && !info_local.data) {
+    if (preload && !info_local.data) {
         // preload failed
         log_e(LOG_TAG, "Preload failed\n");
         return false;
@@ -371,10 +377,10 @@ static bool load_direct(const char *path, bool disable_preloading)
     return true;
 }
 
-bool files_load(const char *path, bool disable_preloading)
+bool files_load(const char *path)
 {
-    if (is_extension_supported(path)) {
-        return load_direct(path, disable_preloading);
+    if (is_path_supported(path, system_info.valid_extensions)) {
+        return load_direct(path);
     } else if (has_extension(path, "7z")) {
         return load_7z(path);
     } else if (has_extension(path, "zip")) {

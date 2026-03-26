@@ -36,6 +36,7 @@ typedef struct {
     LogLevel log_level;
     ScaleMode scale_mode;
     bool disable_preloading;
+    bool force_preloading;
     KvStore input_configs;
     DeferredKeypress *autopress;
 } ArgsOptions;

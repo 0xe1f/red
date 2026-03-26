@@ -635,7 +635,7 @@ int main(int argc, const char **argv)
         return 1;
     }
 
-    if (args.rom_path && !files_load(args.rom_path, args.disable_preloading)) {
+    if (args.rom_path && !files_load(args.rom_path)) {
         log_f(LOG_TAG, "Failed to load file '%s'\n", args.rom_path);
         dump_env();
         clean_up();
