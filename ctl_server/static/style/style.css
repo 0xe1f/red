@@ -255,8 +255,7 @@ div:has(> #volume) {
 }
 
 #games:not(.oriented) .game .company,
-#games:not(.oriented) .game .year,
-#games:not(.oriented) .game .system {
+#games:not(.oriented) .game .year {
     padding-left: 28px;
 }
 
@@ -267,11 +266,23 @@ div:has(> #volume) {
     font-size: 10pt;
 }
 
-#games.platformed .game .platform {
+/* #games.platformed .game .platform {
+    display: none;
+} */
+
+#games.has-system .game .system {
     display: none;
 }
 
-#games:not(.platformed) .game .platform {
+/* #games:not(.platformed) .game .platform {
+    font-variant: small-caps;
+    font-weight: bold;
+    font-size: 12pt;
+    color: #f94a37;
+    padding-left: 0.5em;
+} */
+
+#games:not(.has-system) .game .system {
     font-variant: small-caps;
     font-weight: bold;
     font-size: 12pt;
@@ -279,7 +290,7 @@ div:has(> #volume) {
     padding-left: 0.5em;
 }
 
-.game .system {
+.game .platform {
     display: none;
 }
 

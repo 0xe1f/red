@@ -346,6 +346,9 @@ $(function() {
                 if (filters.find(filter => filter.startsWith("p:")) !== undefined) {
                     $gamesContainer.addClass("platformed");
                 }
+                if (filters.find(filter => filter.startsWith("y:")) !== undefined) {
+                    $gamesContainer.addClass("has-system");
+                }
                 $.each(response, function(_, entry) {
                     $gamesContainer
                         .append(
@@ -360,13 +363,13 @@ $(function() {
                                     $("<span />", { "class": "platform", text: entry.app_id })
                                 )
                                 .append(
+                                    $("<span />", { "class": "system", text: entry.system })
+                                )
+                                .append(
                                     $("<span />", { "class": "year", text: entry.year })
                                 )
                                 .append(
                                     $("<span />", { "class": "company", text: entry.company })
-                                )
-                                .append(
-                                    $("<span />", { "class": "system", text: entry.system })
                                 )
                         );
                 });

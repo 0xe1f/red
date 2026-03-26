@@ -26,6 +26,7 @@ class GameConfig:
         self.orientations = defaultdict(list)
         self.series = defaultdict(list)
         self.platforms = defaultdict(list)
+        self.systems = defaultdict(list)
 
         with open(path) as fd:
             for item in yaml.safe_load(fd):
@@ -39,6 +40,7 @@ class GameConfig:
                 for o in game.series:
                     self.series[o].append(game.id)
                 self.platforms[game.app_id].append(game.id)
+                self.systems[game.system].append(game.id)
 
     def filters(self):
         return [
@@ -51,6 +53,16 @@ class GameConfig:
                         "count": len(v),
                     } for k, v in self.orientations.items()], key=lambda x: x['name'].lower()),
                 "prefix": 'o',
+            },
+            {
+                "id": 'system',
+                "label": 'System',
+                "options": sorted([
+                    {
+                        "name": k,
+                        "count": len(v),
+                    } for k, v in self.systems.items()], key=lambda x: x['name'].lower()),
+                "prefix": 'y',
             },
             {
                 "id": 'platform',
@@ -122,6 +134,9 @@ class GameConfig:
                 elif k == 's' and filters.intersection(set(game.series)) != filters:
                     filter_match = False
                     break
+                elif k == 'y' and filters != { game.system }:
+                    filter_match = False
+                    break
             if filter_match:
                 filtered_games.append(game)
 
@@ -137,6 +152,7 @@ class Config:
         self.genres = set()
         self.orientations = set()
         self.series = set()
+        self.systems = set()
 
         with open(path, 'r') as fd:
             conf = yaml.safe_load(fd)
@@ -272,12 +288,15 @@ class Game:
             self.series = []
         if 'extra_args' not in item:
             self.extra_args = ""
+        if 'system' not in item:
+            self.system = 'unknown'
         self.filters = list(
             itertools.chain(
                 map(lambda f: f"t:{f}", self.tags),
                 map(lambda f: f"g:{f}", self.genres),
                 map(lambda f: f"s:{f}", self.series),
                 [ f"o:{self.orientation}" ],
+                [ f"y:{self.system}" ],
             )
         )
 
