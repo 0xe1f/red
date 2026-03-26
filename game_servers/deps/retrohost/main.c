@@ -83,6 +83,7 @@ static FILE *log_file = NULL;
 
 static void set_core_options(const struct retro_core_option_definition *option_defs);
 static void set_variables(const struct retro_variable *vars, bool single);
+static void callback_set_led_state(int led, int state);
 
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
@@ -189,6 +190,12 @@ static void callback_input_poll()
     input_poll();
 }
 
+static void callback_set_led_state(int led, int state)
+{
+    log_v(LOG_TAG, "LED state changed: led=%1$d (0x%1$x) state=%2$s\n",
+        led, state ? "ON" : "OFF");
+}
+
 static void dump_env()
 {
     if (args.log_level < LOG_DEBUG) {
@@ -268,6 +275,10 @@ static bool callback_environment_set(unsigned cmd, void *data)
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_LANGUAGE\n");
         *((unsigned *)data) = RETRO_LANGUAGE_ENGLISH;
         break;
+    case RETRO_ENVIRONMENT_GET_LED_INTERFACE:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_LED_INTERFACE\n");
+        ((struct retro_led_interface *)data)->set_led_state = callback_set_led_state;
+        return true;
     case RETRO_ENVIRONMENT_GET_LOG_INTERFACE:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_LOG_INTERFACE\n");
         ((struct retro_log_callback *)data)->log = callback_log;
@@ -464,7 +475,12 @@ static bool callback_environment_set(unsigned cmd, void *data)
         is_running = false;
         break;
     default:
-        log_w(LOG_TAG, "retro_environment_set(): unrecognized cmd=%1$u (0x%1$x)\n", cmd);
+        if (cmd & RETRO_ENVIRONMENT_EXPERIMENTAL) {
+            int exp_cmd = cmd & ~RETRO_ENVIRONMENT_EXPERIMENTAL;
+            log_w(LOG_TAG, "retro_environment_set(): unrecognized experimental cmd=0x%1$x | %2$d\n", RETRO_ENVIRONMENT_EXPERIMENTAL, exp_cmd);
+        } else {
+            log_w(LOG_TAG, "retro_environment_set(): unrecognized cmd=%1$u (0x%1$x)\n", cmd);
+        }
         return false;
     }
 
