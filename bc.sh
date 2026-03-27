@@ -64,7 +64,7 @@ for CLIENT in `seq 0 $CLIENT_COUNT`; do
     CL_EXE=`yq e ".game_clients[$CLIENT].exe" deploy.yaml`
 
     echo -e "${BOLD_WHITE}>> ${GREEN}Deploying to ${CL_HOST}... ${PLAIN}"
-    echo scp "${BUILD_SVR}:${BUILD_PATH}/${CL_EXE}" "${CL_HOST}:${CL_PATH}/"
+    scp "${BUILD_SVR}:${BUILD_PATH}/${CL_EXE}" "${CL_HOST}:${CL_PATH}/"
 done
 
 echo -e "${BOLD_WHITE}>> ${GREEN}All done... ${PLAIN}"

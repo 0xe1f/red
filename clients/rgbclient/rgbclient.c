@@ -27,9 +27,15 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <nats.h>
 
+#include "log.h"
+#include "xm.h"
+#include "frame.pb-c.h"
 #include "led-matrix-c.h"
 #include "rgbcommon.h"
+
+#define LOG_TAG "rgbclient"
 
 #define RETRY_COUNT_DEFAULT    0
 #define RETRY_DELAY_DEFAULT_MS 500
@@ -76,8 +82,10 @@ static struct ViewRect dest;
 static struct ViewRect blitSrc;
 static struct ViewRect blitDest;
 
+static inline void log_fps();
 static void render();
 static const char *rect_string(const struct ViewRect *rect);
+static void xm_callback(const struct FrameGeometry *frame, const unsigned char *content);
 
 // RGB565
 #define RED_RGB565(x) (((x>>11)&0x1f)*255/31)
@@ -96,35 +104,6 @@ static const char *rect_string(const struct ViewRect *rect);
 #define GREEN_RGBA5551(x) (((x>>6)&0x1f)*255/31)
 #define BLUE_RGBA5551(x) (((x>>1)&0x1f)*255/31)
 
-static int connect_es(const char *server)
-{
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd == -1) {
-        fprintf(stderr, "socket() failed\n");
-        return 0;
-    }
-
-    struct sockaddr_in dest_addr = {};
-    dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(port);
-    dest_addr.sin_addr.s_addr = inet_addr(server);
-
-    fprintf(stderr, "connecting to '%s' on port %d...\n", server, port);
-    for (int i = 0; (i <= retry_count || retry_count < 0) && !exit_main_loop; i++) {
-        if (connect(sockfd,(struct sockaddr*)&dest_addr, sizeof(struct sockaddr)) == 0) {
-            fprintf(stderr, "connected!\n");
-            return 1;
-        }
-        nanosleep(&retry_delay_ts, NULL);
-        // fprintf(stderr, "retrying...\n");
-    }
-
-    fprintf(stderr, "connect() failed\n");
-    close(sockfd);
-
-    return 0;
-}
-
 static const char* pixel_format_str(unsigned char pixel_format)
 {
     switch(pixel_format) {
@@ -138,20 +117,6 @@ static const char* pixel_format_str(unsigned char pixel_format)
             return "RGBA5551";
         default:
             return "UNKNOWN";
-    }
-}
-
-static unsigned char bpp(unsigned char pixel_format)
-{
-    switch(pixel_format) {
-        case PIXEL_FORMAT_RGBA8888:
-        case PIXEL_FORMAT_ARGB8888:
-            return 4;
-        case PIXEL_FORMAT_RGB565:
-        case PIXEL_FORMAT_RGBA5551:
-            return 2;
-        default:
-            return 0;
     }
 }
 
@@ -205,7 +170,7 @@ static int read_preamble()
             MAGIC_NUMBER
         );
     }
-    bitmap_bpp = bpp(data.pixel_format);
+    bitmap_bpp = PIXEL_FORMAT_BPP(data.pixel_format);
     if (bitmap_bpp == 0) {
         fprintf(stderr, "Unrecognized pixel format\n");
         return 0;
@@ -256,50 +221,14 @@ static int read_preamble()
     return 1;
 }
 
-static int create_buffer()
-{
-    if ((buffer = (unsigned char *)malloc(data.buffer_size)) == NULL) {
-        fprintf(stderr, "Error allocating buffer\n");
-        return 0;
-    }
-
-    return 1;
-}
-
-static void clear_buffer()
-{
-    if (buffer != NULL) {
-        memset(buffer, 0, data.buffer_size);
-    }
-    if (matrix != NULL) {
-        for (int i = 0; i < 2; i++) {
-            if (canvas != NULL) {
-                led_canvas_clear(canvas);
-                canvas = led_matrix_swap_on_vsync(matrix, canvas);
-            }
-        }
-    }
-}
-
-static void clean_up_connection()
-{
-    if (sockfd != -1) {
-        close(sockfd);
-        sockfd = -1;
-    }
-    if (buffer != NULL) {
-        free(buffer);
-        buffer = NULL;
-    }
-}
-
 static void clean_up()
 {
-    clean_up_connection();
+    // clean_up_connection();
     if (matrix != NULL) {
         led_matrix_delete(matrix);
         matrix = NULL;
     }
+    xm_cleanup();
 }
 
 static int init_rgb(int argc, char **argv)
@@ -319,6 +248,16 @@ static int init_rgb(int argc, char **argv)
 
     fprintf(stderr, "Initialized %dx%d canvas...\n", screen_width, screen_height);
     return 1;
+}
+
+static void xm_callback(const struct FrameGeometry *frame, const unsigned char *content)
+{
+    data = *frame;
+    buffer = content;
+    if (show_server_fps) {
+        log_fps();
+    }
+    render();
 }
 
 static void render()
@@ -377,26 +316,6 @@ static inline void log_fps()
         pms = ms;
     } else {
         frames++;
-    }
-}
-
-static void main_loop()
-{
-    int nread = 0;
-    while (!exit_main_loop) {
-        while (nread < data.buffer_size) {
-            int r = read(sockfd, buffer + nread, data.buffer_size - nread);
-            if (r <= 0) {
-                fprintf(stderr, "server disconnected\n");
-                return;
-            }
-            nread += r;
-        }
-        if (show_server_fps) {
-            log_fps();
-        }
-        nread = nread - data.buffer_size;
-        render();
     }
 }
 
@@ -600,6 +519,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    // FIXME
+    log_set_level(LOG_VERBOSE);
     if (run_in_background) {
         run_as_daemon();
     }
@@ -622,31 +543,41 @@ int main(int argc, char **argv)
     }
 
     signal(SIGINT, sigint_handler);
-    unsigned int reconnect_attempt = 0;
-    do {
-        if (reconnect_attempt++ > 0) {
-            clear_buffer();
-            clean_up_connection();
-            nanosleep(&retry_delay_ts, NULL);
-        }
-        if (!connect_es(server)) {
-            if (reconnect && !exit_main_loop) {
-                continue;
-            } else {
-                break;
-            }
-        }
 
-        if (!read_preamble() || !create_buffer()) {
-            if (reconnect && !exit_main_loop) {
-                continue;
-            } else {
-                break;
-            }
-        }
+    blitSrc = source;
+    blitDest = dest;
 
-        main_loop();
-    } while (reconnect && !exit_main_loop);
+    xm_init();
+    xm_set_callback(xm_callback);
+    while (!exit_main_loop) {
+        nats_Sleep(10);
+    }
+
+    // unsigned int reconnect_attempt = 0;
+    // do {
+    //     if (reconnect_attempt++ > 0) {
+    //         clear_buffer();
+    //         clean_up_connection();
+    //         nanosleep(&retry_delay_ts, NULL);
+    //     }
+    //     if (!connect_es(server)) {
+    //         if (reconnect && !exit_main_loop) {
+    //             continue;
+    //         } else {
+    //             break;
+    //         }
+    //     }
+
+    //     if (!read_preamble() || !create_buffer()) {
+    //         if (reconnect && !exit_main_loop) {
+    //             continue;
+    //         } else {
+    //             break;
+    //         }
+    //     }
+
+    //     main_loop();
+    // } while (reconnect && !exit_main_loop);
 
     clean_up();
     fprintf(stderr, "done\n");

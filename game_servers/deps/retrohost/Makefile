@@ -25,7 +25,8 @@ INCLUDE=\
 	-I$(LIB7Z_ROOT) \
 	-I$(UN7Z_ROOT) \
 	-I$(RGBSERVER_ROOT) \
-	-I/usr/include/nats/ -I$(GEN_DIR)
+	-I/usr/include/nats/ \
+	-I$(GEN_DIR)
 DEFINE=
 CFLAGS=-Wall -O2 `sdl2-config --cflags`
 CXXFLAGS=$(CFLAGS) 
