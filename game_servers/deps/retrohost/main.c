@@ -28,6 +28,7 @@
 #include "video.h"
 #include "input.h"
 #include "log.h"
+#include "xm.h"
 #include "timing.h"
 
 static void *solib = NULL;
@@ -151,7 +152,7 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
             (rotation == ROTATE_CCW90 || rotation == ROTATE_CCW180) ? ATTR_ROT180 : ATTR_NONE,
             MAGIC_NUMBER
         };
-        rgbs_set_buffer_data(geometry);
+        // rgbs_set_buffer_data(geometry);
     } else if (!video_buffer.data && dims_changed) {
         geometry = (struct FrameGeometry) {
             (unsigned int) pitch * height,
@@ -162,15 +163,16 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
             (rotation == ROTATE_CCW90 || rotation == ROTATE_CCW180) ? ATTR_ROT180 : ATTR_NONE,
             MAGIC_NUMBER
         };
-        rgbs_set_buffer_data(geometry);
+        // rgbs_set_buffer_data(geometry);
     }
 
     const unsigned char *out;
     size_t out_size;
     blit(args.scale_mode, data, width, height, pitch, &out, &out_size);
 
-    rgbs_poll();
-    rgbs_send(out, out_size);
+    xm_publish_frame(&geometry, out, out_size);
+    // rgbs_poll();
+    // rgbs_send(out, out_size);
 }
 
 static void callback_audio_sample(int16_t left, int16_t right)
@@ -491,7 +493,8 @@ static bool callback_environment_set(unsigned cmd, void *data)
 
 static void clean_up()
 {
-    rgbs_end();
+    xm_cleanup();
+    // rgbs_end();
     dlclose(solib);
     free(video_buffer.data);
     video_buffer.data = NULL;
@@ -624,7 +627,7 @@ int main(int argc, const char **argv)
 
     audio_init(&audio);
     files_mkdirs(dirname((char *)args.so_path));
-    rgbs_start();
+    // rgbs_start();
 
     api_version = retro_api_version();
     retro_get_system_info(&system_info);
@@ -679,7 +682,9 @@ int main(int argc, const char **argv)
         kvstore_dump(&kv_store);
     }
 
+    xm_init();
     input_init();
+
     if (args.autopress) {
         input_schedule_keypress(args.autopress);
     }

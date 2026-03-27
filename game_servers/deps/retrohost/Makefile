@@ -12,6 +12,8 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 
+GEN_DIR=generated
+PROTO_DIR=proto
 MINIZIP_ROOT=minizip
 LIB7Z_ROOT=lib7z
 UN7Z_ROOT=un7z
@@ -22,17 +24,22 @@ INCLUDE=\
 	-I$(MINIZIP_ROOT) \
 	-I$(LIB7Z_ROOT) \
 	-I$(UN7Z_ROOT) \
-	-I$(RGBSERVER_ROOT)
+	-I$(RGBSERVER_ROOT) \
+	-I/usr/include/nats/ -I$(GEN_DIR)
 DEFINE=
 CFLAGS=-Wall -O2 `sdl2-config --cflags`
 CXXFLAGS=$(CFLAGS) 
-LDFLAGS=`sdl2-config --libs` -lz
+LDFLAGS=`sdl2-config --libs` -lz -lnats -lprotobuf-c
 EXE=rh
+
+PROTO_FILES = $(wildcard $(PROTO_DIR)/*.proto)
+PB_O_FILES = $(patsubst $(PROTO_DIR)/%.proto, $(GEN_DIR)/%.pb-c.o, $(PROTO_FILES))
 
 all: $(EXE)
 
 $(EXE): \
-	kv_store.o args.o files.o video.o input.o audio.o log.o timing.o main.o \
+	$(PB_O_FILES) \
+	kv_store.o args.o files.o video.o input.o audio.o log.o timing.o xm.o main.o \
 	$(MINIZIP_ROOT)/unzip.o $(MINIZIP_ROOT)/ioapi.o \
 	$(UN7Z_ROOT)/un7z.o \
 	$(LIB7Z_ROOT)/7zStream.o $(LIB7Z_ROOT)/7zCrc.o $(LIB7Z_ROOT)/7zArcIn.o \
@@ -43,6 +50,15 @@ $(EXE): \
 	$(RGBSERVER_ROOT)/rgbserver.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
+$(GEN_DIR)/%.pb-c.o: $(PROTO_DIR)/%.pb-c.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(GEN_DIR)/%.pb-c.c: $(PROTO_DIR)/%.proto | $(GEN_DIR)
+	protoc-c -I$(PROTO_DIR) --c_out=$(GEN_DIR) $(notdir $<)
+
+$(GEN_DIR):
+	mkdir -p $@
+
 %.o: %.c
 	$(CC) $(INCLUDE) $(DEFINE) $(CFLAGS) -c $< -o $@
 
@@ -50,4 +66,4 @@ $(EXE): \
 	$(CXX) $(INCLUDE) $(DEFINE) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	@rm -rf *.o $(EXE)
+	@rm -rf *.o $(EXE) $(GEN_DIR)

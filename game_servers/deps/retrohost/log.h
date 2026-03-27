@@ -16,6 +16,7 @@
 #define __LOG_H__
 
 #include <stdbool.h>
+#include <stdio.h>
 
 typedef enum {
     LOG_FATAL   = 0,
