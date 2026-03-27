@@ -12,11 +12,10 @@ CTL_SERVER_EXE='serve.sh'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--ctl', action='store_true', help='Deploy to control server')
-parser.add_argument('--cli', action='store_true', help='Deploy to clients')
 parser.add_argument('--all', action='store_true', help='Deploy everything')
 args = parser.parse_args()
 
-if not (args.ctl or args.cli or args.all):
+if not (args.ctl or args.all):
     sys.exit('Specify at least one option or "--all" to deploy everything')
 
 config = config.Config('deploy.yaml')
@@ -47,27 +46,3 @@ if args.ctl or args.all:
         f'{config.control_server.hostname}',
         f'cd {config.control_server.path}; nohup ./{CTL_SERVER_EXE} >log.txt 2>&1 &',
     ])
-
-if args.cli or args.all:
-    if not config.game_clients:
-        raise ValueError('Missing game client configuration')
-
-    print("Deploying to clients...")
-    for client in config.game_clients:
-        # Copy rgbclient
-        subprocess.call([
-            'rsync',
-            '-vrt',
-            '--exclude', '.*',
-            f'clients/rgbclient/',
-            f'{client.hostname}:{client.path}',
-        ])
-        # Build
-        subprocess.call([
-            'ssh',
-            '-o',
-            'StrictHostKeyChecking no',
-            f'{client.hostname}',
-            '-t',
-            f'cd {client.path} && make',
-        ])

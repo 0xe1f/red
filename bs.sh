@@ -14,6 +14,8 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 
+# Stages, builds and deploys game servers to the game server host
+
 # Check prerequisites
 if [ ! -f "deploy.yaml" ]; then
     echo "Error: deploy.yaml not found" >&2
@@ -25,7 +27,7 @@ fi
 
 BUILD_SVR=`yq e '.control_server.hostname' deploy.yaml`
 if [ -z "$BUILD_SVR" ]; then
-    echo "Error: missing control server hostname in deploy.yaml" >&2
+    echo "Error: missing build server hostname in deploy.yaml" >&2
     exit 1
 fi
 

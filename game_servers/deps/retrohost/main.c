@@ -477,9 +477,11 @@ static bool callback_environment_set(unsigned cmd, void *data)
     default:
         if (cmd & RETRO_ENVIRONMENT_EXPERIMENTAL) {
             int exp_cmd = cmd & ~RETRO_ENVIRONMENT_EXPERIMENTAL;
-            log_w(LOG_TAG, "retro_environment_set(): unrecognized experimental cmd=0x%1$x | %2$d\n", RETRO_ENVIRONMENT_EXPERIMENTAL, exp_cmd);
+            log_w(LOG_TAG, "retro_environment_set(): unrecognized cmd=0x%1$x | %2$d\n",
+                RETRO_ENVIRONMENT_EXPERIMENTAL, exp_cmd);
         } else {
-            log_w(LOG_TAG, "retro_environment_set(): unrecognized cmd=%1$u (0x%1$x)\n", cmd);
+            log_w(LOG_TAG, "retro_environment_set(): unrecognized cmd=%1$u (0x%1$x)\n",
+                cmd);
         }
         return false;
     }

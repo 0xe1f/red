@@ -66,7 +66,7 @@ stage_project() {
 }
 
 # Create build directory on build server
-ssh -o "StrictHostKeyChecking no" $BUILD_SVR -t "mkdir -p $BUILD_PATH"
+ssh $BUILD_SVR -t "mkdir -p $BUILD_PATH"
 
 # Copy common scripts/files to build server
 copy_scripts
@@ -77,4 +77,4 @@ for DIR in $ARGS; do
 done
 
 # Start build on build server
-ssh -o "StrictHostKeyChecking no" $BUILD_SVR -t "$BUILD_PATH/build.sh $GAME_SVR_HOST $GAME_SVR_PATH $ARGS"
+ssh $BUILD_SVR -t "$BUILD_PATH/build.sh $GAME_SVR_HOST $GAME_SVR_PATH $ARGS"
