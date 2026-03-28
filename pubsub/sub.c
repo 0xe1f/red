@@ -20,7 +20,7 @@
 #include <unistd.h>
 
 #include "log.h"
-#include "xm.h"
+#include "xm_sub.h"
 #include "led-matrix-c.h"
 
 #define LOG_TAG "client"

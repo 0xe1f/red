@@ -22,13 +22,12 @@
 #include <unistd.h>
 #include "libretro.h"
 #include "audio.h"
-#include "rgbserver.h"
 #include "args.h"
 #include "files.h"
 #include "video.h"
 #include "input.h"
 #include "log.h"
-#include "xm.h"
+#include "xm_pub.h"
 #include "timing.h"
 
 static void *solib = NULL;
@@ -63,7 +62,7 @@ struct retro_game_info_ext *game_info_ext = NULL;
 VideoBuffer video_buffer = {0};
 struct retro_system_av_info av_info;
 Rotation rotation = ROTATE_NONE;
-unsigned char pixel_format = PIXEL_FORMAT_UNKNOWN; // default is 1555
+Red__Geometry__PixelFormat pixel_format = RED__GEOMETRY__PIXEL_FORMAT__PF_UNKNOWN; // default is 1555
 struct retro_input_descriptor *input_descriptors = NULL;
 ArgsOptions args;
 retro_keyboard_event_t keyboard_event_callback = NULL;
@@ -73,7 +72,7 @@ static struct retro_controller_info *ports;
 static struct retro_core_options_v2_intl core_options_v2_intl;
 static const struct retro_subsystem_info *subsystem_info;
 static Audio audio;
-static struct FrameGeometry geometry;
+static Red__Geometry geometry = RED__GEOMETRY__INIT;
 static bool is_running = true;
 static KvStore kv_store = {0};
 static retro_core_options_update_display_callback_t core_options_update_display_callback = NULL;
@@ -85,6 +84,11 @@ static FILE *log_file = NULL;
 static void set_core_options(const struct retro_core_option_definition *option_defs);
 static void set_variables(const struct retro_variable *vars, bool single);
 static void callback_set_led_state(int led, int state);
+
+// FIXME! move this
+#define PIXEL_FORMAT_BPP(pf) \
+    ((pf) == RED__GEOMETRY__PIXEL_FORMAT__PF_RGBA8888 || (pf) == RED__GEOMETRY__PIXEL_FORMAT__PF_ARGB8888 ? 4 : \
+     (pf) == RED__GEOMETRY__PIXEL_FORMAT__PF_RGB565 || (pf) == RED__GEOMETRY__PIXEL_FORMAT__PF_RGBA5551 ? 2 : 0)
 
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
@@ -142,26 +146,22 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
         }
     }
 
-    if (video_buffer.data && geometry.bitmap_width == 0) {
-        geometry = (struct FrameGeometry) {
-            (unsigned int) video_buffer.pitch * video_buffer.height,
-            (unsigned short) video_buffer.pitch,
-            (unsigned short) video_buffer.width,
-            (unsigned short) video_buffer.height,
-            pixel_format,
-            (rotation == ROTATE_CCW90 || rotation == ROTATE_CCW180) ? ATTR_ROT180 : ATTR_NONE,
-            MAGIC_NUMBER
-        };
+    if (video_buffer.data && geometry.width == 0) {
+        geometry.pitch = video_buffer.pitch;
+        geometry.width = video_buffer.width;
+        geometry.height = video_buffer.height;
+        geometry.pixel_format = pixel_format;
+        geometry.attrs = (rotation == ROTATE_CCW90 || rotation == ROTATE_CCW180)
+            ? RED__GEOMETRY__ATTRS__ATTR_ROT180 
+            : RED__GEOMETRY__ATTRS__ATTR_NONE;
     } else if (!video_buffer.data && dims_changed) {
-        geometry = (struct FrameGeometry) {
-            (unsigned int) pitch * height,
-            (unsigned short) pitch,
-            (unsigned short) width,
-            (unsigned short) height,
-            pixel_format,
-            (rotation == ROTATE_CCW90 || rotation == ROTATE_CCW180) ? ATTR_ROT180 : ATTR_NONE,
-            MAGIC_NUMBER
-        };
+        geometry.pitch = pitch;
+        geometry.width = width;
+        geometry.height = height;
+        geometry.pixel_format = pixel_format;
+        geometry.attrs = (rotation == ROTATE_CCW90 || rotation == ROTATE_CCW180)
+            ? RED__GEOMETRY__ATTRS__ATTR_ROT180 
+            : RED__GEOMETRY__ATTRS__ATTR_NONE;
     }
 
     const unsigned char *out;
@@ -229,8 +229,8 @@ static void dump_env()
     log_d(LOG_TAG, "    fps: %.02f\n", av_info.timing.fps);
     log_d(LOG_TAG, "    sample_rate: %.02f\n", av_info.timing.sample_rate);
     log_d(LOG_TAG, "    pixel_format: %s\n",
-        pixel_format == PIXEL_FORMAT_ARGB8888 ? "ARGB8888" :
-        pixel_format == PIXEL_FORMAT_RGB565 ? "RGB565" :
+        pixel_format == RED__GEOMETRY__PIXEL_FORMAT__PF_ARGB8888 ? "ARGB8888" :
+        pixel_format == RED__GEOMETRY__PIXEL_FORMAT__PF_RGB565 ? "RGB565" :
         "UNKNOWN");
     log_d(LOG_TAG, "----\n");
 }
@@ -413,13 +413,13 @@ static bool callback_environment_set(unsigned cmd, void *data)
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_PIXEL_FORMAT\n");
         switch (*(enum retro_pixel_format *)data) {
         case RETRO_PIXEL_FORMAT_XRGB8888:
-            pixel_format = PIXEL_FORMAT_ARGB8888;
+            pixel_format = RED__GEOMETRY__PIXEL_FORMAT__PF_ARGB8888;
             break;
         case RETRO_PIXEL_FORMAT_RGB565:
-            pixel_format = PIXEL_FORMAT_RGB565;
+            pixel_format = RED__GEOMETRY__PIXEL_FORMAT__PF_RGB565;
             break;
         default:
-            pixel_format = PIXEL_FORMAT_UNKNOWN;
+            pixel_format = RED__GEOMETRY__PIXEL_FORMAT__PF_UNKNOWN;
             log_d(LOG_TAG, "Unsupported pixel format: %d\n",
                 *(enum retro_pixel_format *)data);
             return false;

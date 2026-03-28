@@ -15,8 +15,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "geometry.pb-c.h"
 #include "libretro.h"
-#include "rgbcommon.h"
 #include "video.h"
 
 #define MIN(a,b) ((a)<(b)?(a):(b))
@@ -35,7 +35,7 @@
 extern VideoBuffer video_buffer;
 extern struct retro_system_av_info av_info;
 extern Rotation rotation;
-extern unsigned char pixel_format;
+extern Red__Geometry__PixelFormat pixel_format;
 
 static void blit_plain(const void *data, unsigned width, unsigned height, size_t pitch);
 static void blit_half(const void *data, unsigned width, unsigned height, size_t pitch);
@@ -252,12 +252,12 @@ static void blit_scale(
 
             for (int i = y1; i < y2; ++i) {
                 for (int j = x1; j < x2; ++j) {
-                    if (pixel_format == PIXEL_FORMAT_ARGB8888) {
+                    if (pixel_format == RED__GEOMETRY__PIXEL_FORMAT__PF_ARGB8888) {
                         unsigned int c = ((unsigned int *)pixels)[j];
                         r += RED_ARGB8888(c);
                         g += GREEN_ARGB8888(c);
                         b += BLUE_ARGB8888(c);
-                    } else if (pixel_format == PIXEL_FORMAT_RGB565) {
+                    } else if (pixel_format == RED__GEOMETRY__PIXEL_FORMAT__PF_RGB565) {
                         unsigned short c = ((unsigned short *)pixels)[j];
                         r += RED_RGB565(c);
                         g += GREEN_RGB565(c);
@@ -272,9 +272,9 @@ static void blit_scale(
             g /= pixel_count;
             b /= pixel_count;
 
-            if (pixel_format == PIXEL_FORMAT_ARGB8888) {
+            if (pixel_format == RED__GEOMETRY__PIXEL_FORMAT__PF_ARGB8888) {
                 (*(unsigned int *)dr) = RGB_ARGB8888(r,g,b);
-            } else if (pixel_format == PIXEL_FORMAT_RGB565) {
+            } else if (pixel_format == RED__GEOMETRY__PIXEL_FORMAT__PF_RGB565) {
                 (*(unsigned short *)dr) = RGB_RGB565(r,g,b);
             }
 

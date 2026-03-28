@@ -12,16 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __XM_H__
-#define __XM_H__
+#ifndef __XM_PUB_H__
+#define __XM_PUB_H__
 
 #include <stdbool.h>
 #include <stddef.h>
-// FIXME!!
-#include "rgbcommon.h"
+#include "geometry.pb-c.h"
 
 void xm_init();
-void xm_publish_frame(const struct FrameGeometry *frame, const unsigned char *content, size_t size);
+void xm_publish_frame(const Red__Geometry *geometry, const unsigned char *content, size_t size);
 void xm_cleanup();
 
-#endif // __XM_H__
+#endif // __XM_PUB_H__

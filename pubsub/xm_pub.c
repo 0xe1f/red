@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <nats.h>
+#include <nats/nats.h>
 #include "frame.pb-c.h"
 #include "args.h"
 #include "log.h"
-#include "xm.h"
+#include "xm_pub.h"
 
 #define LOG_TAG "xm"
 
@@ -55,21 +55,12 @@ void xm_init()
     log_i(LOG_TAG, "Will publish frames to '%s'\n", subject);
 }
 
-void xm_publish_frame(const struct FrameGeometry *frame, const unsigned char *content, size_t size)
+void xm_publish_frame(const Red__Geometry *geometry, const unsigned char *content, size_t size)
 {
-    // Create and populate the Protobuf message
-    Red__Geometry gm = RED__GEOMETRY__INIT;
-    gm.pitch = frame->bitmap_pitch;
-    gm.width = frame->bitmap_width;
-    gm.height = frame->bitmap_height;
-    // FIXME - this is an enum; for now, values align
-    gm.pixel_format = frame->pixel_format;
-    gm.attrs = frame->attrs;
-
     Red__Frame fm = RED__FRAME__INIT;
     fm.content.data = (unsigned char *) content;
     fm.content.len = size;
-    fm.geometry = &gm;
+    fm.geometry = (Red__Geometry *) geometry;
 
     // Pack the message
     size_t len = red__frame__get_packed_size(&fm);

@@ -18,9 +18,15 @@
 #include "frame.pb-c.h"
 #include "arena.h"
 #include "log.h"
-#include "xm.h"
+#include "xm_sub.h"
 
 #define LOG_TAG "xm"
+
+static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *msg, void *closure);
+inline static void* allocator_alloc(void *allocator_data, size_t size);
+inline static void allocator_free(void *allocator_data, void *pointer);
+
+static const char *subject = "red.frames";
 
 static natsConnection *conn = NULL;
 static natsSubscription *sub = NULL;
@@ -31,12 +37,6 @@ static ProtobufCAllocator allocator = {
     .free = allocator_free,
     .allocator_data = &default_arena
 };
-
-static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *msg, void *closure);
-inline static void* allocator_alloc(void *allocator_data, size_t size);
-inline static void allocator_free(void *allocator_data, void *pointer);
-
-static const char *subject = "red.frames";
 
 void xm_init(const char *server_url)
 {

@@ -43,20 +43,22 @@ if [ $CLIENT_COUNT -le 0 ] ; then
     exit 1
 fi
 
-CLIENT_PATH=rgbclient
-BUILD_PATH="red_builds/${CLIENT_PATH}"
+APP_PATH=pubsub
+BUILD_PATH="red_builds/${APP_PATH}"
+TARGET=$1
 
+shift
 set -e
 
 echo -e "${BOLD_WHITE}>> ${GREEN}Staging build... ${PLAIN}"
 rsync -trph \
     --info=progress2 \
     --exclude '.*' \
-    clients/rgbclient/ \
+    "${APP_PATH}/" \
     "${BUILD_SVR}:${BUILD_PATH}/"
 
 echo -e "${BOLD_WHITE}>> ${GREEN}Building... ${PLAIN}"
-ssh $BUILD_SVR -t "cd ${BUILD_PATH} && make"
+ssh $BUILD_SVR -t "cd ${BUILD_PATH} && make $TARGET"
 
 for CLIENT in `seq 0 $CLIENT_COUNT`; do
     CL_HOST=`yq e ".game_clients[$CLIENT].hostname" deploy.yaml`
@@ -64,7 +66,10 @@ for CLIENT in `seq 0 $CLIENT_COUNT`; do
     CL_EXE=`yq e ".game_clients[$CLIENT].exe" deploy.yaml`
 
     echo -e "${BOLD_WHITE}>> ${GREEN}Deploying to ${CL_HOST}... ${PLAIN}"
+    ssh $CL_HOST -t "mkdir -p ${CL_PATH}"
     scp "${BUILD_SVR}:${BUILD_PATH}/${CL_EXE}" "${CL_HOST}:${CL_PATH}/"
 done
+
+# scp "${BUILD_SVR}:${BUILD_PATH}/pub" "${CL_HOST}:${CL_PATH}/"
 
 echo -e "${BOLD_WHITE}>> ${GREEN}All done... ${PLAIN}"

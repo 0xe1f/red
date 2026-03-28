@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __XM_H__
-#define __XM_H__
+#ifndef __XM_SUB_H__
+#define __XM_SUB_H__
 
 #include <stdbool.h>
 #include <stddef.h>
 #include "frame.pb-c.h"
-
 
 typedef void (*xm_callback_t)(const Red__Frame *);
 
@@ -26,4 +25,4 @@ void xm_init(const char *server_url);
 void xm_set_callback(xm_callback_t callback);
 void xm_cleanup();
 
-#endif // __XM_H__
+#endif // __XM_SUB_H__
