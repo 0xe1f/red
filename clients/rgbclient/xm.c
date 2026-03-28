@@ -26,7 +26,6 @@ static natsSubscription *sub = NULL;
 static const char *subject = "protobuf.topic";
 
 static xm_callback_t frame_callback = NULL;
-static struct FrameGeometry geometry;
 
 static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *msg, void *closure);
 
@@ -36,8 +35,6 @@ void xm_init(const char *server_url)
         log_e(LOG_TAG, "NATS connection already initialized\n");
         return;
     }
-
-    geometry.magic = MAGIC_NUMBER;
 
     // Connect to NATS server
     natsOptions *opts;
@@ -88,21 +85,14 @@ static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *
 
     // Unpack message
     Red__Frame *frame;
+    // FIXME: optimize by reusing unpacked structure and only unpacking content data
     frame = red__frame__unpack(NULL, len, data);
 
     if (frame == NULL) {
         log_e(LOG_TAG, "Failed to unpack message\n");
     } else {
-        Red__Geometry *fg = frame->geometry;
-        geometry.buffer_size = frame->content.len;
-        geometry.pixel_format = fg->pixel_format;
-        geometry.attrs = fg->attrs;
-        geometry.bitmap_width = fg->width;
-        geometry.bitmap_height = fg->height;
-        geometry.bitmap_pitch = fg->pitch;
-
         if (frame_callback) {
-            frame_callback(&geometry, frame->content.data);
+            frame_callback(frame);
         }
 
         // 4. Free the unpacked message structure

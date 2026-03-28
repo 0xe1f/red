@@ -17,10 +17,10 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-// FIXME!!
-#include "rgbcommon.h"
+#include "frame.pb-c.h"
 
-typedef void (*xm_callback_t)(const struct FrameGeometry *, const unsigned char *);
+
+typedef void (*xm_callback_t)(const Red__Frame *);
 
 void xm_init(const char *server_url);
 void xm_set_callback(xm_callback_t callback);

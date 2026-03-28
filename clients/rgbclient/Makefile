@@ -20,8 +20,8 @@ CXXFLAGS=$(CFLAGS)
 LDFLAGS=$(LIB) -lrgbmatrix -lnats -lprotobuf-c
 EXE=rgbclient
 
-PROTO_FILES = $(wildcard $(PROTO_DIR)/*.proto)
-PB_O_FILES = $(patsubst $(PROTO_DIR)/%.proto, $(GEN_DIR)/%.pb-c.o, $(PROTO_FILES))
+PROTO_FILES=proto/geometry.proto proto/frame.proto
+PB_O_FILES=$(patsubst $(PROTO_DIR)/%.proto, $(GEN_DIR)/%.pb-c.o, $(PROTO_FILES))
 
 all: $(EXE)
 
