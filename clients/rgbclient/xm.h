@@ -22,7 +22,7 @@
 
 typedef void (*xm_callback_t)(const struct FrameGeometry *, const unsigned char *);
 
-void xm_init();
+void xm_init(const char *server_url);
 void xm_set_callback(xm_callback_t callback);
 void xm_cleanup();
 

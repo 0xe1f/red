@@ -23,7 +23,6 @@ static natsConnection *conn = NULL;
 static natsSubscription *sub = NULL;
 
 // FIXME!! config
-static const char *nats_url = "nats://10.42.0.131:4222";
 static const char *subject = "protobuf.topic";
 
 static xm_callback_t frame_callback = NULL;
@@ -31,7 +30,7 @@ static struct FrameGeometry geometry;
 
 static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *msg, void *closure);
 
-void xm_init()
+void xm_init(const char *server_url)
 {
     if (conn) {
         log_e(LOG_TAG, "NATS connection already initialized\n");
@@ -43,7 +42,7 @@ void xm_init()
     // Connect to NATS server
     natsOptions *opts;
     natsOptions_Create(&opts);
-    natsOptions_SetURL(opts, nats_url);
+    natsOptions_SetURL(opts, server_url);
     natsStatus s = natsConnection_Connect(&conn, opts);
     natsOptions_Destroy(opts);
 
@@ -60,8 +59,8 @@ void xm_init()
         return;
     }
 
-    log_i(LOG_TAG, "Connected to NATS server at %s\n", nats_url);
-    log_i(LOG_TAG, "Subscribed to subject '%s'\n", subject);
+    log_i(LOG_TAG, "Connected to NATS server at %s\n", server_url);
+    log_i(LOG_TAG, "Subscribed to '%s'\n", subject);
 }
 
 void xm_set_callback(xm_callback_t callback)

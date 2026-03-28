@@ -1,28 +1,22 @@
-/*
-   RGBClient
-   Copyright 2024, Akop Karapetyan
+// Copyright (c) 2024 Akop Karapetyan
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
-
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <netinet/in.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
@@ -35,14 +29,7 @@
 #include "led-matrix-c.h"
 #include "rgbcommon.h"
 
-#define LOG_TAG "rgbclient"
-
-#define RETRY_COUNT_DEFAULT    0
-#define RETRY_DELAY_DEFAULT_MS 500
-#define PORT_DEFAULT           3500
-
-#define MIN(x, y) ((x) < (y) ? (x) : (y))
-#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#define LOG_TAG "client"
 
 struct RGB {
     unsigned char r;
@@ -60,16 +47,12 @@ struct ViewRect {
 static int show_server_fps = 0;
 static int sockfd = -1;
 static int exit_main_loop = 0;
-static int retry_count = RETRY_COUNT_DEFAULT;
-static int reconnect = 0;
 static int run_in_background = 0;
-static struct timespec retry_delay_ts;
-static unsigned short port = PORT_DEFAULT;
 static struct FrameGeometry data;
 static unsigned char bitmap_bpp = 0;
 static unsigned char *buffer = NULL;
+static const char *server_url = NULL;
 
-static const char *server;
 static int screen_width;
 static int screen_height;
 static int vw_origin = 0;
@@ -81,11 +64,6 @@ static struct ViewRect source;
 static struct ViewRect dest;
 static struct ViewRect blitSrc;
 static struct ViewRect blitDest;
-
-static inline void log_fps();
-static void render();
-static const char *rect_string(const struct ViewRect *rect);
-static void xm_callback(const struct FrameGeometry *frame, const unsigned char *content);
 
 // RGB565
 #define RED_RGB565(x) (((x>>11)&0x1f)*255/31)
@@ -103,6 +81,20 @@ static void xm_callback(const struct FrameGeometry *frame, const unsigned char *
 #define RED_RGBA5551(x) (((x>>11)&0x1f)*255/31)
 #define GREEN_RGBA5551(x) (((x>>6)&0x1f)*255/31)
 #define BLUE_RGBA5551(x) (((x>>1)&0x1f)*255/31)
+
+static const char* pixel_format_str(unsigned char pixel_format);
+static inline void unpack(struct RGB *dest, unsigned char *src, int offset);
+static bool init_rgb(int argc, char **argv);
+static void render();
+static unsigned long long current_millis();
+static inline void log_fps();
+static bool parse_rect(const char *arg, struct ViewRect *rect);
+static bool validate_rect(struct ViewRect rect);
+static void run_as_daemon();
+static bool parse_args(int argc, const char **argv);
+static void sigint_callback(int s);
+static void xm_callback(const struct FrameGeometry *frame, const unsigned char *content);
+static void clean_up();
 
 static const char* pixel_format_str(unsigned char pixel_format)
 {
@@ -151,11 +143,11 @@ static int read_preamble()
     blitDest = dest;
     int r = read(sockfd, &data, sizeof(data));
     if (r != sizeof(data)) {
-        fprintf(stderr, "Error reading buffer data (read %d bytes)\n", r);
+        log_e(LOG_TAG, "Error reading buffer data (read %d bytes)\n", r);
         return 0;
     }
 
-    fprintf(stderr, "Buffer size: %d\npitch: %d\nwidth: %d\nheight: %d\npixel format: %s\nattrs: 0x%x\n",
+    log_i(LOG_TAG, "Buffer size: %d\npitch: %d\nwidth: %d\nheight: %d\npixel format: %s\nattrs: 0x%x\n",
         data.buffer_size,
         data.bitmap_pitch,
         data.bitmap_width,
@@ -165,27 +157,27 @@ static int read_preamble()
     );
 
     if (data.magic != MAGIC_NUMBER) {
-        fprintf(stderr, "Magic number mismatch (0x%x != 0x%x)\n",
+        log_e(LOG_TAG, "Magic number mismatch (0x%x != 0x%x)\n",
             data.magic,
             MAGIC_NUMBER
         );
     }
     bitmap_bpp = PIXEL_FORMAT_BPP(data.pixel_format);
     if (bitmap_bpp == 0) {
-        fprintf(stderr, "Unrecognized pixel format\n");
+        log_e(LOG_TAG, "Unrecognized pixel format\n");
         return 0;
     }
 
 #if 0
     if (bitmap_bpp * data.bitmap_width != data.bitmap_pitch) {
-        fprintf(stderr, "Bitmap pitch does not fempute (%d != %d)\n",
+        log_e(LOG_TAG, "Bitmap pitch does not fempute (%d != %d)\n",
             bitmap_bpp * data.bitmap_width,
             data.bitmap_pitch
         );
         return 0;
     }
 #endif
-    fprintf(stderr, "Projected Mbps: %.02f\n",
+    log_i(LOG_TAG, "Projected Mbps: %.02f\n",
         (float)(data.buffer_size * 60) / 1024 / 1024
     );
 
@@ -221,24 +213,14 @@ static int read_preamble()
     return 1;
 }
 
-static void clean_up()
+static bool init_rgb(int argc, char **argv)
 {
-    // clean_up_connection();
-    if (matrix != NULL) {
-        led_matrix_delete(matrix);
-        matrix = NULL;
-    }
-    xm_cleanup();
-}
-
-static int init_rgb(int argc, char **argv)
-{
-    fprintf(stderr, "Initializing LED matrix...\n");
+    log_i(LOG_TAG, "Initializing LED matrix...\n");
     struct RGBLedMatrixOptions options = {};
     matrix = led_matrix_create_from_options(&options, &argc, &argv);
     if (matrix == NULL) {
-        fprintf(stderr, "Error initializing matrix\n");
-        return 0;
+        log_e(LOG_TAG, "Error initializing matrix\n");
+        return false;
     }
 
     canvas = led_matrix_create_offscreen_canvas(matrix);
@@ -246,18 +228,8 @@ static int init_rgb(int argc, char **argv)
     led_canvas_get_size(canvas, &screen_width, &screen_height);
     led_canvas_set_pixel(canvas, 0, 0, 0, 0, 0);
 
-    fprintf(stderr, "Initialized %dx%d canvas...\n", screen_width, screen_height);
-    return 1;
-}
-
-static void xm_callback(const struct FrameGeometry *frame, const unsigned char *content)
-{
-    data = *frame;
-    buffer = content;
-    if (show_server_fps) {
-        log_fps();
-    }
-    render();
+    log_i(LOG_TAG, "Initialized %dx%d canvas...\n", screen_width, screen_height);
+    return true;
 }
 
 static void render()
@@ -311,7 +283,7 @@ static inline void log_fps()
     unsigned long long delta = ms - pms;
     if (delta > 1000L) {
         float fps = (float) frames / (delta / 1000L);
-        fprintf(stderr, "\rfps: %.02f", fps);
+        log_v(LOG_TAG, "fps: %.02f\r", fps);
         frames = 0;
         pms = ms;
     } else {
@@ -319,31 +291,25 @@ static inline void log_fps()
     }
 }
 
-static void sigint_handler(int s)
-{
-    fprintf(stderr, "Caught SIGINT, exiting...\n");
-    exit_main_loop = 1;
-}
-
-static int parse_rect(const char *arg, struct ViewRect *rect)
+static bool parse_rect(const char *arg, struct ViewRect *rect)
 {
     char temp[128];
     strncpy(temp, arg, 127);
     char *delim = strchr(temp, '-');
     if (delim == NULL) {
-        return 0;
+        return false;
     }
     *delim = '\0';
 
     char *sdelim = strchr(temp, ',');
     if (sdelim == NULL) {
-        return 0;
+        return false;
     }
     *sdelim = '\0';
 
     char *ddelim = strchr(delim + 1, ',');
     if (ddelim == NULL) {
-        return 0;
+        return false;
     }
     *ddelim = '\0';
 
@@ -352,45 +318,33 @@ static int parse_rect(const char *arg, struct ViewRect *rect)
     rect->dx = strtol(delim + 1, NULL, 10);
     rect->dy = strtol(ddelim + 1, NULL, 10);
 
-    return 1;
+    return true;
 }
 
-static int validate_rect(struct ViewRect rect)
+static bool validate_rect(struct ViewRect rect)
 {
     if (rect.sx >= rect.dx) {
-        return 0;
+        return false;
     } else if (rect.sy >= rect.dy) {
-        return 0;
+        return false;
     }
-    return 1;
-}
-
-static const char *rect_string(const struct ViewRect *rect)
-{
-    static char buf[64];
-    snprintf(buf, 63, "%d,%d-%d,%d",
-        rect->sx,
-        rect->sy,
-        rect->dx,
-        rect->dy
-    );
-    return buf;
+    return true;
 }
 
 static void run_as_daemon()
 {
     pid_t pid = fork();
     if (pid < 0) {
-        fprintf(stderr, "Error forking process\n");
+        log_e(LOG_TAG, "Error forking process\n");
         exit(1);
     } else if (pid > 0) {
         // Parent
-        fprintf(stderr, "Running in background, PID: %d\n", pid);
+        log_i(LOG_TAG, "Running in background, PID: %d\n", pid);
         exit(0);
     } else {
         // Child
         if (setsid() < 0) {
-            fprintf(stderr, "Error creating new session\n");
+            log_e(LOG_TAG, "Error creating new session\n");
             exit(1);
         }
         fclose(stdin);
@@ -399,118 +353,112 @@ static void run_as_daemon()
     }
 }
 
-static int parse_args(int argc, const char **argv)
+static bool parse_args(int argc, const char **argv)
 {
-    if (argc < 2) {
-        fprintf(stderr, "Missing server IP\n");
-        return 0;
-    }
-
-    server = argv[1];
     unsigned char src_set = 0;
     unsigned char dest_set = 0;
     unsigned char content_set = 0;
-    unsigned int retry_delay_ms = RETRY_DELAY_DEFAULT_MS;
 
-    fprintf(stderr, "%s \\\n", argv[0]);
     for (int i = 1; i < argc; i++) {
         const char *arg = argv[i];
-        fprintf(stderr, "\t%s \\\n", arg);
-        if (i == 1) {
-            continue;
-        }
         if (strcmp(arg, "--sfps") == 0) {
             show_server_fps = 1;
         } else if (strcmp(arg, "--help") == 0) {
-            fprintf(stderr, "Usage: %s <server-ip> [--src-rect=x1,y1-x2,y2] [--dest-rect=x1,y1-x2,y2] [--content-rect=x1,y1-x2,y2] [--port=port] [--retry-count=count] [--retry-delay=ms] [--sfps] [--reconnect]\n", argv[0]);
-            fprintf(stderr, "  --sfps              Show server FPS\n");
-            fprintf(stderr, "  --src-rect          Source rectangle in server bitmap\n");
-            fprintf(stderr, "  --dest-rect         Destination rectangle on LED matrix\n");
-            fprintf(stderr, "  --content-rect      Content rectangle on LED matrix\n");
-            fprintf(stderr, "  --port              Server port (default: %d)\n", PORT_DEFAULT);
-            fprintf(stderr, "  --retry-count       Connection retry count (default: %d, -1 for infinite)\n", RETRY_COUNT_DEFAULT);
-            fprintf(stderr, "  --retry-delay       Connection retry delay in milliseconds (default: %d)\n", RETRY_DELAY_DEFAULT_MS);
-            fprintf(stderr, "  --reconnect         Reconnect on disconnection\n");
-            fprintf(stderr, "  --background        Run in background as a daemon\n");
-            return 0;
-        } else if (strcmp(arg, "--reconnect") == 0) {
-            reconnect = 1;
+            fprintf(stdout, "Usage: %s <server-url> [--src-rect=x1,y1-x2,y2] [--dest-rect=x1,y1-x2,y2] [--content-rect=x1,y1-x2,y2] [--background] [--sfps]\n", argv[0]);
+            fprintf(stdout, "  --src-rect          Source rectangle in server bitmap\n");
+            fprintf(stdout, "  --dest-rect         Destination rectangle on LED matrix\n");
+            fprintf(stdout, "  --content-rect      Content rectangle on LED matrix\n");
+            fprintf(stdout, "  --background        Run in background as a daemon\n");
+            fprintf(stdout, "  --sfps              Show server FPS\n");
+            return false;
         } else if (strcmp(arg, "--background") == 0) {
             run_in_background = 1;
         } else if (strstr(arg, "--src-rect=")) {
             const char *post_eq = arg + 11;
             if (!parse_rect(post_eq, &source)) {
-                fprintf(stderr, "'%s' is not a valid rectangle\n", post_eq);
-                return 0;
+                log_f(LOG_TAG, "'%s' is not a valid rectangle\n", post_eq);
+                return false;
             }
             src_set = 1;
         } else if (strstr(arg, "--dest-rect=")) {
             const char *post_eq = arg + 12;
             if (!parse_rect(post_eq, &dest)) {
-                fprintf(stderr, "'%s' is not a valid rectangle\n", post_eq);
-                return 0;
+                log_f(LOG_TAG, "'%s' is not a valid rectangle\n", post_eq);
+                return false;
             }
             dest_set = 1;
         } else if (strstr(arg, "--content-rect=")) {
             const char *post_eq = arg + 15;
             if (!parse_rect(post_eq, &content)) {
-                fprintf(stderr, "'%s' is not a valid rectangle\n", post_eq);
-                return 0;
+                log_f(LOG_TAG, "'%s' is not a valid rectangle\n", post_eq);
+                return false;
             }
             content_set = 1;
-        } else if (strstr(arg, "--port=")) {
-            const char *post_eq = arg + 7;
-            long p = strtol(post_eq, NULL, 10);
-            if (p <= 0 || p > UINT16_MAX) {
-                fprintf(stderr, "'%s' is not a valid port\n", post_eq);
-                return 0;
-            }
-            port = (unsigned short) p;
-        } else if (strstr(arg, "--retry-count=")) {
-            const char *post_eq = arg + 14;
-            long p = strtol(post_eq, NULL, 10);
-            if (p < INT32_MIN || p > INT32_MAX) {
-                fprintf(stderr, "'%s' is not a valid retry count\n", post_eq);
-                return 0;
-            }
-            retry_count = (int) p;
-        } else if (strstr(arg, "--retry-delay=")) {
-            const char *post_eq = arg + 14;
-            long p = strtol(post_eq, NULL, 10);
-            if (p <= 0 || p > UINT32_MAX) {
-                fprintf(stderr, "'%s' is not a valid retry delay\n", post_eq);
-                return 0;
-            }
-            retry_delay_ms = p;
+        } else if (strstr(arg, "--led-")) {
+            continue; // skip led matrix options
+        } else if (strstr(arg, "--") || strstr(arg, "-")) {
+            log_f(LOG_TAG, "Unrecognized argument: '%s'\n", arg);
+            return false;
+        } else if (server_url) {
+            log_f(LOG_TAG, "Server URL already specified\n");
+            return false;
+        } else {
+            server_url = arg;
         }
     }
 
-    if (!src_set) {
-        fprintf(stderr, "Missing source rectangle\n");
-        return 0;
+    if (!server_url) {
+         log_f(LOG_TAG, "Missing server URL\n");
+         return false;
+    } else if (!src_set) {
+        log_f(LOG_TAG, "Missing source rectangle\n");
+        return false;
     } else if (!dest_set) {
-        fprintf(stderr, "Missing destination rectangle\n");
-        return 0;
+        log_f(LOG_TAG, "Missing destination rectangle\n");
+        return false;
     }  else if (!content_set) {
-        fprintf(stderr, "Missing content rectangle\n");
-        return 0;
+        log_f(LOG_TAG, "Missing content rectangle\n");
+        return false;
     }
 
     if (!validate_rect(source)) {
-        fprintf(stderr, "Invalid source rectangle\n");
-        return 0;
+        log_f(LOG_TAG, "Invalid source rectangle\n");
+        return false;
     } else if (!validate_rect(dest)) {
-        fprintf(stderr, "Invalid destination rectangle\n");
-        return 0;
+        log_f(LOG_TAG, "Invalid destination rectangle\n");
+        return false;
     } else if (!validate_rect(content)) {
-        fprintf(stderr, "Invalid content rectangle\n");
-        return 0;
+        log_f(LOG_TAG, "Invalid content rectangle\n");
+        return false;
     }
 
-    retry_delay_ts.tv_sec = 0;
-    retry_delay_ts.tv_nsec = retry_delay_ms * 1000000;
+    return true;
+}
 
-    return 1;
+static void sigint_callback(int s)
+{
+    log_i(LOG_TAG, "Caught SIGINT, exiting...\n");
+    exit_main_loop = 1;
+}
+
+static void xm_callback(const struct FrameGeometry *frame, const unsigned char *content)
+{
+    data = *frame;
+    buffer = content;
+    if (show_server_fps) {
+        log_fps();
+    }
+    render();
+}
+
+static void clean_up()
+{
+    if (matrix != NULL) {
+        led_matrix_delete(matrix);
+        matrix = NULL;
+        canvas = NULL;
+    }
+    xm_cleanup();
 }
 
 int main(int argc, char **argv)
@@ -530,57 +478,31 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    signal(SIGINT, sigint_callback);
+
     if (dest.dx > screen_width) {
-        fprintf(stderr, "drect: end (%d) exceeds max (%d)\n",
+        log_f(LOG_TAG, "drect: end (%d) exceeds max (%d)\n",
             dest.dx, screen_width);
         clean_up();
         return 1;
     } else if (dest.dy > screen_height) {
-        fprintf(stderr, "drect: end (%d) exceeds max (%d)\n",
+        log_f(LOG_TAG, "drect: end (%d) exceeds max (%d)\n",
             dest.dy, screen_height);
         clean_up();
         return 1;
     }
 
-    signal(SIGINT, sigint_handler);
-
     blitSrc = source;
     blitDest = dest;
 
-    xm_init();
+    xm_init(server_url);
     xm_set_callback(xm_callback);
     while (!exit_main_loop) {
         nats_Sleep(10);
     }
 
-    // unsigned int reconnect_attempt = 0;
-    // do {
-    //     if (reconnect_attempt++ > 0) {
-    //         clear_buffer();
-    //         clean_up_connection();
-    //         nanosleep(&retry_delay_ts, NULL);
-    //     }
-    //     if (!connect_es(server)) {
-    //         if (reconnect && !exit_main_loop) {
-    //             continue;
-    //         } else {
-    //             break;
-    //         }
-    //     }
-
-    //     if (!read_preamble() || !create_buffer()) {
-    //         if (reconnect && !exit_main_loop) {
-    //             continue;
-    //         } else {
-    //             break;
-    //         }
-    //     }
-
-    //     main_loop();
-    // } while (reconnect && !exit_main_loop);
-
     clean_up();
-    fprintf(stderr, "done\n");
+    log_i(LOG_TAG, "done\n");
 
     return 0;
 }
