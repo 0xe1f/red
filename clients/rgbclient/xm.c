@@ -87,25 +87,26 @@ static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *
     size_t len = natsMsg_GetDataLength(msg);
 
     // Unpack message
-    Red__Frame *unpacked_msg;
-    unpacked_msg = red__frame__unpack(NULL, len, data);
+    Red__Frame *frame;
+    frame = red__frame__unpack(NULL, len, data);
 
-    if (unpacked_msg == NULL) {
+    if (frame == NULL) {
         log_e(LOG_TAG, "Failed to unpack message\n");
     } else {
-        geometry.buffer_size = unpacked_msg->content.len;
-        geometry.pixel_format = unpacked_msg->pixel_format;
-        geometry.attrs = unpacked_msg->attrs;
-        geometry.bitmap_width = unpacked_msg->width;
-        geometry.bitmap_height = unpacked_msg->height;
-        geometry.bitmap_pitch = unpacked_msg->pitch;
+        Red__Geometry *fg = frame->geometry;
+        geometry.buffer_size = frame->content.len;
+        geometry.pixel_format = fg->pixel_format;
+        geometry.attrs = fg->attrs;
+        geometry.bitmap_width = fg->width;
+        geometry.bitmap_height = fg->height;
+        geometry.bitmap_pitch = fg->pitch;
 
         if (frame_callback) {
-            frame_callback(&geometry, unpacked_msg->content.data);
+            frame_callback(&geometry, frame->content.data);
         }
 
         // 4. Free the unpacked message structure
-        red__frame__free_unpacked(unpacked_msg, NULL);
+        red__frame__free_unpacked(frame, NULL);
     }
 
     // Destroy the NATS message object

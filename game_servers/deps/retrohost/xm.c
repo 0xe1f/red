@@ -14,6 +14,7 @@
 
 #include <nats.h>
 #include "frame.pb-c.h"
+#include "args.h"
 #include "log.h"
 #include "xm.h"
 
@@ -23,8 +24,9 @@ static natsConnection *conn = NULL;
 static u_int8_t *buffer = NULL;
 static size_t buffer_size = 0;
 
+extern ArgsOptions args;
+
 // FIXME!! config
-static const char *nats_url = "nats://10.42.0.131:4222";
 static const char *subject = "protobuf.topic";
 
 inline static void* get_reusable_buffer(size_t size);
@@ -41,7 +43,7 @@ void xm_init()
     // Connect to NATS server
     natsOptions *opts;
     natsOptions_Create(&opts);
-    natsOptions_SetURL(opts, nats_url);
+    natsOptions_SetURL(opts, args.server_url);
     natsStatus s = natsConnection_Connect(&conn, opts);
     natsOptions_Destroy(opts);
 
@@ -50,29 +52,32 @@ void xm_init()
         return;
     }
 
-    log_i(LOG_TAG, "Connected to NATS server at %s\n", nats_url);
+    log_i(LOG_TAG, "Connected to NATS server at %s\n", args.server_url);
 }
 
 void xm_publish_frame(const struct FrameGeometry *frame, const unsigned char *content, size_t size)
 {
     // Create and populate the Protobuf message
-    Red__Frame msg = RED__FRAME__INIT;
-    msg.content.data = (unsigned char *) content;
-    msg.content.len = size;
-    msg.pitch = frame->bitmap_pitch;
-    msg.width = frame->bitmap_width;
-    msg.height = frame->bitmap_height;
+    Red__Geometry gm = RED__GEOMETRY__INIT;
+    gm.pitch = frame->bitmap_pitch;
+    gm.width = frame->bitmap_width;
+    gm.height = frame->bitmap_height;
     // FIXME - this is an enum; for now, values align
-    msg.pixel_format = frame->pixel_format;
-    msg.attrs = frame->attrs;
+    gm.pixel_format = frame->pixel_format;
+    gm.attrs = frame->attrs;
+
+    Red__Frame fm = RED__FRAME__INIT;
+    fm.content.data = (unsigned char *) content;
+    fm.content.len = size;
+    fm.geometry = &gm;
 
     // Pack the message
-    size_t len = red__frame__get_packed_size(&msg);
+    size_t len = red__frame__get_packed_size(&fm);
     uint8_t *buf = get_reusable_buffer(len);
     if (!buf) {
         return;
     }
-    red__frame__pack(&msg, buf);
+    red__frame__pack(&fm, buf);
 
     // Publish to NATS
     natsStatus s = natsConnection_Publish(conn, subject, buf, len);

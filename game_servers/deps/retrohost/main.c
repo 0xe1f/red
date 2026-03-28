@@ -152,7 +152,6 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
             (rotation == ROTATE_CCW90 || rotation == ROTATE_CCW180) ? ATTR_ROT180 : ATTR_NONE,
             MAGIC_NUMBER
         };
-        // rgbs_set_buffer_data(geometry);
     } else if (!video_buffer.data && dims_changed) {
         geometry = (struct FrameGeometry) {
             (unsigned int) pitch * height,
@@ -163,7 +162,6 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
             (rotation == ROTATE_CCW90 || rotation == ROTATE_CCW180) ? ATTR_ROT180 : ATTR_NONE,
             MAGIC_NUMBER
         };
-        // rgbs_set_buffer_data(geometry);
     }
 
     const unsigned char *out;
@@ -171,8 +169,6 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
     blit(args.scale_mode, data, width, height, pitch, &out, &out_size);
 
     xm_publish_frame(&geometry, out, out_size);
-    // rgbs_poll();
-    // rgbs_send(out, out_size);
 }
 
 static void callback_audio_sample(int16_t left, int16_t right)
@@ -494,7 +490,6 @@ static bool callback_environment_set(unsigned cmd, void *data)
 static void clean_up()
 {
     xm_cleanup();
-    // rgbs_end();
     dlclose(solib);
     free(video_buffer.data);
     video_buffer.data = NULL;
@@ -570,6 +565,9 @@ int main(int argc, const char **argv)
     if (!args.so_path || access(args.so_path, F_OK) == -1) {
         log_f(LOG_TAG, "Missing or invalid core\n");
         return 1;
+    } else if (!args.server_url) {
+        log_f(LOG_TAG, "Missing server URL\n");
+        return 1;
     }
 
     if (args.background) {
@@ -627,7 +625,6 @@ int main(int argc, const char **argv)
 
     audio_init(&audio);
     files_mkdirs(dirname((char *)args.so_path));
-    // rgbs_start();
 
     api_version = retro_api_version();
     retro_get_system_info(&system_info);

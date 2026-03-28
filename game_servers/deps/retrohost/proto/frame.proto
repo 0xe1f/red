@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package red;
 
-message Frame {
+message Geometry {
     enum Attrs {
         ATTR_NONE = 0x00;
         ATTR_ROT180 = 0x01;
@@ -14,10 +14,14 @@ message Frame {
         PF_RGBA5551 = 3;
         PF_ARGB8888 = 4;
     }
-    bytes content = 1;
-    uint32 pitch = 2;
-    uint32 width = 3;
-    uint32 height = 4;
-    PixelFormat pixel_format = 5;
-    uint32 attrs = 6;
+    uint32 pitch = 1;
+    uint32 width = 2;
+    uint32 height = 3;
+    PixelFormat pixel_format = 4;
+    uint32 attrs = 5;
+}
+
+message Frame {
+    Geometry geometry = 1;
+    bytes content = 2;
 }

@@ -207,6 +207,12 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
                 return false;
             }
             opts->keyboard_device_path = *(++arg);
+        } else if (strcmp(*arg, "--server-url") == 0 || strcmp(*arg, "-s") == 0) {
+            if (++i >= argc) {
+                log_e(LOG_TAG, "Missing argument for %s\n", *arg);
+                return false;
+            }
+            opts->server_url = *(++arg);
         } else if (**arg == '-') {
             log_e(LOG_TAG, "Unrecognized switch: %s\n", *arg);
             return false;

@@ -21,6 +21,7 @@
 #include "log.h"
 
 typedef struct {
+    const char *server_url;
     const char *rom_path;
     const char *so_path;
     const char *bios_path;
