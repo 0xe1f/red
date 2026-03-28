@@ -26,8 +26,7 @@ static size_t buffer_size = 0;
 
 extern ArgsOptions args;
 
-// FIXME!! config
-static const char *subject = "protobuf.topic";
+static const char *subject = "red.frames";
 
 inline static void* get_reusable_buffer(size_t size);
 
@@ -53,6 +52,7 @@ void xm_init()
     }
 
     log_i(LOG_TAG, "Connected to NATS server at %s\n", args.server_url);
+    log_i(LOG_TAG, "Will publish frames to '%s'\n", subject);
 }
 
 void xm_publish_frame(const struct FrameGeometry *frame, const unsigned char *content, size_t size)
@@ -100,6 +100,7 @@ void xm_cleanup()
 inline static void* get_reusable_buffer(size_t size)
 {
     if (buffer_size < size) {
+        // FIXME: do not use realloc; copying is unnecessary
         u_int8_t *new_buffer = realloc(buffer, size);
         if (!new_buffer) {
             log_e(LOG_TAG, "Failed to allocate buffer of size %zu\n", size);

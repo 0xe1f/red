@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <nats.h>
+#define ARENA_IMPLEMENTATION
+
+#include <nats/nats.h>
 #include "frame.pb-c.h"
+#include "arena.h"
 #include "log.h"
 #include "xm.h"
 
@@ -21,13 +24,19 @@
 
 static natsConnection *conn = NULL;
 static natsSubscription *sub = NULL;
-
-// FIXME!! config
-static const char *subject = "protobuf.topic";
-
 static xm_callback_t frame_callback = NULL;
+static Arena default_arena = {0};
+static ProtobufCAllocator allocator = {
+    .alloc = allocator_alloc,
+    .free = allocator_free,
+    .allocator_data = &default_arena
+};
 
 static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *msg, void *closure);
+inline static void* allocator_alloc(void *allocator_data, size_t size);
+inline static void allocator_free(void *allocator_data, void *pointer);
+
+static const char *subject = "red.frames";
 
 void xm_init(const char *server_url)
 {
@@ -75,6 +84,7 @@ void xm_cleanup()
         natsConnection_Destroy(conn);
         conn = NULL;
     }
+    arena_free(&default_arena);
 }
 
 static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *msg, void *closure)
@@ -84,21 +94,28 @@ static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *
     size_t len = natsMsg_GetDataLength(msg);
 
     // Unpack message
-    Red__Frame *frame;
-    // FIXME: optimize by reusing unpacked structure and only unpacking content data
-    frame = red__frame__unpack(NULL, len, data);
-
+    Red__Frame *frame = red__frame__unpack(&allocator, len, data);
     if (frame == NULL) {
         log_e(LOG_TAG, "Failed to unpack message\n");
     } else {
         if (frame_callback) {
+            // Invoke the callback with the unpacked frame
             frame_callback(frame);
         }
-
-        // 4. Free the unpacked message structure
-        red__frame__free_unpacked(frame, NULL);
+        // Free the unpacked frame
+        red__frame__free_unpacked(frame, &allocator);
     }
 
     // Destroy the NATS message object
     natsMsg_Destroy(msg);
+}
+
+inline static void* allocator_alloc(void *allocator_data, size_t size)
+{
+    return arena_alloc((Arena *) allocator_data, size);
+}
+
+inline static void allocator_free(void *allocator_data, void *pointer)
+{
+    arena_free((Arena *) allocator_data);
 }

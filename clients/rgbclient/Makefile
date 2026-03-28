@@ -11,8 +11,8 @@ RGB_LIBDIR=$(RGB_ROOT)/lib
 INCLUDE=\
 	-I$(RGB_ROOT)/include \
 	-Iinclude \
-	-I/usr/include/nats/ \
-	-I$(GEN_DIR)
+	-I$(GEN_DIR) \
+	-Iarena
 LIB=-L$(RGB_LIBDIR)
 DEFINE=
 CFLAGS=-Wall -O2
