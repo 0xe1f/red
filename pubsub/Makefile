@@ -56,7 +56,7 @@ $(RGB_LIBDIR)/librgbmatrix.a:
 	@cd $(RGB_LIBDIR); $(MAKE)
 
 $(SUB_EXE): $(PB_OBJECTS) \
-	xm_sub.o log.o matrix.o sub_args.o \
+	xm_sub.o log.o matrix.o timing.o sub_args.o \
 	$(SUB_EXE).o $(RGB_LIBDIR)/librgbmatrix.a
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LD_SUB_FLAGS)
 

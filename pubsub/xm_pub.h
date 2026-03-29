@@ -19,7 +19,7 @@
 #include <stddef.h>
 #include "geometry.pb-c.h"
 
-void xm_init();
+void xm_init(const char *server_url);
 void xm_publish_frame(const Red__Geometry *geometry, const unsigned char *content, size_t size);
 void xm_cleanup();
 

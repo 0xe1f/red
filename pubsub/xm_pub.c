@@ -14,7 +14,6 @@
 
 #include <nats/nats.h>
 #include "frame.pb-c.h"
-#include "pub_args.h"
 #include "log.h"
 #include "xm_pub.h"
 
@@ -24,15 +23,13 @@ static natsConnection *conn = NULL;
 static u_int8_t *buffer = NULL;
 static size_t buffer_size = 0;
 
-extern ArgsOptions args;
-
 static const char *subject = "red.frames";
 
 inline static void* get_reusable_buffer(size_t size);
 
 // sudo apt install libprotobuf-c-dev libnats-dev protobuf-c-compiler
 
-void xm_init()
+void xm_init(const char *server_url)
 {
     if (conn) {
         log_e(LOG_TAG, "NATS connection already initialized\n");
@@ -42,8 +39,30 @@ void xm_init()
     // Connect to NATS server
     natsOptions *opts;
     natsOptions_Create(&opts);
-    natsOptions_SetURL(opts, args.server_url);
-    natsStatus s = natsConnection_Connect(&conn, opts);
+
+    natsStatus s;
+    if ((s = natsOptions_SetMaxReconnect(opts, 50)) != NATS_OK) {
+        log_e(LOG_TAG, "Error setting max reconnect: %s\n", natsStatus_GetText(s));
+        natsOptions_Destroy(opts);
+        return;
+    }
+    if ((s = natsOptions_SetReconnectWait(opts, 100)) != NATS_OK) {
+        log_e(LOG_TAG, "Error setting reconnect wait: %s\n", natsStatus_GetText(s));
+        natsOptions_Destroy(opts);
+        return;
+    }
+    if ((s = natsOptions_SetRetryOnFailedConnect(opts, true, NULL, NULL)) != NATS_OK) {
+        log_e(LOG_TAG, "Error setting retry on failed connect: %s\n", natsStatus_GetText(s));
+        natsOptions_Destroy(opts);
+        return;
+    }
+    if ((s = natsOptions_SetURL(opts, server_url)) != NATS_OK) {
+        log_e(LOG_TAG, "Error setting NATS server URL: %s\n", natsStatus_GetText(s));
+        natsOptions_Destroy(opts);
+        return;
+    }
+
+    s = natsConnection_Connect(&conn, opts);
     natsOptions_Destroy(opts);
 
     if (s != NATS_OK) {
@@ -51,7 +70,7 @@ void xm_init()
         return;
     }
 
-    log_i(LOG_TAG, "Connected to NATS server at %s\n", args.server_url);
+    log_i(LOG_TAG, "Connected to NATS server at %s\n", server_url);
     log_i(LOG_TAG, "Will publish frames to '%s'\n", subject);
 }
 

@@ -21,6 +21,7 @@
 
 #include "sub_args.h"
 #include "log.h"
+#include "timing.h"
 #include "xm_sub.h"
 #include "led-matrix-c.h"
 
@@ -66,7 +67,6 @@ static const char* pixel_format_str(Red__Geometry__PixelFormat pixel_format);
 static inline void unpack(struct RGB *dest, unsigned char *src, int offset);
 static bool init_rgb(int argc, char **argv);
 static void render(const Red__Frame *frame);
-static unsigned long long current_millis();
 static inline void log_fps();
 static void run_as_daemon();
 static void sigint_callback(int s);
@@ -172,26 +172,18 @@ static void render(const Red__Frame *frame)
     canvas = led_matrix_swap_on_vsync(matrix, canvas);
 }
 
-static unsigned long long current_millis()
-{
-    struct timeval te;
-    gettimeofday(&te, NULL);
-    return te.tv_sec * 1000LL + te.tv_usec / 1000;
-}
-
 static inline void log_fps()
 {
-    static unsigned long long pms = 0;
+    static double pmu = 0;
     static int frames = 0;
-    unsigned long long ms = current_millis();
-    unsigned long long delta = ms - pms;
-    if (delta > 1000L) {
-        float fps = (float) frames / (delta / 1000L);
+    double mu = micros();
+    double delta = mu - pmu;
+    frames++;
+    if (delta >= 1000000L) {
+        float fps = (float) (frames / (delta / 1000000L));
         log_v(LOG_TAG, "fps: %.02f\r", fps);
         frames = 0;
-        pms = ms;
-    } else {
-        frames++;
+        pmu = mu;
     }
 }
 
@@ -354,8 +346,8 @@ int main(int argc, char **argv)
         sleep(1);
     }
 
-    clean_up();
     log_i(LOG_TAG, "done\n");
+    clean_up();
 
     return 0;
 }

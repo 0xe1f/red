@@ -48,8 +48,30 @@ void xm_init(const char *server_url)
     // Connect to NATS server
     natsOptions *opts;
     natsOptions_Create(&opts);
-    natsOptions_SetURL(opts, server_url);
-    natsStatus s = natsConnection_Connect(&conn, opts);
+
+    natsStatus s;
+    if ((s = natsOptions_SetMaxReconnect(opts, 50)) != NATS_OK) {
+        log_e(LOG_TAG, "Error setting max reconnect: %s\n", natsStatus_GetText(s));
+        natsOptions_Destroy(opts);
+        return;
+    }
+    if ((s = natsOptions_SetReconnectWait(opts, 100)) != NATS_OK) {
+        log_e(LOG_TAG, "Error setting reconnect wait: %s\n", natsStatus_GetText(s));
+        natsOptions_Destroy(opts);
+        return;
+    }
+    if ((s = natsOptions_SetRetryOnFailedConnect(opts, true, NULL, NULL)) != NATS_OK) {
+        log_e(LOG_TAG, "Error setting retry on failed connect: %s\n", natsStatus_GetText(s));
+        natsOptions_Destroy(opts);
+        return;
+    }
+    if ((s = natsOptions_SetURL(opts, server_url)) != NATS_OK) {
+        log_e(LOG_TAG, "Error setting NATS server URL: %s\n", natsStatus_GetText(s));
+        natsOptions_Destroy(opts);
+        return;
+    }
+
+    s = natsConnection_Connect(&conn, opts);
     natsOptions_Destroy(opts);
 
     if (s != NATS_OK) {
