@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include "libretro.h"
 #include "log.h"
-#include "args.h"
+#include "pub_args.h"
 
 #define LOG_TAG "args"
 
@@ -34,7 +34,6 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
     const char **arg;
     opts->output_width = 0;
     opts->output_height = 0;
-    opts->max_clients = -1;
     opts->scale_mode = SCALE_MODE_NONE;
     opts->log_level = LOG_INFO;
     opts->log_overwrite = false;
@@ -86,17 +85,6 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
                 opts->scale_mode = SCALE_MODE_NONE;
             } else {
                 log_e(LOG_TAG, "Invalid scale mode: '%s'\n", value);
-                return false;
-            }
-        } else if (strcmp(*arg, "--max-clients") == 0 || strcmp(*arg, "-mc") == 0) {
-            if (++i >= argc) {
-                log_e(LOG_TAG, "Missing argument for %s\n", *arg);
-                return false;
-            }
-            const char *value = *(++arg);
-            opts->max_clients = atoi(value);
-            if (opts->max_clients <= 0) {
-                log_e(LOG_TAG, "Invalid max clients: '%s'\n", value);
                 return false;
             }
         } else if (strcmp(*arg, "--background") == 0 || strcmp(*arg, "-bg") == 0) {

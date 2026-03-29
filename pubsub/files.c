@@ -19,7 +19,7 @@
 #include "unzip.h"
 #include "un7z.h"
 #include "libretro.h"
-#include "args.h"
+#include "pub_args.h"
 #include "log.h"
 #include "files.h"
 

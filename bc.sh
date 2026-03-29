@@ -70,6 +70,6 @@ for CLIENT in `seq 0 $CLIENT_COUNT`; do
     scp "${BUILD_SVR}:${BUILD_PATH}/${CL_EXE}" "${CL_HOST}:${CL_PATH}/"
 done
 
-# scp "${BUILD_SVR}:${BUILD_PATH}/pub" "${CL_HOST}:${CL_PATH}/"
+scp "${BUILD_SVR}:${BUILD_PATH}/pub" "${CL_HOST}:${CL_PATH}/"
 
 echo -e "${BOLD_WHITE}>> ${GREEN}All done... ${PLAIN}"

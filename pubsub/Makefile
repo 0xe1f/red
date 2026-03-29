@@ -55,12 +55,15 @@ $(RGB_LIBDIR)/librgbmatrix.a:
 	@echo Building RGB matrix libraries...
 	@cd $(RGB_LIBDIR); $(MAKE)
 
-$(SUB_EXE): $(PB_OBJECTS) xm_sub.o log.o $(SUB_EXE).o $(RGB_LIBDIR)/librgbmatrix.a
+$(SUB_EXE): $(PB_OBJECTS) \
+	xm_sub.o log.o matrix.o sub_args.o \
+	$(SUB_EXE).o $(RGB_LIBDIR)/librgbmatrix.a
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LD_SUB_FLAGS)
 
 $(PUB_EXE): \
 	$(PB_OBJECTS) $(MINIZIP_OBJECTS) $(Z7_OBJECTS) \
-	kv_store.o args.o files.o video.o input.o audio.o log.o timing.o xm_pub.o $(PUB_EXE).o
+	kv_store.o args.o files.o video.o input.o audio.o log.o timing.o xm_pub.o \
+	$(PUB_EXE).o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LD_PUB_FLAGS)
 
 %.pb-c.o: $(GEN_DIR)/%.pb-c.c

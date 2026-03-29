@@ -21,7 +21,7 @@
 #include <unistd.h>
 #include <SDL.h>
 #include "libretro.h"
-#include "args.h"
+#include "pub_args.h"
 #include "log.h"
 #include "timing.h"
 #include "input.h"

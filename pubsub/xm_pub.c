@@ -14,7 +14,7 @@
 
 #include <nats/nats.h>
 #include "frame.pb-c.h"
-#include "args.h"
+#include "pub_args.h"
 #include "log.h"
 #include "xm_pub.h"
 

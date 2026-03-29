@@ -214,7 +214,7 @@ class GameServer:
         self.__dict__.update(item)
 
     def to_dict(self, *remove):
-        obj = self.__dict__
+        obj = self.__dict__.copy()
         for prop in remove:
             del obj[prop]
         return obj

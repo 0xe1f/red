@@ -28,6 +28,18 @@ subprocess.call([
     f'{config.control_server.path}',
     f'{config.control_server.hostname}:'
 ])
+
+print("Deploying core tools...")
+subprocess.call([
+    'rsync',
+    '-avrL',
+    f'{config.game_server.path}/launch.sh',
+    f'{config.game_server.path}/stopall.sh',
+    f'{config.game_server.path}/query.sh',
+    f'{config.game_server.path}/set_volume.sh',
+    f'{config.game_server.hostname}:{config.game_server.path}'
+])
+
 subprocess.call([
     'ssh',
     '-o',

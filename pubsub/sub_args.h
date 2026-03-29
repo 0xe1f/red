@@ -12,37 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __ARGS_H__
-#define __ARGS_H__
+#ifndef __SUB_ARGS_H__
+#define __SUB_ARGS_H__
 
-#include "kv_store.h"
-#include "video.h"
-#include "input.h"
+#include <stdbool.h>
 #include "log.h"
+#include "matrix.h"
 
 typedef struct {
     const char *server_url;
-    const char *rom_path;
-    const char *so_path;
-    const char *bios_path;
     const char *log_path;
-    const char *mouse_device_path;
-    const char *keyboard_device_path;
     bool log_overwrite;
     bool background;
     bool show_fps;
-    int max_clients;
-    int output_width;
-    int output_height;
     LogLevel log_level;
-    ScaleMode scale_mode;
-    bool disable_preloading;
-    bool force_preloading;
-    KvStore input_configs;
-    DeferredKeypress *autopress;
+    ViewRect content;
+    ViewRect source;
+    ViewRect dest;
 } ArgsOptions;
 
-bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_store);
+bool args_parse(int argc, const char **argv, ArgsOptions *opts);
 void args_free(ArgsOptions *opts);
 
-#endif // __ARGS_H__
+#endif // __SUB_ARGS_H__

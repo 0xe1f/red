@@ -19,6 +19,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "sub_args.h"
 #include "log.h"
 #include "xm_sub.h"
 #include "led-matrix-c.h"
@@ -31,30 +32,17 @@ struct RGB {
     unsigned char b;
 };
 
-struct ViewRect {
-    short sx;
-    short sy;
-    short dx;
-    short dy;
-};
-
-static bool show_server_fps = false;
+static ArgsOptions args = {0};
 static bool exit_main_loop = false;
-static bool run_in_background = false;
-static const char *server_url = NULL;
-static LogLevel log_level = LOG_INFO;
 
 static int screen_width;
 static int screen_height;
 static int vw_origin = 0;
-
+static FILE *log_file = NULL;
 static struct RGBLedMatrix *matrix = NULL;
 static struct LedCanvas *canvas = NULL;
-static struct ViewRect content;
-static struct ViewRect source;
-static struct ViewRect dest;
-static struct ViewRect blit_src;
-static struct ViewRect blit_dest;
+static ViewRect blit_src;
+static ViewRect blit_dest;
 static Red__Geometry geometry;
 
 // RGB565
@@ -80,10 +68,7 @@ static bool init_rgb(int argc, char **argv);
 static void render(const Red__Frame *frame);
 static unsigned long long current_millis();
 static inline void log_fps();
-static bool parse_rect(const char *arg, struct ViewRect *rect);
-static bool validate_rect(struct ViewRect rect);
 static void run_as_daemon();
-static bool parse_args(int argc, const char **argv);
 static void sigint_callback(int s);
 static void inspect_geometry(const Red__Geometry *fg);
 static void xm_callback(const Red__Frame *frame);
@@ -210,46 +195,6 @@ static inline void log_fps()
     }
 }
 
-static bool parse_rect(const char *arg, struct ViewRect *rect)
-{
-    char temp[128];
-    strncpy(temp, arg, 127);
-    char *delim = strchr(temp, '-');
-    if (delim == NULL) {
-        return false;
-    }
-    *delim = '\0';
-
-    char *sdelim = strchr(temp, ',');
-    if (sdelim == NULL) {
-        return false;
-    }
-    *sdelim = '\0';
-
-    char *ddelim = strchr(delim + 1, ',');
-    if (ddelim == NULL) {
-        return false;
-    }
-    *ddelim = '\0';
-
-    rect->sx = strtol(temp, NULL, 10);
-    rect->sy = strtol(sdelim + 1, NULL, 10);
-    rect->dx = strtol(delim + 1, NULL, 10);
-    rect->dy = strtol(ddelim + 1, NULL, 10);
-
-    return true;
-}
-
-static bool validate_rect(struct ViewRect rect)
-{
-    if (rect.sx >= rect.dx) {
-        return false;
-    } else if (rect.sy >= rect.dy) {
-        return false;
-    }
-    return true;
-}
-
 static void run_as_daemon()
 {
     pid_t pid = fork();
@@ -272,132 +217,6 @@ static void run_as_daemon()
     }
 }
 
-static bool parse_args(int argc, const char **argv)
-{
-    bool src_set = false;
-    bool dest_set = false;
-    bool content_set = false;
-
-    int i;
-    const char **arg;
-    for (i = 1, arg = argv + 1; i < argc; i++, arg++) {
-        if (strcmp(*arg, "--sfps") == 0) {
-            show_server_fps = true;
-        } else if (strcmp(*arg, "--help") == 0) {
-            fprintf(stdout, "Usage: %s <server-url> [--src-rect=x1,y1-x2,y2] [--dest-rect=x1,y1-x2,y2] [--content-rect=x1,y1-x2,y2] [--background] [--sfps]\n", argv[0]);
-            fprintf(stdout, "  --src-rect          Source rectangle in server bitmap\n");
-            fprintf(stdout, "  --dest-rect         Destination rectangle on LED matrix\n");
-            fprintf(stdout, "  --content-rect      Content rectangle on LED matrix\n");
-            fprintf(stdout, "  --background        Run in background as a daemon\n");
-            fprintf(stdout, "  --sfps              Show server FPS\n");
-            return false;
-        } else if (strcmp(*arg, "--background") == 0) {
-            run_in_background = true;
-        } else if (strstr(*arg, "--src-rect=")) {
-            const char *post_eq = *arg + 11;
-            if (!parse_rect(post_eq, &source)) {
-                log_f(LOG_TAG, "'%s' is not a valid rectangle\n", post_eq);
-                return false;
-            }
-            src_set = true;
-        } else if (strstr(*arg, "--dest-rect=")) {
-            const char *post_eq = *arg + 12;
-            if (!parse_rect(post_eq, &dest)) {
-                log_f(LOG_TAG, "'%s' is not a valid rectangle\n", post_eq);
-                return false;
-            }
-            dest_set = true;
-        } else if (strstr(*arg, "--content-rect=")) {
-            const char *post_eq = *arg + 15;
-            if (!parse_rect(post_eq, &content)) {
-                log_f(LOG_TAG, "'%s' is not a valid rectangle\n", post_eq);
-                return false;
-            }
-            content_set = true;
-        } else if (strcmp(*arg, "--log-level") == 0) {
-            if (++i >= argc) {
-                log_e(LOG_TAG, "Missing argument for %s\n", *arg);
-                return false;
-            }
-            const char *level = *(++arg);
-            if (strcmp(level, "fatal") == 0) {
-                log_level = LOG_FATAL;
-            } else if (strcmp(level, "error") == 0) {
-                log_level = LOG_ERROR;
-            } else if (strcmp(level, "warn") == 0) {
-                log_level = LOG_WARN;
-            } else if (strcmp(level, "info") == 0) {
-                log_level = LOG_INFO;
-            } else if (strcmp(level, "debug") == 0) {
-                log_level = LOG_DEBUG;
-            } else if (strcmp(level, "verbose") == 0) {
-                log_level = LOG_VERBOSE;
-            } else {
-                log_e(LOG_TAG, "Invalid log level: '%s'\n", level);
-                return false;
-            }
-        } else if (strncmp(*arg, "-l", 2) == 0) {
-            const char *level = *arg + 2;
-            if (strcmp(level, "f") == 0) {
-                log_level = LOG_FATAL;
-            } else if (strcmp(level, "e") == 0) {
-                log_level = LOG_ERROR;
-            } else if (strcmp(level, "w") == 0) {
-                log_level = LOG_WARN;
-            } else if (strcmp(level, "i") == 0) {
-                log_level = LOG_INFO;
-            } else if (strcmp(level, "d") == 0) {
-                log_level = LOG_DEBUG;
-            } else if (strcmp(level, "v") == 0) {
-                log_level = LOG_VERBOSE;
-            } else if (strcmp(level, "") == 0) {
-                log_e(LOG_TAG, "Log level unspecified\n");
-                return false;
-            } else {
-                log_e(LOG_TAG, "Invalid log level: '%s'\n", level);
-                return false;
-            }
-        } else if (strstr(*arg, "--led-")) {
-            continue; // skip led matrix options
-        } else if (strstr(*arg, "--") || strstr(*arg, "-")) {
-            log_f(LOG_TAG, "Unrecognized argument: '%s'\n", *arg);
-            return false;
-        } else if (server_url) {
-            log_f(LOG_TAG, "Server URL already specified\n");
-            return false;
-        } else {
-            server_url = *arg;
-        }
-    }
-
-    if (!server_url) {
-         log_f(LOG_TAG, "Missing server URL\n");
-         return false;
-    } else if (!src_set) {
-        log_f(LOG_TAG, "Missing source rectangle\n");
-        return false;
-    } else if (!dest_set) {
-        log_f(LOG_TAG, "Missing destination rectangle\n");
-        return false;
-    }  else if (!content_set) {
-        log_f(LOG_TAG, "Missing content rectangle\n");
-        return false;
-    }
-
-    if (!validate_rect(source)) {
-        log_f(LOG_TAG, "Invalid source rectangle\n");
-        return false;
-    } else if (!validate_rect(dest)) {
-        log_f(LOG_TAG, "Invalid destination rectangle\n");
-        return false;
-    } else if (!validate_rect(content)) {
-        log_f(LOG_TAG, "Invalid content rectangle\n");
-        return false;
-    }
-
-    return true;
-}
-
 static void sigint_callback(int s)
 {
     log_i(LOG_TAG, "Caught SIGINT, exiting...\n");
@@ -406,7 +225,7 @@ static void sigint_callback(int s)
 
 static void xm_callback(const Red__Frame *frame)
 {
-    if (show_server_fps) {
+    if (args.show_fps) {
         log_fps();
     }
     inspect_geometry(frame->geometry);
@@ -428,15 +247,15 @@ static void inspect_geometry(const Red__Geometry *fg)
         pixel_format_str(fg->pixel_format),
         fg->attrs);
 
-    blit_src = source;
-    blit_dest = dest;
+    blit_src = args.source;
+    blit_dest = args.dest;
 
     // Center content
-    int x_delta = (content.dx - fg->width) / 2;
+    int x_delta = (args.content.dx - fg->width) / 2;
     if (blit_src.dx - x_delta < 0) {
         x_delta -= blit_src.dx - x_delta;
     }
-    int y_delta = (content.dy - fg->height) / 2;
+    int y_delta = (args.content.dy - fg->height) / 2;
     if (blit_src.dy - y_delta < 0) {
         y_delta -= blit_src.dy - y_delta;
     }
@@ -471,20 +290,38 @@ static void clean_up()
         canvas = NULL;
     }
     xm_cleanup();
+    args_free(&args);
+    if (log_file != NULL) {
+        fclose(log_file);
+        log_file = NULL;
+    }
 }
 
 int main(int argc, char **argv)
 {
-    if (!parse_args(argc, (const char **)argv)) {
+    if (!args_parse(argc, (const char **)argv, &args)) {
         return 1;
     }
 
     // FIXME: clear canvas when geometry changes and/or we don't receive any
     //        frames for a while, to avoid showing stale content
-    // FIXME: reuse some of the c/h between client and server
-    log_set_level(log_level);
-    if (run_in_background) {
+    log_set_level(args.log_level);
+    if (args.background) {
         run_as_daemon();
+    }
+
+    if (args.log_path) {
+        FILE *f = fopen(args.log_path, args.log_overwrite ? "w" : "a");
+        if (!f) {
+            log_f(LOG_TAG, "Failed to open log file '%s'\n", args.log_path);
+            clean_up();
+            return 1;
+        }
+        log_file = f;
+        log_set_fd(f);
+
+        log_i(LOG_TAG, "%s output to '%s'\n",
+            args.log_overwrite ? "Writing" : "Appending", args.log_path);
     }
 
     if (!init_rgb(argc, argv)) {
@@ -494,22 +331,22 @@ int main(int argc, char **argv)
 
     signal(SIGINT, sigint_callback);
 
-    if (dest.dx > screen_width) {
+    if (args.dest.dx > screen_width) {
         log_f(LOG_TAG, "drect: end (%d) exceeds max (%d)\n",
-            dest.dx, screen_width);
+            args.dest.dx, screen_width);
         clean_up();
         return 1;
-    } else if (dest.dy > screen_height) {
+    } else if (args.dest.dy > screen_height) {
         log_f(LOG_TAG, "drect: end (%d) exceeds max (%d)\n",
-            dest.dy, screen_height);
+            args.dest.dy, screen_height);
         clean_up();
         return 1;
     }
 
-    blit_src = source;
-    blit_dest = dest;
+    blit_src = args.source;
+    blit_dest = args.dest;
 
-    xm_init(server_url);
+    xm_init(args.server_url);
     xm_set_callback(xm_callback);
     while (!exit_main_loop) {
         // Virtually all work is done via callbacks, and SIGINT

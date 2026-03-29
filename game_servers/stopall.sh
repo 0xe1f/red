@@ -2,19 +2,19 @@
 
 cd `dirname $(readlink -f $0)`
 
-RH_PID=`pgrep -x rh`
-if [ ! -z "$RH_PID" ]; then
-    echo "Stopping retrohost (pid $RH_PID)..." >> log.txt
-    kill -s SIGINT $RH_PID
+PUB_PID=`pgrep -x pub`
+if [ ! -z "$PUB_PID" ]; then
+    echo "Stopping retrohost (pid $PUB_PID)..." >> log.txt
+    kill -s SIGINT $PUB_PID
     for I in {1..8}; do
-        if ! pgrep -x rh > /dev/null; then
+        if ! pgrep -x pub > /dev/null; then
             break
         fi
         sleep 0.25
     done
-    if pgrep -x rh > /dev/null; then
+    if pgrep -x pub > /dev/null; then
         echo "Force-stopping..." >> log.txt
-        kill -9 $RH_PID
+        kill -9 $PUB_PID
     fi
     rm -f .launch_info
 else

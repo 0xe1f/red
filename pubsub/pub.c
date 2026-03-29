@@ -22,7 +22,7 @@
 #include <unistd.h>
 #include "libretro.h"
 #include "audio.h"
-#include "args.h"
+#include "pub_args.h"
 #include "files.h"
 #include "video.h"
 #include "input.h"
