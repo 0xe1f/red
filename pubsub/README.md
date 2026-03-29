@@ -1,3 +1,7 @@
+```
+sudo apt install libprotobuf-c-dev libnats-dev protobuf-c-compiler
+```
+
 ## License
 
    Copyright 2024, Akop Karapetyan

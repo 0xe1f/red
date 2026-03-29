@@ -33,35 +33,10 @@ if [ ! -z "$ARGS" ]; then
     done
 fi
 
-# Deploy common scripts to game server
 set -e
-rsync -tph \
-    --info=progress2 \
-    --exclude='*/' \
-    --exclude='build.sh' \
-    * \
-    $GAME_SVR_HOST:$GAME_SVR_PATH
 
-# Build dependencies on remote server
-GENERATED=()
-for DIR in deps/*/ ; do
-    if [ -f "$DIR/Makefile" ]; then
-        pushd $DIR > /dev/null
-        echo -e "${BOLD_WHITE}>> ${GREEN}Building dependency `basename $DIR`... ${PLAIN}"
-        make
-        popd > /dev/null
-        mapfile -d '' -t GENERATED < <(find $DIR -executable -type f -print0)
-    fi
-done
-
-echo -e "${BOLD_WHITE}>> ${GREEN}Installing dependencies... ${PLAIN}"
 # Create remote directory
 ssh -o "StrictHostKeyChecking no" $GAME_SVR_HOST -t "mkdir -p $GAME_SVR_PATH"
-# Copy files to remote server
-rsync -tph \
-    --info=progress2 \
-    "${GENERATED[@]}" \
-    "$GAME_SVR_HOST:$GAME_SVR_PATH/"
 
 # Run build.sh in each specified directory
 for DIR in $ARGS; do

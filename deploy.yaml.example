@@ -1,7 +1,7 @@
 game_server:
   hostname: red1.local
   ip: 192.168.1.101
-  path: game_servers
+  path: cores
   extra_args: >-
     -background
     --output-dims=320x256

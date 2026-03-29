@@ -62,7 +62,7 @@ $(SUB_EXE): $(PB_OBJECTS) \
 
 $(PUB_EXE): \
 	$(PB_OBJECTS) $(MINIZIP_OBJECTS) $(Z7_OBJECTS) \
-	kv_store.o args.o files.o video.o input.o audio.o log.o timing.o xm_pub.o \
+	kv_store.o pub_args.o files.o video.o input.o audio.o log.o timing.o xm_pub.o \
 	$(PUB_EXE).o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LD_PUB_FLAGS)
 

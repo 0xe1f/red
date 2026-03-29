@@ -37,6 +37,7 @@ subprocess.call([
     f'{config.game_server.path}/stopall.sh',
     f'{config.game_server.path}/query.sh',
     f'{config.game_server.path}/set_volume.sh',
+    f'{config.game_server.path}/keypress.py',
     f'{config.game_server.hostname}:{config.game_server.path}'
 ])
 

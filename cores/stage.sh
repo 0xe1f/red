@@ -38,14 +38,8 @@ copy_scripts() {
     echo -e "${BOLD_WHITE}>> ${GREEN}Copying common code... ${PLAIN}"
     rsync -tph \
         --info=progress2 \
-        --exclude '*.exclude' \
-        --exclude 'stage.sh' \
-        --exclude='*/' \
-        ./* \
-        "$BUILD_SVR:$BUILD_PATH/"
-    rsync -trph \
-        --info=progress2 \
-        deps \
+        build_module.sh \
+        build.sh \
         "$BUILD_SVR:$BUILD_PATH/"
 }
 

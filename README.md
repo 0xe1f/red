@@ -29,6 +29,10 @@ sound, capturing input, etc).
 
 ## Design
 
+> [!IMPORTANT]
+> Most of this section is no longer valid; as the client/server have been
+> rewritten as a pub/sub model using NATS.
+
 ![Img](doc/entities.png)
 
 The `red` ecosystem recognizes 3 primary sets of components
@@ -106,7 +110,7 @@ To set up connection sharing, follow the steps in
 
 ### Game Server
 
-[Game Server](game_servers) is a basic emulator running a "headless" renderer. It displays nothing,
+[Game Server](cores) is a basic emulator running a "headless" renderer. It displays nothing,
 but accepts connections from rendering clients, and will dispatch frames as they become available. 
 To keep rendering fast, connections are done to/from eth0 IPs, which may require connection 
 sharing on one of the Pi units.

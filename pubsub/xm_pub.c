@@ -27,15 +27,12 @@ static const char *subject = "red.frames";
 
 inline static void* get_reusable_buffer(size_t size);
 
-// sudo apt install libprotobuf-c-dev libnats-dev protobuf-c-compiler
-
 void xm_init(const char *server_url)
 {
     if (conn) {
         log_e(LOG_TAG, "NATS connection already initialized\n");
         return;
     }
-
     // Connect to NATS server
     natsOptions *opts;
     natsOptions_Create(&opts);

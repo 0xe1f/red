@@ -45,9 +45,9 @@ fi
 
 ARGS="$@"
 if [ "$1" == "--all" ] || [ "$1" == "-a" ]; then
-    # List all game servers in the game_servers directory,
+    # List all cores in the cores directory,
     # excluding hidden and dependency directories
-    ARGS=$(find game_servers/ -mindepth 1 -maxdepth 1 -type d -not -name '.*' -not -name deps -exec basename {} \; | tr -s '[:space:]' ' ')
+    ARGS=$(find cores/ -mindepth 1 -maxdepth 1 -type d -not -name '.*' -exec basename {} \; | tr -s '[:space:]' ' ')
     shift
 
     if [ $# -gt 0 ]; then
@@ -57,4 +57,4 @@ if [ "$1" == "--all" ] || [ "$1" == "-a" ]; then
 fi
 
 # Run the staging script
-game_servers/stage.sh "$BUILD_SVR" "$GAME_SVR_HOST" "$GAME_SVR_PATH" $ARGS
+cores/stage.sh "$BUILD_SVR" "$GAME_SVR_HOST" "$GAME_SVR_PATH" $ARGS

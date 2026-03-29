@@ -679,7 +679,7 @@ int main(int argc, const char **argv)
         kvstore_dump(&kv_store);
     }
 
-    xm_init();
+    xm_init(args.server_url);
     input_init();
 
     if (args.autopress) {
