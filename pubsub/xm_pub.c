@@ -12,20 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#define ARENA_IMPLEMENTATION
+
 #include <nats/nats.h>
+#include <lz4.h>
 #include "frame.pb-c.h"
 #include "log.h"
+#include "arena.h"
 #include "xm_pub.h"
 
-#define LOG_TAG "xm"
+#define LOG_TAG "xm_pub"
 
 static natsConnection *conn = NULL;
-static u_int8_t *buffer = NULL;
-static size_t buffer_size = 0;
+static Arena nats_arena = {0};
+static Arena compress_arena = {0};
 
 static const char *subject = "red.frames";
-
-inline static void* get_reusable_buffer(size_t size);
 
 void xm_init(const char *server_url)
 {
@@ -73,15 +75,33 @@ void xm_init(const char *server_url)
 
 void xm_publish_frame(const Red__Geometry *geometry, const unsigned char *content, size_t size)
 {
+    // Prepare space to compress content
+    const int max_compressed_size = LZ4_compressBound(size);
+    arena_reset(&compress_arena);
+    u_int8_t *compressed_data = arena_alloc(&compress_arena, max_compressed_size);
+    if (!compressed_data) {
+        log_v(LOG_TAG, "Failed to get compression buffer\n");
+        return;
+    }
+
+    // Compress content
+    const int compressed_size = LZ4_compress_default((char *) content, (char *) compressed_data,
+        size, max_compressed_size);
+
+    // log_i(LOG_TAG, "size: %d => %d\n", size, compressed_size);
+
+    // Set up frame
     Red__Frame fm = RED__FRAME__INIT;
-    fm.content.data = (unsigned char *) content;
-    fm.content.len = size;
+    fm.content.data = compressed_data;
+    fm.content.len = compressed_size;
     fm.geometry = (Red__Geometry *) geometry;
 
     // Pack the message
     size_t len = red__frame__get_packed_size(&fm);
-    uint8_t *buf = get_reusable_buffer(len);
+    arena_reset(&nats_arena);
+    uint8_t *buf = arena_alloc(&nats_arena, len);
     if (!buf) {
+        log_v(LOG_TAG, "Failed to get NATS buffer\n");
         return;
     }
     red__frame__pack(&fm, buf);
@@ -99,23 +119,6 @@ void xm_cleanup()
         natsConnection_Destroy(conn);
         conn = NULL;
     }
-    free(buffer);
-    buffer = NULL;
-    buffer_size = 0;
-}
-
-inline static void* get_reusable_buffer(size_t size)
-{
-    if (buffer_size < size) {
-        u_int8_t *new_buffer = malloc(size);
-        if (!new_buffer) {
-            log_e(LOG_TAG, "Failed to allocate buffer of size %zu\n", size);
-            return NULL;
-        }
-        free(buffer);
-        buffer = new_buffer;
-        buffer_size = size;
-    }
-
-    return buffer;
+    arena_free(&nats_arena);
+    arena_free(&compress_arena);
 }

@@ -15,12 +15,13 @@
 #define ARENA_IMPLEMENTATION
 
 #include <nats/nats.h>
+#include <lz4.h>
 #include "frame.pb-c.h"
 #include "arena.h"
 #include "log.h"
 #include "xm_sub.h"
 
-#define LOG_TAG "xm"
+#define LOG_TAG "xm_sub"
 
 static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *msg, void *closure);
 inline static void* allocator_alloc(void *allocator_data, size_t size);
@@ -31,11 +32,12 @@ static const char *subject = "red.frames";
 static natsConnection *conn = NULL;
 static natsSubscription *sub = NULL;
 static xm_callback_t frame_callback = NULL;
-static Arena default_arena = {0};
+static Arena protobuf_arena = {0};
+static Arena compress_arena = {0};
 static ProtobufCAllocator allocator = {
     .alloc = allocator_alloc,
     .free = allocator_free,
-    .allocator_data = &default_arena
+    .allocator_data = &protobuf_arena
 };
 
 void xm_init(const char *server_url)
@@ -106,7 +108,8 @@ void xm_cleanup()
         natsConnection_Destroy(conn);
         conn = NULL;
     }
-    arena_free(&default_arena);
+    arena_free(&protobuf_arena);
+    arena_free(&compress_arena);
 }
 
 static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *msg, void *closure)
@@ -120,10 +123,27 @@ static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *
     if (frame == NULL) {
         log_e(LOG_TAG, "Failed to unpack message\n");
     } else {
+        Red__Geometry *fg = frame->geometry;
+
+        // Decompress content
+        int max_decomp_size = fg->pitch * fg->height;
+        arena_reset(&compress_arena);
+        char *decomp_buff = arena_alloc(&compress_arena, max_decomp_size);
+        int decomp_size = LZ4_decompress_safe((char *) frame->content.data, decomp_buff, frame->content.len, max_decomp_size);
+
+        // log_i(LOG_TAG, "size: %d => %d\n", frame->content.len, decomp_size);
+
+        // Replace compressed content with decompressed content in the frame
+        // FIXME: I don't think I'm leaking here (arena allocator),
+        //        but... am I leaking here? доверяй, но проверяй.
+        frame->content.data = (u_int8_t *) decomp_buff;
+        frame->content.len = decomp_size;
+
         if (frame_callback) {
             // Invoke the callback with the unpacked frame
             frame_callback(frame);
         }
+
         // Free the unpacked frame
         red__frame__free_unpacked(frame, &allocator);
     }
@@ -139,5 +159,5 @@ inline static void* allocator_alloc(void *allocator_data, size_t size)
 
 inline static void allocator_free(void *allocator_data, void *pointer)
 {
-    arena_free((Arena *) allocator_data);
+    arena_reset((Arena *) allocator_data);
 }

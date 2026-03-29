@@ -27,6 +27,8 @@
 
 #define LOG_TAG "client"
 
+#define FRAME_TIMEOUT_US 1000000.0 // 1s
+
 static ArgsOptions args = {0};
 static bool exit_main_loop = false;
 
@@ -39,14 +41,16 @@ static struct LedCanvas *canvas = NULL;
 static ViewRect blit_src;
 static ViewRect blit_dest;
 static Red__Geometry geometry;
+static double last_frame_time = 0;
 
 static bool init_rgb(int argc, char **argv);
 static void render(const Red__Frame *frame);
 static inline void log_fps();
 static void run_as_daemon();
 static void sigint_callback(int s);
-static void inspect_geometry(const Red__Geometry *fg);
 static void xm_callback(const Red__Frame *frame);
+static void inspect_geometry(const Red__Geometry *fg);
+static void matrix_clear();
 static void clean_up();
 
 static bool init_rgb(int argc, char **argv)
@@ -151,6 +155,7 @@ static void sigint_callback(int s)
 
 static void xm_callback(const Red__Frame *frame)
 {
+    last_frame_time = micros();
     if (args.show_fps) {
         log_fps();
     }
@@ -173,7 +178,8 @@ static void inspect_geometry(const Red__Geometry *fg)
         pixel_format_str(fg->pixel_format),
         fg->attrs);
 
-    led_canvas_clear(canvas);
+    matrix_clear();
+
     blit_src = args.source;
     blit_dest = args.dest;
 
@@ -209,6 +215,14 @@ static void inspect_geometry(const Red__Geometry *fg)
     geometry = *fg;
 }
 
+static void matrix_clear()
+{
+    for (int i = 0; i < 2; i++) {
+        led_canvas_clear(canvas);
+        canvas = led_matrix_swap_on_vsync(matrix, canvas);
+    }
+}
+
 static void clean_up()
 {
     if (matrix != NULL) {
@@ -230,8 +244,6 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // FIXME: clear canvas when geometry changes and/or we don't receive any
-    //        frames for a while, to avoid showing stale content
     log_set_level(args.log_level);
     if (args.background) {
         run_as_daemon();
@@ -279,6 +291,12 @@ int main(int argc, char **argv)
         // Virtually all work is done via callbacks, and SIGINT
         // will cause sleep to be interrupted anyway
         sleep(1);
+        if (last_frame_time > 0 && micros() - last_frame_time > FRAME_TIMEOUT_US) {
+            log_d(LOG_TAG, "No frames received for %.02f seconds, clearing canvas...\n",
+                (micros() - last_frame_time) / 1000000.0);
+            matrix_clear();
+            last_frame_time = 0.0;
+        }
     }
 
     log_i(LOG_TAG, "done\n");
