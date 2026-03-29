@@ -27,12 +27,6 @@
 
 #define LOG_TAG "client"
 
-struct RGB {
-    unsigned char r;
-    unsigned char g;
-    unsigned char b;
-};
-
 static ArgsOptions args = {0};
 static bool exit_main_loop = false;
 
@@ -46,25 +40,6 @@ static ViewRect blit_src;
 static ViewRect blit_dest;
 static Red__Geometry geometry;
 
-// RGB565
-#define RED_RGB565(x) (((x>>11)&0x1f)*255/31)
-#define GREEN_RGB565(x) (((x>>5)&0x3f)*255/63)
-#define BLUE_RGB565(x) ((x&0x1f)*255/31)
-// RGBA8888
-#define RED_RGBA8888(x) ((x>>24)&0xff)
-#define GREEN_RGBA8888(x) ((x>>16)&0xff)
-#define BLUE_RGBA8888(x) ((x>>8)&0xff)
-// ARGB8888
-#define RED_ARGB8888(x) ((x>>16)&0xff)
-#define GREEN_ARGB8888(x) ((x>>8)&0xff)
-#define BLUE_ARGB8888(x) ((x)&0xff)
-// RGBA5551
-#define RED_RGBA5551(x) (((x>>11)&0x1f)*255/31)
-#define GREEN_RGBA5551(x) (((x>>6)&0x1f)*255/31)
-#define BLUE_RGBA5551(x) (((x>>1)&0x1f)*255/31)
-
-static const char* pixel_format_str(Red__Geometry__PixelFormat pixel_format);
-static inline void unpack(struct RGB *dest, unsigned char *src, int offset);
 static bool init_rgb(int argc, char **argv);
 static void render(const Red__Frame *frame);
 static inline void log_fps();
@@ -73,47 +48,6 @@ static void sigint_callback(int s);
 static void inspect_geometry(const Red__Geometry *fg);
 static void xm_callback(const Red__Frame *frame);
 static void clean_up();
-
-static const char* pixel_format_str(Red__Geometry__PixelFormat pixel_format)
-{
-    switch(pixel_format) {
-        case RED__GEOMETRY__PIXEL_FORMAT__PF_RGB565:
-            return "RGB565";
-        case RED__GEOMETRY__PIXEL_FORMAT__PF_RGBA8888:
-            return "RGBA8888";
-        case RED__GEOMETRY__PIXEL_FORMAT__PF_ARGB8888:
-            return "ARGB8888";
-        case RED__GEOMETRY__PIXEL_FORMAT__PF_RGBA5551:
-            return "RGBA5551";
-        default:
-            return "UNKNOWN";
-    }
-}
-
-static inline void unpack(struct RGB *dest, unsigned char *src, int offset)
-{
-    if (geometry.pixel_format == RED__GEOMETRY__PIXEL_FORMAT__PF_RGB565) {
-        unsigned short rcol = *((unsigned short *)src + offset);
-        dest->r = RED_RGB565(rcol);
-        dest->g = GREEN_RGB565(rcol);
-        dest->b = BLUE_RGB565(rcol);
-    } else if (geometry.pixel_format == RED__GEOMETRY__PIXEL_FORMAT__PF_RGBA8888) {
-        unsigned int rcol = *((unsigned int *)src + offset);
-        dest->r = RED_RGBA8888(rcol);
-        dest->g = GREEN_RGBA8888(rcol);
-        dest->b = BLUE_RGBA8888(rcol);
-    } else if (geometry.pixel_format == RED__GEOMETRY__PIXEL_FORMAT__PF_ARGB8888) {
-        unsigned int rcol = *((unsigned int *)src + offset);
-        dest->r = RED_ARGB8888(rcol);
-        dest->g = GREEN_ARGB8888(rcol);
-        dest->b = BLUE_ARGB8888(rcol);
-    } else if (geometry.pixel_format == RED__GEOMETRY__PIXEL_FORMAT__PF_RGBA5551) {
-        unsigned short rcol = *((unsigned short *)src + offset);
-        dest->r = RED_RGBA5551(rcol);
-        dest->g = GREEN_RGBA5551(rcol);
-        dest->b = BLUE_RGBA5551(rcol);
-    }
-}
 
 static bool init_rgb(int argc, char **argv)
 {
@@ -137,7 +71,7 @@ static bool init_rgb(int argc, char **argv)
 static void render(const Red__Frame *frame)
 {
     const Red__Geometry *fg = frame->geometry;
-    struct RGB pixel = { 255, 255, 255 };
+    Pixel pixel = { 255, 255, 255 };
 
     for (int ry = blit_src.sy, yo = 0; ry < blit_src.dy; ry++, yo++) {
         if (ry >= fg->height) {
@@ -155,7 +89,7 @@ static void render(const Red__Frame *frame)
             int wy = blit_dest.sy + yo;
             int wx = blit_dest.sx + xo;
             if (wx < screen_width && wy < screen_height) {
-                unpack(&pixel, rrow, rx);
+                pixel_unpack(&pixel, fg->pixel_format, rrow, rx);
                 led_canvas_set_pixel(
                     canvas,
                     (fg->attrs & RED__GEOMETRY__ATTRS__ATTR_ROT180)
@@ -239,6 +173,7 @@ static void inspect_geometry(const Red__Geometry *fg)
         pixel_format_str(fg->pixel_format),
         fg->attrs);
 
+    led_canvas_clear(canvas);
     blit_src = args.source;
     blit_dest = args.dest;
 

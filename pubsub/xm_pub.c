@@ -43,7 +43,7 @@ void xm_init(const char *server_url)
         natsOptions_Destroy(opts);
         return;
     }
-    if ((s = natsOptions_SetReconnectWait(opts, 100)) != NATS_OK) {
+    if ((s = natsOptions_SetReconnectWait(opts, 250)) != NATS_OK) {
         log_e(LOG_TAG, "Error setting reconnect wait: %s\n", natsStatus_GetText(s));
         natsOptions_Destroy(opts);
         return;
@@ -107,12 +107,12 @@ void xm_cleanup()
 inline static void* get_reusable_buffer(size_t size)
 {
     if (buffer_size < size) {
-        // FIXME: do not use realloc; copying is unnecessary
-        u_int8_t *new_buffer = realloc(buffer, size);
+        u_int8_t *new_buffer = malloc(size);
         if (!new_buffer) {
             log_e(LOG_TAG, "Failed to allocate buffer of size %zu\n", size);
             return NULL;
         }
+        free(buffer);
         buffer = new_buffer;
         buffer_size = size;
     }

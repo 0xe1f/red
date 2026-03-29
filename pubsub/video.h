@@ -15,6 +15,8 @@
 #ifndef __VIDEO_H__
 #define __VIDEO_H__
 
+#include <stdlib.h>
+
 typedef enum {
     ROTATE_NONE   = 0,
     ROTATE_CCW90  = 1,

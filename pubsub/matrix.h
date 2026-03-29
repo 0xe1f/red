@@ -16,6 +16,7 @@
 #define __MATRIX_H__
 
 #include <stdbool.h>
+#include "geometry.pb-c.h"
 
 typedef struct {
     short sx;
@@ -24,8 +25,17 @@ typedef struct {
     short dy;
 } ViewRect;
 
+typedef struct {
+    unsigned char r;
+    unsigned char g;
+    unsigned char b;
+} Pixel;
+
 bool viewrect_validate(const ViewRect *rect);
 bool viewrect_parse(const char *arg, ViewRect *rect);
 bool viewrect_is_zero(const ViewRect *rect);
+
+void pixel_unpack(Pixel *dest, const Red__Geometry__PixelFormat pixel_format, const unsigned char *src, int offset);
+const char* pixel_format_str(Red__Geometry__PixelFormat pixel_format);
 
 #endif // __MATRIX_H__
