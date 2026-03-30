@@ -51,10 +51,6 @@ case "$MODULE_NAME" in
             make && \
             echo "done:build/mgba_libretro.so"
         ;;
-    atari800)
-        make && \
-            echo "done:atari800_libretro.so"
-        ;;
     dosbox)
         cd libretro && \
             make BUNDLED_AUDIO_CODECS=1 BUNDLED_LIBSNDFILE=1 BUNDLED_SDL=1 WITH_DYNAREC=arm64 deps && \
@@ -66,6 +62,8 @@ case "$MODULE_NAME" in
         try_libretro_build `find . -type f -name "Makefile.libretro"`
         # See if there's a Makefile in a libretro subdirectory and build that
         try_libretro_build `find . -path '*/libretro/*' -name "Makefile" -type f | head -1`
+        # Finally, see if there's a Makefile anywhere and build that
+        try_libretro_build `find . -name "Makefile" -type f | head -1`
 
         # Well, shit...
         echo "Unknown or unbuildable module: $MODULE_NAME" >&2

@@ -31,3 +31,6 @@
 [submodule "game_servers/dosbox"]
 	path = cores/dosbox
 	url = https://github.com/libretro/dosbox-core.git
+[submodule "cores/prboom"]
+	path = cores/prboom
+	url = https://github.com/libretro/libretro-prboom.git
