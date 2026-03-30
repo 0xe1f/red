@@ -38,6 +38,7 @@ typedef struct {
     bool force_preloading;
     KvStore input_configs;
     DeferredKeypress *autopress;
+    const char *tag;
 } ArgsOptions;
 
 bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_store);

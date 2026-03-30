@@ -201,6 +201,14 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
                 return false;
             }
             opts->server_url = *(++arg);
+        } else if (strcmp(*arg, "--tag") == 0 || strcmp(*arg, "-t") == 0) {
+            if (++i >= argc) {
+                log_e(LOG_TAG, "Missing argument for %s\n", *arg);
+                return false;
+            }
+            // A tag is for external applications to identify critical data.
+            // We'll record it, but not use it for anything internally.
+            opts->tag = *(++arg);
         } else if (**arg == '-') {
             log_e(LOG_TAG, "Unrecognized switch: %s\n", *arg);
             return false;

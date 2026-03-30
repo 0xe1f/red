@@ -1,5 +1,5 @@
 ```
-sudo apt install libprotobuf-c-dev libnats-dev protobuf-c-compiler
+sudo apt install nats-server libprotobuf-c-dev libnats-dev protobuf-c-compiler
 ```
 
 ## License
