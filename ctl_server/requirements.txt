@@ -8,6 +8,8 @@ iso8601==2.1.0
 itsdangerous==2.2.0
 Jinja2==3.1.4
 MarkupSafe==2.1.5
+nats-py==2.14.0
+netifaces==0.11.0
 pyserial==3.5
 PyYAML==6.0.2
 toml==0.10.2

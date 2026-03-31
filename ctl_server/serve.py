@@ -17,11 +17,14 @@
 from collections import defaultdict
 from flask import session
 from werkzeug.utils import secure_filename
+import asyncio
 import config
 import flask
 import flask_login
 import http
+import json
 import logging
+import nats
 import os
 import re
 import subprocess
@@ -101,13 +104,32 @@ def volume():
     vol = int(result) if result.isdigit() else None
     return { 'volume': vol }
 
+async def request_topic(topic, data=None):
+    logging.info(f"Requesting topic '{topic}' with data: {data}")
+
+    nc = await nats.connect(f"nats://{konfig.game_server.ip}:4222")
+    try:
+        subject = f"red.query.{topic}"
+        encoded_data = data.encode() if data else b''
+        response = await nc.request(subject, encoded_data, timeout=0.5)
+        decoded = response.data.decode()
+        response_obj = json.loads(decoded)
+        logging.info(f"Received response: {response_obj}")
+    except TimeoutError:
+        # FIXME: return a more specific error to client
+        logging.error("Request timed out")
+
+    # Terminate connection to NATS.
+    await nc.drain()
+
+    return response_obj
+
 @app.route('/stop', methods=['POST'])
 @flask_login.login_required
 def stop():
-    if server_state()['is_running']:
-        konfig.game_server.stop()
-        dl.end_launch()
+    asyncio.run(request_topic("stop"))
 
+    # FIXME: return a proper status
     return { 'status': 'OK' }
 
 @app.route('/launch', methods=['POST'])
@@ -219,19 +241,17 @@ def upload():
     return { 'status': 'OK' }
 
 def server_state():
-    result = read_process_output(
-        'ssh',
-        [
-            konfig.game_server.ip,
-            f'{konfig.game_server.path}/query.sh',
-        ]
-    )
-    app_id, title_id, vol, *_ = result.split(' ') + [None] * 4
-    title = game_konfig.game_map.get(f'{app_id}:{title_id}') if title_id else None
+    result = asyncio.run(request_topic("state"))
+    logging.debug(f"Received state: {result}")
+
+    # FIXME: error handling
+    active = result.get('active', None)
+    tag = f'{active.get("app_id")}:{active.get("title_id")}' if active else None
+
     return {
-        'title': title.as_dict() if title else None,
-        'is_running': not not title_id,
-        'volume': vol,
+        'title': game_konfig.game_map.get(tag).as_dict() if tag else None,
+        'is_running': not not active,
+        'volume': result.get('volume'),
     }
 
 def read_process_output(exe, args):
