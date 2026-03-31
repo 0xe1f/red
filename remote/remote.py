@@ -14,8 +14,10 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 
+import argparse
 import alsaaudio
 import asyncio
+import json
 import logging
 import nats
 import psutil
@@ -45,6 +47,34 @@ def query_identifiers():
     logging.info(f"Process {PUB_PROCESS_NAME} found with tag: {tag}")
     return tag
 
+def current_volume():
+    m = alsaaudio.Mixer('PCM')
+    vol, _ = m.getvolume()
+    logging.info(f"PCM mixer volume obtained: {vol}%")
+    return int(vol)
+
+def get_state():
+    _, tag = find_proc_and_tag()
+    volume = current_volume()
+
+    if tag:
+        app_id, title = tag
+        active = {
+            "app_id": app_id,
+            "title": title
+        }
+    else:
+        active = None
+
+    out = {
+        "volume": volume,
+        "result": "OK"
+    }
+    if active:
+        out["active"] = active
+
+    return out
+
 def stop_process():
     proc, _ = find_proc_and_tag()
     if not proc:
@@ -63,45 +93,45 @@ def stop_process():
         # If it doesn't exit, kill it forcefully
         proc.kill()
 
-    return True
-
-def current_volume():
-    m = alsaaudio.Mixer('PCM')
-    vol, _ = m.getvolume()
-    logging.info(f"PCM mixer volume obtained: {vol}%")
-    return int(vol)
+    return {
+        "result": "OK"
+    }
 
 def set_volume(vol):
     vol = max(0, min(100, vol))
     m = alsaaudio.Mixer('PCM')
     m.setvolume(vol)
     logging.info(f"PCM mixer volume set to: {vol}%")
-    return current_volume()
+    return {
+        "volume": current_volume(),
+        "result": "OK"
+    }
+
+def unknown_query(subject):
+    logging.warning(f"Query unrecognized: {subject}")
+    return {
+        "result": "ERROR",
+        "message": "Unknown query"
+    }
 
 def handle_request(subject, data):
     logging.info(f"Handling request for subject: {subject}")
     _, _, result = subject.rpartition('.')
     match result:
-        case "proc":
-            if tags := query_identifiers():
-                return f"Process 'pub' found with tag: {tags}"
-            else:
-                return "Process 'pub' not found"
-        case "volume":
-            return f"Current volume is: {current_volume()}%"
+        case "state":
+            return json.dumps(get_state())
         case "set_volume":
+            # FIXME: properly validate input
             if not data.isdigit():
+                # FIXME: return a proper error response
                 return "Invalid volume value. Must be an integer between 0 and 100."
             else:
-                vol = set_volume(int(data))
-                return f"Volume set to: {vol}%"
+                vol = int(data)
+                return json.dumps(set_volume(vol))
         case "stop":
-            if stop_process():
-                return "Process 'pub' stopped successfully"
-            else:
-                return "Process 'pub' not found or could not be stopped"
+            return json.dumps(stop_process())
         case _:
-            return "UNKNOWN QUERY"
+            return json.dumps(unknown_query(subject))
 
 async def reply_handler(msg):
     data = msg.data.decode()
@@ -110,7 +140,12 @@ async def reply_handler(msg):
     await msg.respond(response.encode())
 
 async def main():
-    nc = await nats.connect("nats://localhost:4222")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--server", "-s", help="NATS server URL (default: nats://localhost:4222)", default="nats://localhost:4222")
+
+    args = parser.parse_args()
+
+    nc = await nats.connect(args.server)
     # Subscribe and get notified of any messages on "red.query.*"
     await nc.subscribe("red.query.*", cb=reply_handler)
     logging.info("Subscribed to 'red.query.*'...")
