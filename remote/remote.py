@@ -17,24 +17,75 @@
 import argparse
 import alsaaudio
 import asyncio
+import glob
 import json
 import logging
 import nats
+import pathlib
 import psutil
+import os
+import re
+import shlex
+import subprocess
+import yaml
 
-PUB_PROCESS_NAME = "pub"
+SUBJECT = "red.query.*"
+LAUNCH_PROCESS_NAME = "pub"
+APP_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
+TITLE_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
+CORE_PATTERN = "*.so"
+
+game_configs = {}
+server_config = {}
+
+def read_config(platform_config_path, game_config_path):
+    if not pathlib.Path(platform_config_path).is_file():
+        raise ValueError(f"Platform configuration file not found: {platform_config_path}")
+    if not pathlib.Path(game_config_path).is_file():
+        raise ValueError(f"Game configuration file not found: {game_config_path}")
+
+    global server_config
+    with open(platform_config_path, 'r') as f:
+        config = yaml.safe_load(f)
+
+    if not (server_config := config.get("game_server")):
+        raise ValueError("Missing server configuration")
+
+    if not server_config.get("path"):
+        raise ValueError("Missing server path in configuration")
+
+    if not server_config.get("platforms"):
+        raise ValueError("Missing platform configuration")
+
+    if not server_config.get("ip"):
+        raise ValueError("Missing server IP in configuration")
+
+    logging.info(f"Server configuration loaded")
+
+    global game_configs
+    with open(game_config_path, 'r') as f:
+        for game in yaml.safe_load(f):
+            if not game.get("app_id"):
+                raise ValueError("Game missing app_id")
+            if not game.get("title_id"):
+                raise ValueError("Game missing title_id")
+
+            id = (game["app_id"], game["title_id"])
+            game_configs[id] = game
+
+    logging.info(f"Game configurations loaded for {len(game_configs)} items")
 
 def find_proc_and_tag():
     found_proc = None
     for proc in psutil.process_iter(['name']):
-        if proc.info['name'] == PUB_PROCESS_NAME:
+        if proc.info['name'] == LAUNCH_PROCESS_NAME:
             for index, value in enumerate(proc.cmdline()):
                 if value == "--tag" or value == "-t":
                     if index + 1 < len(proc.cmdline()):
                         tag = proc.cmdline()[index + 1]
                         if ':' in tag:
                             return proc, tag.split(':', 2)
-            logging.warning(f"Process {PUB_PROCESS_NAME} ({proc.pid}) found with no tag")
+            logging.warning(f"Process {LAUNCH_PROCESS_NAME} ({proc.pid}) found with no tag")
             found_proc = proc
 
     return found_proc, None
@@ -44,7 +95,7 @@ def query_identifiers():
     if not tag:
         return None
 
-    logging.info(f"Process {PUB_PROCESS_NAME} found with tag: {tag}")
+    logging.info(f"Process {LAUNCH_PROCESS_NAME} found with tag: {tag}")
     return tag
 
 def current_volume():
@@ -57,31 +108,30 @@ def get_state():
     _, tag = find_proc_and_tag()
     volume = current_volume()
 
-    if tag:
-        app_id, title = tag
-        active = {
-            "app_id": app_id,
-            "title": title
-        }
-    else:
-        active = None
-
     out = {
         "volume": volume,
         "result": "OK"
     }
-    if active:
-        out["active"] = active
+
+    if tag:
+        app_id, title_id = tag
+        out["active"] = {
+            "app_id": app_id,
+            "title_id": title_id
+        }
 
     return out
 
 def stop_process():
     proc, _ = find_proc_and_tag()
     if not proc:
-        logging.warning(f"Process {PUB_PROCESS_NAME} not found")
-        return False
+        logging.warning(f"Process {LAUNCH_PROCESS_NAME} not found")
+        return {
+            "result": "OK",
+            "was_running": False
+        }
 
-    logging.info(f"Stopping {PUB_PROCESS_NAME} (pid: {proc.pid})...")
+    logging.info(f"Stopping {LAUNCH_PROCESS_NAME} (pid: {proc.pid})...")
 
     # Send SIGINT to allow graceful shutdown, then wait for it to exit
     proc.send_signal(psutil.signal.SIGINT)
@@ -94,64 +144,158 @@ def stop_process():
         proc.kill()
 
     return {
-        "result": "OK"
+        "result": "OK",
+        "was_running": True
     }
 
-def set_volume(vol):
-    vol = max(0, min(100, vol))
+def set_volume(args):
+    if not args.isdigit():
+        raise ValueError(f"Invalid volume value: '{args}'")
+
+    vol = max(0, min(100, int(args)))
+    logging.info(f"Setting PCM mixer volume to: {vol}%...")
+
     m = alsaaudio.Mixer('PCM')
     m.setvolume(vol)
-    logging.info(f"PCM mixer volume set to: {vol}%")
+
     return {
         "volume": current_volume(),
         "result": "OK"
     }
 
-def unknown_query(subject):
-    logging.warning(f"Query unrecognized: {subject}")
+def launch(args):
+    if ':' not in args:
+        raise ValueError(f"Invalid launch arguments: '{args}'")
+
+    app_id, title_id = args.split(':', 1)
+    if not re.fullmatch(APP_ID_PATTERN, app_id):
+        raise ValueError(f"Invalid app_id: {app_id}")
+    if not re.fullmatch(TITLE_ID_PATTERN, title_id):
+        raise ValueError(f"Invalid title_id: {title_id}")
+
+    proc, _ = find_proc_and_tag()
+    if proc:
+        raise ValueError(f"{LAUNCH_PROCESS_NAME} is already running with pid: {proc.pid}")
+
+    logging.info(f"Launching ({app_id}/{title_id})...")
+
+    home_dir = pathlib.Path.home()
+    cores_dir = home_dir / server_config["path"]
+
+    launch_proc = str(cores_dir / LAUNCH_PROCESS_NAME)
+    if not pathlib.Path(launch_proc).is_file():
+        raise ValueError(f"Launch executable not found: {launch_proc}")
+
+    core_dir = cores_dir / app_id
+    if not core_dir.is_dir():
+        raise ValueError(f"Core not found for app_id: {app_id}")
+
+    core_matches = glob.glob(CORE_PATTERN, root_dir=core_dir)
+    if not core_matches:
+        raise ValueError(f"No core found in {core_dir}")
+    so_file = str(core_dir / core_matches[0])
+
+    logging.debug(f"Found core {so_file}")
+
+    # FIXME: configurable rom directory
+    rom_dir = core_dir / "roms"
+    title_matches = glob.glob(f"{title_id}.*", root_dir=rom_dir)
+    if not title_matches:
+        raise ValueError(f"No title matching title_id {title_id}")
+    rom_spec = str(rom_dir / title_matches[0])
+
+    logging.debug(f"Found ROM {rom_spec}")
+
+    args = [ launch_proc ]
+
+    platforms_config = server_config.get("platforms", {})
+    common_config = platforms_config.get("common", {})
+    if common_args := common_config.get("extra_args", ""):
+        args.extend(shlex.split(common_args))
+    platform_config = platforms_config.get(app_id, {})
+    if platform_args := platform_config.get("extra_args", ""):
+        args.extend(shlex.split(platform_args))
+    if game_args := game_configs.get((app_id, title_id), {}).get("extra_args", ""):
+        args.extend(shlex.split(game_args))
+
+    args += [
+        "--tag", f"{app_id}:{title_id}",
+        "--core", so_file,
+        rom_spec,
+    ]
+
+    logging.info(f"Launching {' '.join(args)}")
+    with subprocess.Popen(args, start_new_session=True) as proc:
+        logging.info(f"Process launched with pid: {proc.pid}")
+
     return {
-        "result": "ERROR",
-        "message": "Unknown query"
+        "result": "OK"
     }
 
-def handle_request(subject, data):
-    logging.info(f"Handling request for subject: {subject}")
-    _, _, result = subject.rpartition('.')
-    match result:
-        case "state":
-            return json.dumps(get_state())
-        case "set_volume":
-            # FIXME: properly validate input
-            if not data.isdigit():
-                # FIXME: return a proper error response
-                return "Invalid volume value. Must be an integer between 0 and 100."
-            else:
-                vol = int(data)
-                return json.dumps(set_volume(vol))
-        case "stop":
-            return json.dumps(stop_process())
-        case _:
-            return json.dumps(unknown_query(subject))
+def handle_topic(topic, data):
+    logging.info(f"Handling request for topic: {topic}")
+    response = None
+    try:
+        match topic:
+            case "state":
+                response = get_state()
+            case "set_volume":
+                response = set_volume(data)
+            case "stop":
+                response = stop_process()
+            case "launch":
+                response = launch(data)
+            case _:
+                raise ValueError(f"Unrecognized topic: {topic}")
 
-async def reply_handler(msg):
+    except ValueError as e:
+        # FIXME: return a more specific error to client
+        logging.error(f"Error handling topic '{topic}': {e}")
+        response = {
+            "result": "ERROR",
+        }
+
+    except Exception as e:
+        logging.error(f"Unexpected error handling topic '{topic}': {e}")
+        response = {
+            "result": "ERROR",
+        }
+
+    return json.dumps(response)
+
+async def handle_request(msg):
     data = msg.data.decode()
     logging.debug(f"Received request: '{data}' with subject: '{msg.subject}'")
-    response = handle_request(msg.subject, data)
+
+    _, _, topic = msg.subject.rpartition('.')
+    response = handle_topic(topic, data)
+
     await msg.respond(response.encode())
 
-async def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--server", "-s", help="NATS server URL (default: nats://localhost:4222)", default="nats://localhost:4222")
+async def start_listening():
+    nc = await nats.connect(server_config["ip"])
 
-    args = parser.parse_args()
+    # Subscribe and get notified of any messages
+    await nc.subscribe(SUBJECT, cb=handle_request)
+    logging.info(f"Subscribed to '{SUBJECT}'...")
 
-    nc = await nats.connect(args.server)
-    # Subscribe and get notified of any messages on "red.query.*"
-    await nc.subscribe("red.query.*", cb=reply_handler)
-    logging.info("Subscribed to 'red.query.*'...")
     # Keep the program running to listen for messages
     await asyncio.Future()
 
-if __name__ == "__main__":
+def main():
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--platform-config", "-p", help="Path to platform configuration file (default: config.yaml)", default="config.yaml")
+    parser.add_argument("--game-config", "-g", help="Path to game configuration file (default: games.yaml)", default="games.yaml")
+    args = parser.parse_args()
+
+    # Set up logging
     logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(message)s')
-    asyncio.run(main())
+
+    # Load configuration from files
+    read_config(args.platform_config, args.game_config)
+
+    asyncio.run(start_listening())
+
+if __name__ == "__main__":
+    main()
