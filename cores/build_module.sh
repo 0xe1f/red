@@ -23,13 +23,6 @@ fi
 cd $MODULE_NAME
 
 case "$MODULE_NAME" in
-    chocolate-doom)
-        if [ ! -f Makefile ]; then
-            ./autogen.sh || exit 1
-        fi
-        make && \
-                echo "done:src/chocolate-doom src/chocolate-heretic src/chocolate-hexen src/chocolate-strife launch.sh stop.sh"
-        ;;
     mgba)
         if [ ! -f build/Makefile ]; then
             mkdir -p build && cd build && cmake \
