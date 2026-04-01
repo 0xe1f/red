@@ -29,18 +29,6 @@ subprocess.call([
     f'{config.control_server.hostname}:'
 ])
 
-print("Deploying core tools...")
-subprocess.call([
-    'rsync',
-    '-avrL',
-    f'{config.game_server.path}/launch.sh',
-    f'{config.game_server.path}/stopall.sh',
-    f'{config.game_server.path}/query.sh',
-    f'{config.game_server.path}/set_volume.sh',
-    f'{config.game_server.path}/keypress.py',
-    f'{config.game_server.hostname}:{config.game_server.path}'
-])
-
 subprocess.call([
     'ssh',
     '-o',
@@ -48,3 +36,7 @@ subprocess.call([
     f'{config.control_server.hostname}',
     f'cd {config.control_server.path}; nohup ./{CTL_SERVER_EXE} >log.txt 2>&1 &',
 ])
+
+# FIXME: deploy config files too
+# FIXME: strip non-essential data from platform config
+# FIXME: strip non-essential data from games config

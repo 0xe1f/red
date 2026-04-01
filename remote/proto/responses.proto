@@ -13,7 +13,8 @@ message Result {
 message StateResponse {
     Result result = 1;
     uint32 volume = 2;
-    LaunchId running = 3;
+    bool is_running = 3;
+    LaunchId active = 4;
 }
 
 message SetVolumeResponse {

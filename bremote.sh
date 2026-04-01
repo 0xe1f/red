@@ -28,6 +28,18 @@ if [ -z "$GAME_SVR_HOST" ]; then
     exit 1
 fi
 
+CONTROL_SVR_HOST=`yq e '.control_server.hostname' deploy.yaml`
+if [ -z "$CONTROL_SVR_HOST" ]; then
+    echo "${CLR_ERR}Error: missing control server hostname in deploy.yaml${CLR_RST}" >&2
+    exit 1
+fi
+
+CONTROL_SVR_PATH=`yq e '.control_server.path' deploy.yaml`
+if [ -z "$CONTROL_SVR_PATH" ]; then
+    echo "${CLR_ERR}Error: missing control server path in deploy.yaml${CLR_RST}" >&2
+    exit 1
+fi
+
 BUILD_SVR=`yq e '.control_server.hostname' deploy.yaml`
 if [ -z "$BUILD_SVR" ]; then
     echo "${CLR_ERR}Error: missing build server hostname in deploy.yaml${CLR_RST}" >&2
@@ -61,5 +73,14 @@ rsync -trph \
     --exclude 'proto/' \
     "${APP_PATH}/" \
     "${GAME_SVR_HOST}:${APP_PATH}/"
+
+# Copy to control server
+rsync -trph \
+    --info=progress2 \
+    --exclude '.*' \
+    --exclude 'setup.sh' \
+    --exclude 'proto/' \
+    "${APP_PATH}/generated" \
+    "${CONTROL_SVR_HOST}:${CONTROL_SVR_PATH}/"
 
 # FIXME - copy configs

@@ -21,8 +21,11 @@ import asyncio
 import config
 import flask
 import flask_login
+import generated.common_pb2 as pbcom
+import generated.requests_pb2 as pbreq
+import generated.responses_pb2 as pbresp
 import http
-import json
+import importlib
 import logging
 import nats
 import os
@@ -67,7 +70,17 @@ def games():
 @app.route('/query')
 @flask_login.login_required
 def query():
-    return server_state()
+    result = request_topic("state", pbreq.StateRequest(), "generated.responses_pb2.StateResponse")
+
+    # FIXME: error handling
+    active = result.active
+    tag = f"{active.app_id}:{active.title_id}" if result.is_running else None
+
+    return {
+        'title': game_konfig.game_map.get(tag).as_dict() if tag else None,
+        'is_running': result.is_running,
+        'volume': result.volume,
+    }
 
 @app.route('/sync')
 @flask_login.login_required
@@ -87,34 +100,36 @@ def volume():
     dict = flask.request.json
 
     volume = dict.get('volume')
-    if not 0 <= volume <= 100:
-        logging.error(f'{volume} is not a valid volume')
+    volume = max(0, min(volume, 100)) if isinstance(volume, int) else None
+    if volume is None:
+        logging.error('Missing or invalid volume')
         return {
             'status': 'ERR',
-            'message': 'Volume is not valid',
+            'message': 'Missing or invalid volume',
         }, http.HTTPStatus.BAD_REQUEST
 
-    result = read_process_output(
-        'ssh',
-        [
-            konfig.game_server.ip,
-            f'{konfig.game_server.path}/set_volume.sh {volume}',
-        ]
-    )
-    vol = int(result) if result.isdigit() else None
-    return { 'volume': vol }
+    result = request_topic("set_volume", pbreq.SetVolumeRequest(volume=volume), "generated.responses_pb2.SetVolumeResponse")
 
-async def request_topic(topic, data=None):
-    logging.info(f"Requesting topic '{topic}' with data: {data}")
+    return { 'volume': result.volume }
 
+def deserialize(message, type):
+    module_, class_ = type.rsplit('.', 1)
+    class_ = getattr(importlib.import_module(module_), class_)
+    rv = class_()
+    rv.ParseFromString(message)
+    return rv
+
+async def request_topic_async(topic, request, response_type):
+    subject = f"red.query.{topic}"
+    logging.info(f"Requesting subject '{subject}'")
+
+    # FIXME: nats URL
     nc = await nats.connect(f"nats://{konfig.game_server.ip}:4222")
     try:
-        subject = f"red.query.{topic}"
-        encoded_data = data.encode() if data else b''
+        encoded_data = request.SerializeToString()
         response = await nc.request(subject, encoded_data, timeout=0.5)
-        decoded = response.data.decode()
-        response_obj = json.loads(decoded)
-        logging.info(f"Received response: {response_obj}")
+        response_obj = deserialize(response.data, response_type)
+        logging.debug(f"Received response for subject '{subject}': {response_obj}")
     except TimeoutError:
         # FIXME: return a more specific error to client
         logging.error("Request timed out")
@@ -124,10 +139,13 @@ async def request_topic(topic, data=None):
 
     return response_obj
 
+def request_topic(topic, request, response_type):
+    return asyncio.run(request_topic_async(topic, request, response_type))
+
 @app.route('/stop', methods=['POST'])
 @flask_login.login_required
 def stop():
-    asyncio.run(request_topic("stop"))
+    request_topic("stop", pbreq.StopRequest(), "generated.responses_pb2.StopResponse")
 
     # FIXME: return a proper status
     return { 'status': 'OK' }
@@ -144,7 +162,9 @@ def launch():
             'message': 'Game id missing',
         }, http.HTTPStatus.BAD_REQUEST
 
-    if server_state()['is_running']:
+    state = request_topic("state", pbreq.StateRequest(), "generated.responses_pb2.StateResponse")
+    if state.is_running:
+        request_topic("stop", pbreq.StopRequest(), "generated.responses_pb2.GeneralResponse")
         dl.end_launch()
 
     title = game_konfig.game_map.get(id)
@@ -155,18 +175,16 @@ def launch():
             'message': 'Game not found',
         }, http.HTTPStatus.NOT_FOUND
 
-    (code, stdout) = konfig.game_server.launch(title)
-    if code == 0:
-        dl.create_launch(
-            session_id=session.get('id'),
-            uid=title.id,
-        )
-        dl.increment_launch_count(
-            uid=title.id,
-        )
-        for client in konfig.game_clients:
-            if not client.runs_as_daemon:
-                client.launch()
+    response = request_topic("launch", pbreq.LaunchRequest(
+        launch_id=pbcom.LaunchId(
+            app_id=title.app_id,
+            title_id=title.title_id,
+        ),
+    ), "generated.responses_pb2.GeneralResponse")
+
+    if response.result.status == pbresp.Result.Status.STATUS_OK:
+        dl.create_launch(session_id=session.get('id'), uid=title.id)
+        dl.increment_launch_count(uid=title.id)
         return {
             'status': 'OK',
             'title': title.as_dict(),
@@ -175,7 +193,6 @@ def launch():
         return {
             'status': 'ERR',
             'message': 'Failed to launch',
-            'detail': stdout,
         }, http.HTTPStatus.BAD_REQUEST
 
 @app.route('/upload', methods=['POST'])
@@ -239,20 +256,6 @@ def upload():
         subprocess.call(args)
 
     return { 'status': 'OK' }
-
-def server_state():
-    result = asyncio.run(request_topic("state"))
-    logging.debug(f"Received state: {result}")
-
-    # FIXME: error handling
-    active = result.get('active', None)
-    tag = f'{active.get("app_id")}:{active.get("title_id")}' if active else None
-
-    return {
-        'title': game_konfig.game_map.get(tag).as_dict() if tag else None,
-        'is_running': not not active,
-        'volume': result.get('volume'),
-    }
 
 def read_process_output(exe, args):
     result = subprocess.run([exe] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

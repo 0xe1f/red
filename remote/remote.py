@@ -17,11 +17,10 @@
 import argparse
 import alsaaudio
 import asyncio
-import generated.common_pb2 as pcom
-import generated.requests_pb2 as requests
-import generated.responses_pb2 as responses
+import generated.common_pb2 as pbcom
+import generated.requests_pb2 as pbreq
+import generated.responses_pb2 as pbresp
 import glob
-import json
 import logging
 import nats
 import pathlib
@@ -107,38 +106,39 @@ def current_volume():
     return int(vol)
 
 def get_state(data):
-    req = requests.StateRequest()
+    req = pbreq.StateRequest()
     req.ParseFromString(data)
 
     _, tag = find_proc_and_tag()
     if tag:
         app_id, title_id = tag
-        running = pcom.LaunchId(
+        active = pbcom.LaunchId(
             app_id=app_id,
             title_id=title_id
         )
     else:
-        running = None
+        active = None
 
-    return responses.StateResponse(
+    return pbresp.StateResponse(
         volume=current_volume(),
-        running=running,
-        result=responses.Result(
-            status=responses.Result.Status.STATUS_OK,
+        active=active,
+        is_running=active is not None,
+        result=pbresp.Result(
+            status=pbresp.Result.Status.STATUS_OK,
         )
     )
 
 def stop_process(data):
-    req = requests.StopRequest()
+    req = pbreq.StopRequest()
     req.ParseFromString(data)
 
     proc, _ = find_proc_and_tag()
     if not proc:
         logging.warning(f"Process {LAUNCH_PROCESS_NAME} not found")
-        return responses.StopResponse(
+        return pbresp.StopResponse(
             was_running=False,
-            result=responses.Result(
-                status=responses.Result.Status.STATUS_OK,
+            result=pbresp.Result(
+                status=pbresp.Result.Status.STATUS_OK,
             )
         )
 
@@ -154,15 +154,15 @@ def stop_process(data):
         # If it doesn't exit, kill it forcefully
         proc.kill()
 
-    return responses.StopResponse(
+    return pbresp.StopResponse(
         was_running=True,
-        result=responses.Result(
-            status=responses.Result.Status.STATUS_OK,
+        result=pbresp.Result(
+            status=pbresp.Result.Status.STATUS_OK,
         )
     )
 
 def set_volume(data):
-    req = requests.SetVolumeRequest()
+    req = pbreq.SetVolumeRequest()
     req.ParseFromString(data)
 
     vol = max(0, min(100, int(req.volume)))
@@ -171,15 +171,15 @@ def set_volume(data):
     m = alsaaudio.Mixer('PCM')
     m.setvolume(vol)
 
-    return responses.SetVolumeResponse(
+    return pbresp.SetVolumeResponse(
         volume=current_volume(),
-        result=responses.Result(
-            status=responses.Result.Status.STATUS_OK,
+        result=pbresp.Result(
+            status=pbresp.Result.Status.STATUS_OK,
         )
     )
 
 def launch(data):
-    req = requests.LaunchRequest()
+    req = pbreq.LaunchRequest()
     req.ParseFromString(data)
 
     app_id = req.launch_id.app_id
@@ -244,9 +244,9 @@ def launch(data):
     with subprocess.Popen(args, start_new_session=True) as proc:
         logging.info(f"Process launched with pid: {proc.pid}")
 
-    return responses.LaunchResponse(
-        result=responses.Result(
-            status=responses.Result.Status.STATUS_ERROR,
+    return pbresp.LaunchResponse(
+        result=pbresp.Result(
+            status=pbresp.Result.Status.STATUS_OK,
         ),
         launch_id=req.launch_id,
     )
@@ -270,17 +270,17 @@ def handle_topic(topic, data):
     except ValueError as e:
         # FIXME: return a more specific error to client
         logging.error(f"Error handling topic '{topic}': {e}")
-        response = responses.GeneralResponse(
-            result=responses.Result(
-                status=responses.Result.Status.STATUS_ERROR,
+        response = pbresp.GeneralResponse(
+            result=pbresp.Result(
+                status=pbresp.Result.Status.STATUS_ERROR,
             )
         )
 
     except Exception as e:
         logging.error(f"Unexpected error handling topic '{topic}': {e}")
-        response = responses.GeneralResponse(
-            result=responses.Result(
-                status=responses.Result.Status.STATUS_ERROR,
+        response = pbresp.GeneralResponse(
+            result=pbresp.Result(
+                status=pbresp.Result.Status.STATUS_ERROR,
             )
         )
 
