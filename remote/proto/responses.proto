@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+import "common.proto";
+
+message Result {
+    enum Status {
+        STATUS_OK = 0;
+        STATUS_ERROR = 1;
+    }
+    Status status = 1;
+}
+
+message StateResponse {
+    Result result = 1;
+    uint32 volume = 2;
+    LaunchId running = 3;
+}
+
+message SetVolumeResponse {
+    Result result = 1;
+    uint32 volume = 2;
+}
+
+message StopResponse {
+    Result result = 1;
+    bool was_running = 2;
+}
+
+message LaunchResponse {
+    Result result = 1;
+    LaunchId launch_id = 2;
+}
+
+message GeneralResponse {
+    Result result = 1;
+}

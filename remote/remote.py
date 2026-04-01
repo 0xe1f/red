@@ -17,13 +17,15 @@
 import argparse
 import alsaaudio
 import asyncio
+import generated.common_pb2 as pcom
+import generated.requests_pb2 as requests
+import generated.responses_pb2 as responses
 import glob
 import json
 import logging
 import nats
 import pathlib
 import psutil
-import os
 import re
 import shlex
 import subprocess
@@ -104,32 +106,41 @@ def current_volume():
     logging.info(f"PCM mixer volume obtained: {vol}%")
     return int(vol)
 
-def get_state():
+def get_state(data):
+    req = requests.StateRequest()
+    req.ParseFromString(data)
+
     _, tag = find_proc_and_tag()
-    volume = current_volume()
-
-    out = {
-        "volume": volume,
-        "result": "OK"
-    }
-
     if tag:
         app_id, title_id = tag
-        out["active"] = {
-            "app_id": app_id,
-            "title_id": title_id
-        }
+        running = pcom.LaunchId(
+            app_id=app_id,
+            title_id=title_id
+        )
+    else:
+        running = None
 
-    return out
+    return responses.StateResponse(
+        volume=current_volume(),
+        running=running,
+        result=responses.Result(
+            status=responses.Result.Status.STATUS_OK,
+        )
+    )
 
-def stop_process():
+def stop_process(data):
+    req = requests.StopRequest()
+    req.ParseFromString(data)
+
     proc, _ = find_proc_and_tag()
     if not proc:
         logging.warning(f"Process {LAUNCH_PROCESS_NAME} not found")
-        return {
-            "result": "OK",
-            "was_running": False
-        }
+        return responses.StopResponse(
+            was_running=False,
+            result=responses.Result(
+                status=responses.Result.Status.STATUS_OK,
+            )
+        )
 
     logging.info(f"Stopping {LAUNCH_PROCESS_NAME} (pid: {proc.pid})...")
 
@@ -143,31 +154,36 @@ def stop_process():
         # If it doesn't exit, kill it forcefully
         proc.kill()
 
-    return {
-        "result": "OK",
-        "was_running": True
-    }
+    return responses.StopResponse(
+        was_running=True,
+        result=responses.Result(
+            status=responses.Result.Status.STATUS_OK,
+        )
+    )
 
-def set_volume(args):
-    if not args.isdigit():
-        raise ValueError(f"Invalid volume value: '{args}'")
+def set_volume(data):
+    req = requests.SetVolumeRequest()
+    req.ParseFromString(data)
 
-    vol = max(0, min(100, int(args)))
+    vol = max(0, min(100, int(req.volume)))
     logging.info(f"Setting PCM mixer volume to: {vol}%...")
 
     m = alsaaudio.Mixer('PCM')
     m.setvolume(vol)
 
-    return {
-        "volume": current_volume(),
-        "result": "OK"
-    }
+    return responses.SetVolumeResponse(
+        volume=current_volume(),
+        result=responses.Result(
+            status=responses.Result.Status.STATUS_OK,
+        )
+    )
 
-def launch(args):
-    if ':' not in args:
-        raise ValueError(f"Invalid launch arguments: '{args}'")
+def launch(data):
+    req = requests.LaunchRequest()
+    req.ParseFromString(data)
 
-    app_id, title_id = args.split(':', 1)
+    app_id = req.launch_id.app_id
+    title_id = req.launch_id.title_id
     if not re.fullmatch(APP_ID_PATTERN, app_id):
         raise ValueError(f"Invalid app_id: {app_id}")
     if not re.fullmatch(TITLE_ID_PATTERN, title_id):
@@ -228,9 +244,12 @@ def launch(args):
     with subprocess.Popen(args, start_new_session=True) as proc:
         logging.info(f"Process launched with pid: {proc.pid}")
 
-    return {
-        "result": "OK"
-    }
+    return responses.LaunchResponse(
+        result=responses.Result(
+            status=responses.Result.Status.STATUS_ERROR,
+        ),
+        launch_id=req.launch_id,
+    )
 
 def handle_topic(topic, data):
     logging.info(f"Handling request for topic: {topic}")
@@ -238,11 +257,11 @@ def handle_topic(topic, data):
     try:
         match topic:
             case "state":
-                response = get_state()
+                response = get_state(data)
             case "set_volume":
                 response = set_volume(data)
             case "stop":
-                response = stop_process()
+                response = stop_process(data)
             case "launch":
                 response = launch(data)
             case _:
@@ -251,26 +270,29 @@ def handle_topic(topic, data):
     except ValueError as e:
         # FIXME: return a more specific error to client
         logging.error(f"Error handling topic '{topic}': {e}")
-        response = {
-            "result": "ERROR",
-        }
+        response = responses.GeneralResponse(
+            result=responses.Result(
+                status=responses.Result.Status.STATUS_ERROR,
+            )
+        )
 
     except Exception as e:
         logging.error(f"Unexpected error handling topic '{topic}': {e}")
-        response = {
-            "result": "ERROR",
-        }
+        response = responses.GeneralResponse(
+            result=responses.Result(
+                status=responses.Result.Status.STATUS_ERROR,
+            )
+        )
 
-    return json.dumps(response)
+    return response.SerializeToString()
 
 async def handle_request(msg):
-    data = msg.data.decode()
-    logging.debug(f"Received request: '{data}' with subject: '{msg.subject}'")
+    logging.debug(f"Received request with subject: '{msg.subject}'")
 
     _, _, topic = msg.subject.rpartition('.')
-    response = handle_topic(topic, data)
+    response = handle_topic(topic, msg.data)
 
-    await msg.respond(response.encode())
+    await msg.respond(response)
 
 async def start_listening():
     nc = await nats.connect(server_config["ip"])
