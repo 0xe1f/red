@@ -144,28 +144,8 @@ class GameConfig:
 class Config:
 
     def __init__(self, path):
-        self.game_server = GameServer()
-        self.sensor = SensorConfig()
-
         with open(path, 'r') as fd:
-            conf = yaml.safe_load(fd)
-            if 'game_server' in conf:
-                self.game_server = GameServer(**conf['game_server'])
-            if 'sensor' in conf:
-                self.sensor = SensorConfig(**conf['sensor'])
-
-class GameServer:
-
-    def __init__(self, **item):
-        self.__dict__.update(item)
-
-class SensorConfig:
-
-    def __init__(self, **item):
-        self.__dict__.update(item)
-
-        if 'device' not in item:
-            self.device = None
+            self.__dict__.update(yaml.safe_load(fd))
 
 class Game:
 

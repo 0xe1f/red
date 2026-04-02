@@ -49,15 +49,16 @@ def write_launcher_config(platform_config_path):
     with open(platform_config_path, 'r') as f:
         config = yaml.safe_load(f)
 
-    del config['control_server']
-    del config['game_clients']
+    out_config = {}
+    out_config['sensor'] = config['sensor']
+    out_config['game_server'] = {
+        'ip': config['game_server']['ip'],
+    }
+    out_config['control_server'] = {
+        'flask_config': config['control_server']['flask_config'],
+    }
 
-    game_server = config['game_server']
-    del game_server['hostname']
-    del game_server['path']
-    del game_server['platforms']
-
-    yaml.safe_dump(config, sys.stdout)
+    yaml.safe_dump(out_config, sys.stdout)
 
 def write_launcher_games(game_config_path):
     with open(game_config_path, 'r') as f:

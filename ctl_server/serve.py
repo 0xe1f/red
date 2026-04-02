@@ -18,7 +18,6 @@ from collections import defaultdict
 from flask import session
 from generated.common_pb2 import LaunchId
 from generated.responses_pb2 import Result
-from werkzeug.utils import secure_filename
 import argparse
 import asyncio
 import config
@@ -29,14 +28,10 @@ import http
 import importlib
 import logging
 import nats
-import os
 import re
 import subprocess
-import tempfile
-import tomllib
 
 app = flask.Flask(__name__)
-app.config.from_file("config.toml", load=tomllib.load, text=False)
 
 import data.launches as dl
 
@@ -59,7 +54,7 @@ async def request_topic_async(topic, request, response_type):
     logging.info(f"Requesting subject '{subject}'")
 
     # FIXME: nats URL
-    nc = await nats.connect(f"nats://{konfig.game_server.ip}:4222")
+    nc = await nats.connect(f"nats://{konfig.game_server['ip']}:4222")
     try:
         encoded_data = request.SerializeToString()
         response = await nc.request(subject, encoded_data, timeout=0.5)
@@ -287,8 +282,8 @@ def upload():
 @flask_login.login_required
 def sync():
     orientation = "UNKNOWN"
-    if konfig.sensor.device:
-        response = read_process_output("./sensor.py", [ f"--device={konfig.sensor.device}", "orientation" ])
+    if device := konfig.sensor.get('device'):
+        response = read_process_output("./sensor.py", [ f"--device={device}", "orientation" ])
         orientation = response
 
     return {
@@ -324,6 +319,7 @@ def main():
 
     konfig = config.Config(args.platform_config)
     game_konfig = config.GameConfig(args.game_config)
+    app.config.update(konfig.control_server['flask_config'])
 
     app.run(host='0.0.0.0', port=8080, debug=True)
 
