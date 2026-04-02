@@ -23,6 +23,7 @@ import generated.responses_pb2 as pbresp
 import glob
 import logging
 import nats
+import os
 import pathlib
 import psutil
 import re
@@ -218,9 +219,9 @@ def launch(data):
     title_matches = glob.glob(f"{title_id}.*", root_dir=rom_dir)
     if not title_matches:
         raise ValueError(f"No title matching title_id {title_id}")
-    rom_spec = str(rom_dir / title_matches[0])
+    rom_path = os.path.relpath(str(rom_dir / title_matches[0]), cores_dir)
 
-    logging.debug(f"Found ROM {rom_spec}")
+    logging.debug(f"Found ROM {rom_path}")
 
     args = [ launch_proc ]
 
@@ -236,12 +237,12 @@ def launch(data):
 
     args += [
         "--tag", f"{app_id}:{title_id}",
-        "--core", so_file,
-        rom_spec,
+        "--core", os.path.relpath(so_file, cores_dir),
+        rom_path,
     ]
 
     logging.info(f"Launching {' '.join(args)}")
-    with subprocess.Popen(args, start_new_session=True) as proc:
+    with subprocess.Popen(args, start_new_session=True, cwd=cores_dir) as proc:
         logging.info(f"Process launched with pid: {proc.pid}")
 
     return pbresp.LaunchResponse(
@@ -307,12 +308,21 @@ async def start_listening():
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--platform-config", "-p", help="Path to platform configuration file (default: config.yaml)", default="config.yaml")
-    parser.add_argument("--game-config", "-g", help="Path to game configuration file (default: games.yaml)", default="games.yaml")
+    parser.add_argument("--platform-config", "-pc", help="Path to platform configuration file (default: config.yaml)", default="config.yaml")
+    parser.add_argument("--game-config", "-gc", help="Path to game configuration file (default: games.yaml)", default="games.yaml")
+    parser.add_argument("--output", "-o", help="Path to logging file (default: None, logs to console)")
+    parser.add_argument("--output-overwrite", "-oo", help="True to overwrite the logging file (default: False)", action="store_true", default=False)
+    parser.add_argument("--log-level", "-l", help="Logging level (default: INFO)", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
     args = parser.parse_args()
 
     # Set up logging
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(message)s')
+    log_config = {
+        'level': getattr(logging, args.log_level),
+        'format': '%(asctime)s:%(levelname)s:%(message)s',
+        'filename': args.output,
+        'filemode': 'w' if args.output_overwrite else 'a'
+    }
+    logging.basicConfig(**log_config)
 
     # Load configuration from files
     read_config(args.platform_config, args.game_config)

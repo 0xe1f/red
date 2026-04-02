@@ -17,6 +17,7 @@
 from collections import defaultdict
 from flask import session
 from werkzeug.utils import secure_filename
+import argparse
 import asyncio
 import config
 import flask
@@ -41,76 +42,10 @@ import data.launches as dl
 
 import users
 
+RESPONSE_PACKAGE_NAME = "generated.responses_pb2"
 ROM_UPLOAD_FILENAME_REGEX = r'^[A-Za-z0-9]+\.[A-Za-z0-9]{1,7}$'
 ROM_UPLOAD_ALLOWED_TYPES = [ '.zip', '.7z' ]
 ROM_UPLOAD_MAX_FILES = 5
-
-@app.route('/')
-@flask_login.login_required
-def index():
-    return flask.render_template('index.html')
-
-@app.route('/filters')
-@flask_login.login_required
-def filters():
-    return game_konfig.filters()
-
-@app.route('/games')
-@flask_login.login_required
-def games():
-    search = flask.request.args.get("search", "")
-    filters = flask.request.args.get("filters", "")
-    filter_map = defaultdict(list)
-    if filters:
-        for (k, v) in [ filter.split(":") for filter in filters.split(',') ]:
-            filter_map[k].append(v)
-
-    return game_konfig.games(search=search, filter_map=filter_map)
-
-@app.route('/query')
-@flask_login.login_required
-def query():
-    result = request_topic("state", pbreq.StateRequest(), "generated.responses_pb2.StateResponse")
-
-    # FIXME: error handling
-    active = result.active
-    tag = f"{active.app_id}:{active.title_id}" if result.is_running else None
-
-    return {
-        'title': game_konfig.game_map.get(tag).as_dict() if tag else None,
-        'is_running': result.is_running,
-        'volume': result.volume,
-    }
-
-@app.route('/sync')
-@flask_login.login_required
-def sync():
-    orientation = "UNKNOWN"
-    if konfig.sensor.device:
-        response = read_process_output("./sensor.py", [ f"--device={konfig.sensor.device}", "orientation" ])
-        orientation = response
-
-    return {
-        'orientation': orientation,
-    }
-
-@app.route('/volume', methods=['POST'])
-@flask_login.login_required
-def volume():
-    dict = flask.request.json
-
-    volume = dict.get('volume')
-    volume = max(0, min(volume, 100)) if isinstance(volume, int) else None
-    if volume is None:
-        logging.error('Missing or invalid volume')
-        return {
-            'status': 'ERR',
-            'message': 'Missing or invalid volume',
-        }, http.HTTPStatus.BAD_REQUEST
-
-    result = request_topic("set_volume", pbreq.SetVolumeRequest(volume=volume), "generated.responses_pb2.SetVolumeResponse")
-
-    return { 'volume': result.volume }
 
 def deserialize(message, type):
     module_, class_ = type.rsplit('.', 1)
@@ -139,15 +74,96 @@ async def request_topic_async(topic, request, response_type):
 
     return response_obj
 
-def request_topic(topic, request, response_type):
+def request_topic(request, topic=None, response_type=None):
+    request_class_name = request.__class__.__name__.removesuffix('Request')
+    if topic is None:
+        topic = re.sub(r'(?<!^)(?=[A-Z])', '_', request_class_name).lower()
+    if response_type is None:
+        response_type = f"{RESPONSE_PACKAGE_NAME}.{request_class_name}Response"
+
+    logging.debug(f"Requesting '{topic}' with response type of '{response_type}'")
     return asyncio.run(request_topic_async(topic, request, response_type))
+
+@app.route('/')
+@flask_login.login_required
+def index():
+    return flask.render_template('index.html')
+
+@app.route('/filters')
+@flask_login.login_required
+def filters():
+    return game_konfig.filters()
+
+@app.route('/games')
+@flask_login.login_required
+def games():
+    search = flask.request.args.get("search", "")
+    filters = flask.request.args.get("filters", "")
+    filter_map = defaultdict(list)
+    if filters:
+        for (k, v) in [ filter.split(":") for filter in filters.split(',') ]:
+            filter_map[k].append(v)
+
+    return game_konfig.games(search=search, filter_map=filter_map)
+
+@app.route('/query')
+@flask_login.login_required
+def query():
+    try:
+        result = request_topic(pbreq.StateRequest())
+    except Exception as e:
+        logging.error(f"Failed to query game state: {e}")
+        return {
+            'status': 'ERR',
+            'message': 'Failed to query game state',
+        }, http.HTTPStatus.INTERNAL_SERVER_ERROR
+
+    active = result.active
+    tag = f"{active.app_id}:{active.title_id}" if result.is_running else None
+
+    return {
+        'title': game_konfig.game_map.get(tag).as_dict() if tag else None,
+        'is_running': result.is_running,
+        'volume': result.volume,
+    }
+
+@app.route('/volume', methods=['POST'])
+@flask_login.login_required
+def volume():
+    dict = flask.request.json
+
+    volume = dict.get('volume')
+    volume = max(0, min(volume, 100)) if isinstance(volume, int) else None
+    if volume is None:
+        logging.error('Missing or invalid volume')
+        return {
+            'status': 'ERR',
+            'message': 'Missing or invalid volume',
+        }, http.HTTPStatus.BAD_REQUEST
+
+    try:
+        result = request_topic(pbreq.SetVolumeRequest(volume=volume))
+    except Exception as e:
+        logging.error(f"Failed to set volume: {e}")
+        return {
+            'status': 'ERR',
+            'message': 'Failed to set volume',
+        }, http.HTTPStatus.INTERNAL_SERVER_ERROR
+
+    return { 'volume': result.volume }
 
 @app.route('/stop', methods=['POST'])
 @flask_login.login_required
 def stop():
-    request_topic("stop", pbreq.StopRequest(), "generated.responses_pb2.StopResponse")
+    try:
+        request_topic(pbreq.StopRequest())
+    except Exception as e:
+        logging.error(f"Failed to stop game: {e}")
+        return {
+            'status': 'ERR',
+            'message': 'Failed to stop game',
+        }, http.HTTPStatus.INTERNAL_SERVER_ERROR
 
-    # FIXME: return a proper status
     return { 'status': 'OK' }
 
 @app.route('/launch', methods=['POST'])
@@ -162,25 +178,34 @@ def launch():
             'message': 'Game id missing',
         }, http.HTTPStatus.BAD_REQUEST
 
-    state = request_topic("state", pbreq.StateRequest(), "generated.responses_pb2.StateResponse")
-    if state.is_running:
-        request_topic("stop", pbreq.StopRequest(), "generated.responses_pb2.GeneralResponse")
-        dl.end_launch()
-
-    title = game_konfig.game_map.get(id)
-    if not title:
+    if not (title := game_konfig.game_map.get(id)):
         logging.error('Game not found')
         return {
             'status': 'ERR',
             'message': 'Game not found',
         }, http.HTTPStatus.NOT_FOUND
 
-    response = request_topic("launch", pbreq.LaunchRequest(
-        launch_id=pbcom.LaunchId(
-            app_id=title.app_id,
-            title_id=title.title_id,
-        ),
-    ), "generated.responses_pb2.GeneralResponse")
+    try:
+        state = request_topic(pbreq.StateRequest())
+        if state.is_running:
+            request_topic(pbreq.StopRequest())
+            dl.end_launch()
+
+        response = request_topic(
+            pbreq.LaunchRequest(
+                launch_id=pbcom.LaunchId(
+                    app_id=title.app_id,
+                    title_id=title.title_id,
+                ),
+            )
+        )
+
+    except Exception as e:
+        logging.error(f"Error during launch: {e}")
+        return {
+            'status': 'ERR',
+            'message': 'Failed to launch game',
+        }, http.HTTPStatus.INTERNAL_SERVER_ERROR
 
     if response.result.status == pbresp.Result.Status.STATUS_OK:
         dl.create_launch(session_id=session.get('id'), uid=title.id)
@@ -257,6 +282,18 @@ def upload():
 
     return { 'status': 'OK' }
 
+@app.route('/sync')
+@flask_login.login_required
+def sync():
+    orientation = "UNKNOWN"
+    if konfig.sensor.device:
+        response = read_process_output("./sensor.py", [ f"--device={konfig.sensor.device}", "orientation" ])
+        orientation = response
+
+    return {
+        'orientation': orientation,
+    }
+
 def read_process_output(exe, args):
     result = subprocess.run([exe] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if result.returncode != 0:
@@ -264,8 +301,30 @@ def read_process_output(exe, args):
         raise RuntimeError(f'Process {exe} failed: {stderr}')
     return result.stdout.decode('utf-8').rstrip()
 
+def main():
+    global konfig, game_konfig
+
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--platform-config", "-pc", help="Path to platform configuration file (default: config.yaml)", default="config.yaml")
+    parser.add_argument("--game-config", "-gc", help="Path to game configuration file (default: games.yaml)", default="games.yaml")
+    parser.add_argument("--output", "-o", help="Path to logging file (default: None, logs to console)")
+    parser.add_argument("--output-overwrite", "-oo", help="True to overwrite the logging file (default: False)", action="store_true", default=False)
+    parser.add_argument("--log-level", "-l", help="Logging level (default: INFO)", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+    args = parser.parse_args()
+
+    # Set up logging
+    logging.basicConfig(
+        level=getattr(logging, args.log_level),
+        format='%(asctime)s:%(levelname)s:%(message)s',
+        filename=args.output,
+        filemode='w' if args.output_overwrite else 'a',
+    )
+
+    konfig = config.Config(args.platform_config)
+    game_konfig = config.GameConfig(args.game_config)
+
+    app.run(host='0.0.0.0', port=8080, debug=True)
+
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
-    konfig = config.Config('config.yaml')
-    game_konfig = config.GameConfig('games.yaml')
-    app.run(host='0.0.0.0', port='8080', debug=True)
+    main()

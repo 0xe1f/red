@@ -242,7 +242,12 @@ $(function() {
             dataType: "json",
             success: function(response) {
                 setUiVolume(response.volume);
-            }
+            },
+            error: function() {
+                // FIXME: display error message
+            },
+            complete: function() {
+            },
         });
         if (clearMute) {
             cookies.remove('pre_mute_vol');
@@ -257,9 +262,14 @@ $(function() {
             contentType: "application/json; charset=utf-8",
             dataType: "json",
             success: function(resp){
-                toggleScrim(false);
                 updateSelection(resp.title);
-            }
+            },
+            error: function() {
+                // FIXME: display error message
+            },
+            complete: function() {
+                toggleScrim(false);
+            },
         });
     };
     const stop = function() {
@@ -270,9 +280,14 @@ $(function() {
             contentType: "application/json; charset=utf-8",
             dataType: "json",
             success: function(){
-                toggleScrim(false);
                 updateSelection();
-            }
+            },
+            error: function() {
+                // FIXME: display error message
+            },
+            complete: function() {
+                toggleScrim(false);
+            },
         });
     };
     const uiVolume = function() {
@@ -549,8 +564,13 @@ $(function() {
             data: form,
             success: function(){
                 // TODO
+            },
+            error: function() {
+                // TODO: display error message
+            },
+            complete: function() {
                 toggleScrim(false);
-            }
+            },
         });
     };
     const initMenus = function() {
