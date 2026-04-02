@@ -14,6 +14,8 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 
+# Build and deploy launcher to control server and remote to game server
+
 # Change to the script's directory
 cd "$(dirname "$0")"
 
@@ -60,6 +62,7 @@ echo "Generating config files for remote..." >&2
 
 # Generate config files for launcher
 echo "Generating config files for launcher..." >&2
+./gen-config.py --config launcher-config > ${CONTROL_SVR_PATH}/config.yaml
 ./gen-config.py --config launcher-games > ${CONTROL_SVR_PATH}/games.yaml
 
 # Copy to build server
@@ -97,4 +100,5 @@ rsync -trph \
     "${CONTROL_SVR_PATH}" \
     "${CONTROL_SVR_HOST}:"
 
-# FIXME - copy configs
+# FIXME: launch launcher and remote
+# f'cd {config.control_server.path}; nohup ./{CTL_SERVER_EXE} >log.txt 2>&1 &'

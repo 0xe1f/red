@@ -223,64 +223,65 @@ def launch():
 @app.route('/upload', methods=['POST'])
 @flask_login.login_required
 def upload():
-    # Basic checks
-    if len(flask.request.files) < 1:
-        return {
-            'status': 'ERR',
-            'message': 'No files uploaded',
-        }, http.HTTPStatus.BAD_REQUEST
+    # # Basic checks
+    # if len(flask.request.files) < 1:
+    #     return {
+    #         'status': 'ERR',
+    #         'message': 'No files uploaded',
+    #     }, http.HTTPStatus.BAD_REQUEST
 
-    if len(flask.request.files) > ROM_UPLOAD_MAX_FILES:
-        return {
-            'status': 'ERR',
-            'message': 'Too many files',
-        }, http.HTTPStatus.BAD_REQUEST
+    # if len(flask.request.files) > ROM_UPLOAD_MAX_FILES:
+    #     return {
+    #         'status': 'ERR',
+    #         'message': 'Too many files',
+    #     }, http.HTTPStatus.BAD_REQUEST
 
-    # Check individual files
-    files = []
-    for i in range(len(flask.request.files)):
-        if f'files[{i}]' not in flask.request.files:
-            return {
-                'status': 'ERR',
-                'message': 'Missing file upload',
-            }, http.HTTPStatus.BAD_REQUEST
+    # # Check individual files
+    # files = []
+    # for i in range(len(flask.request.files)):
+    #     if f'files[{i}]' not in flask.request.files:
+    #         return {
+    #             'status': 'ERR',
+    #             'message': 'Missing file upload',
+    #         }, http.HTTPStatus.BAD_REQUEST
 
-        file = flask.request.files[f'files[{i}]']
-        filename = file.filename
-        if not re.fullmatch(ROM_UPLOAD_FILENAME_REGEX, filename):
-            return {
-                'status': 'ERR',
-                'message': f'Bad file name: {filename}',
-            }, http.HTTPStatus.BAD_REQUEST
+    #     file = flask.request.files[f'files[{i}]']
+    #     filename = file.filename
+    #     if not re.fullmatch(ROM_UPLOAD_FILENAME_REGEX, filename):
+    #         return {
+    #             'status': 'ERR',
+    #             'message': f'Bad file name: {filename}',
+    #         }, http.HTTPStatus.BAD_REQUEST
 
-        _, ext = os.path.splitext(filename)
-        if ext not in ROM_UPLOAD_ALLOWED_TYPES:
-            return {
-                'status': 'ERR',
-                'message': f'Bad file type: {filename}',
-            }, http.HTTPStatus.BAD_REQUEST
+    #     _, ext = os.path.splitext(filename)
+    #     if ext not in ROM_UPLOAD_ALLOWED_TYPES:
+    #         return {
+    #             'status': 'ERR',
+    #             'message': f'Bad file type: {filename}',
+    #         }, http.HTTPStatus.BAD_REQUEST
 
-        files.append(file)
+    #     files.append(file)
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        # Save each file in a temp directory
-        local_files = []
-        for file in files:
-            filename = secure_filename(file.filename)
-            full_path = os.path.join(temp_dir, filename)
+    # with tempfile.TemporaryDirectory() as temp_dir:
+    #     # Save each file in a temp directory
+    #     local_files = []
+    #     for file in files:
+    #         filename = secure_filename(file.filename)
+    #         full_path = os.path.join(temp_dir, filename)
 
-            file.save(full_path)
-            local_files.append(full_path)
+    #         file.save(full_path)
+    #         local_files.append(full_path)
 
-        # Copy temp files to remote
-        args = [
-            'scp',
-            *local_files,
-            f'{konfig.game_server.ip}:{konfig.game_server.rom_path}',
-        ]
-        subprocess.call(args)
+    #     # Copy temp files to remote
+    #     args = [
+    #         'scp',
+    #         *local_files,
+    #         f'{konfig.game_server.ip}:{konfig.game_server.rom_path}',
+    #     ]
+    #     subprocess.call(args)
 
-    return { 'status': 'OK' }
+    # return { 'status': 'OK' }
+    raise NotImplementedError("ROM upload is not implemented yet")
 
 @app.route('/sync')
 @flask_login.login_required

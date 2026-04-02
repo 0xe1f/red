@@ -14,7 +14,6 @@
 
 from collections import defaultdict
 import itertools
-import subprocess
 import yaml
 
 class GameConfig:
@@ -145,81 +144,17 @@ class GameConfig:
 class Config:
 
     def __init__(self, path):
-        self.game_server = {}
-        self.game_clients = []
-        self.games = {}
-        self.tags = set()
-        self.genres = set()
-        self.orientations = set()
-        self.series = set()
-        self.systems = set()
+        self.game_server = GameServer()
+        self.sensor = SensorConfig()
 
         with open(path, 'r') as fd:
             conf = yaml.safe_load(fd)
             if 'game_server' in conf:
                 self.game_server = GameServer(**conf['game_server'])
-            if 'game_clients' in conf:
-                for item in conf['game_clients']:
-                    self.game_clients.append(GameClient(**item))
-            if 'control_server' in conf:
-                self.control_server = ControlServer(**conf['control_server'])
             if 'sensor' in conf:
                 self.sensor = SensorConfig(**conf['sensor'])
 
-        if not hasattr(self, 'sensor'):
-            self.sensor = SensorConfig()
-
-    def write_control_server_config(self, path):
-        game_server = self.game_server.to_dict('hostname')
-        game_clients = list(
-            map(lambda client: client.to_dict('hostname'), self.game_clients)
-        )
-        sensor = self.sensor.to_dict()
-
-        with open(path, 'w') as fd:
-            yaml.safe_dump(
-                {
-                    'game_server': game_server,
-                    'game_clients': game_clients,
-                    'sensor': sensor,
-                },
-                stream=fd,
-            )
-
-class GameClient:
-
-    def __init__(self, **item):
-        self.__dict__.update(item)
-
-    def to_dict(self, *remove):
-        obj = self.__dict__
-        for prop in remove:
-            del obj[prop]
-        return obj
-
-    def launch(self):
-        subprocess.call(
-            args=[
-                'ssh',
-                self.client_ip,
-                f'sudo killall {self.exe} 2> /dev/null;' + \
-                    f'cd {self.path}; ' + \
-                    f'sudo nohup ./{self.exe} {self.server_ip} {self.extra_args} >log.txt 2>&1 &'
-            ],
-        )
-
 class GameServer:
-
-    def __init__(self, **item):
-        self.__dict__.update(item)
-
-    def to_dict(self, *remove):
-        obj = self.__dict__.copy()
-        for prop in remove:
-            del obj[prop]
-        return obj
-
-class ControlServer:
 
     def __init__(self, **item):
         self.__dict__.update(item)
@@ -231,12 +166,6 @@ class SensorConfig:
 
         if 'device' not in item:
             self.device = None
-
-    def to_dict(self, *remove):
-        obj = self.__dict__
-        for prop in remove:
-            del obj[prop]
-        return obj
 
 class Game:
 

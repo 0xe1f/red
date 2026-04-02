@@ -45,6 +45,20 @@ def write_remote_games(game_config_path):
 
     yaml.safe_dump(out_config, sys.stdout)
 
+def write_launcher_config(platform_config_path):
+    with open(platform_config_path, 'r') as f:
+        config = yaml.safe_load(f)
+
+    del config['control_server']
+    del config['game_clients']
+
+    game_server = config['game_server']
+    del game_server['hostname']
+    del game_server['path']
+    del game_server['platforms']
+
+    yaml.safe_dump(config, sys.stdout)
+
 def write_launcher_games(game_config_path):
     with open(game_config_path, 'r') as f:
         config = yaml.safe_load(f)
@@ -65,13 +79,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--deploy-config", "-pc", help="Path to deployment configuration file (default: deploy.yaml)", default="deploy.yaml")
     parser.add_argument("--game-config", "-gc", help="Path to game configuration file (default: games.yaml)", default="games.yaml")
-    parser.add_argument("--config", "-c", choices=["remote-config", "remote-games", "launcher-games"], help="Type of config to write")
+    parser.add_argument("--config", "-c", choices=["remote-config", "remote-games", "launcher-config", "launcher-games"], help="Type of config to write")
     args = parser.parse_args()
 
     if args.config == "remote-config":
         write_remote_config(args.deploy_config)
     elif args.config == "remote-games":
         write_remote_games(args.game_config)
+    elif args.config == "launcher-config":
+        write_launcher_config(args.deploy_config)
     elif args.config == "launcher-games":
         write_launcher_games(args.game_config)
     else:
