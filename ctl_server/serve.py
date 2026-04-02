@@ -16,15 +16,15 @@
 
 from collections import defaultdict
 from flask import session
+from generated.common_pb2 import LaunchId
+from generated.responses_pb2 import Result
 from werkzeug.utils import secure_filename
 import argparse
 import asyncio
 import config
 import flask
 import flask_login
-import generated.common_pb2 as pbcom
-import generated.requests_pb2 as pbreq
-import generated.responses_pb2 as pbresp
+import generated.requests_pb2 as requests
 import http
 import importlib
 import logging
@@ -110,7 +110,7 @@ def games():
 @flask_login.login_required
 def query():
     try:
-        result = request_topic(pbreq.StateRequest())
+        result = request_topic(requests.StateRequest())
     except Exception as e:
         logging.error(f"Failed to query game state: {e}")
         return {
@@ -142,7 +142,7 @@ def volume():
         }, http.HTTPStatus.BAD_REQUEST
 
     try:
-        result = request_topic(pbreq.SetVolumeRequest(volume=volume))
+        result = request_topic(requests.SetVolumeRequest(volume=volume))
     except Exception as e:
         logging.error(f"Failed to set volume: {e}")
         return {
@@ -156,7 +156,7 @@ def volume():
 @flask_login.login_required
 def stop():
     try:
-        request_topic(pbreq.StopRequest())
+        request_topic(requests.StopRequest())
     except Exception as e:
         logging.error(f"Failed to stop game: {e}")
         return {
@@ -186,14 +186,14 @@ def launch():
         }, http.HTTPStatus.NOT_FOUND
 
     try:
-        state = request_topic(pbreq.StateRequest())
+        state = request_topic(requests.StateRequest())
         if state.is_running:
-            request_topic(pbreq.StopRequest())
+            request_topic(requests.StopRequest())
             dl.end_launch()
 
         response = request_topic(
-            pbreq.LaunchRequest(
-                launch_id=pbcom.LaunchId(
+            requests.LaunchRequest(
+                launch_id=LaunchId(
                     app_id=title.app_id,
                     title_id=title.title_id,
                 ),
@@ -207,7 +207,7 @@ def launch():
             'message': 'Failed to launch game',
         }, http.HTTPStatus.INTERNAL_SERVER_ERROR
 
-    if response.result.status == pbresp.Result.Status.STATUS_OK:
+    if response.result.status == Result.Status.STATUS_OK:
         dl.create_launch(session_id=session.get('id'), uid=title.id)
         dl.increment_launch_count(uid=title.id)
         return {

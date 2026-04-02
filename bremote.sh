@@ -17,6 +17,9 @@
 # Change to the script's directory
 cd "$(dirname "$0")"
 
+set -e
+
+# Verify prerequisites
 if ! command -v yq &> /dev/null; then
     echo "${CLR_ERR}Error: yq is not installed${CLR_RST}" >&2
     exit 1
@@ -46,14 +49,24 @@ if [ -z "$BUILD_SVR" ]; then
     exit 1
 fi
 
-APP_PATH=remote
-BUILD_PATH="red_builds/${APP_PATH}"
+REMOTE_PATH=remote
+GENERATED_PATH=generated
+BUILD_PATH="red_builds/${REMOTE_PATH}"
+
+# Generate config files for remote
+echo "Generating config files for remote..." >&2
+./gen-config.py --config remote-config > ${REMOTE_PATH}/config.yaml
+./gen-config.py --config remote-games > ${REMOTE_PATH}/games.yaml
+
+# Generate config files for launcher
+echo "Generating config files for launcher..." >&2
+./gen-config.py --config launcher-games > ${CONTROL_SVR_PATH}/games.yaml
 
 # Copy to build server
+echo "Building protobuf files..." >&2
 rsync -trph \
-    --info=progress2 \
     --exclude '.*' \
-    "${APP_PATH}/" \
+    "${REMOTE_PATH}/" \
     "${BUILD_SVR}:${BUILD_PATH}/"
 
 # Set up environment and compile protobufs on build server
@@ -61,26 +74,27 @@ ssh "${BUILD_SVR}" "cd ${BUILD_PATH} && ./build.sh"
 
 # Copy generated code back to local
 rsync -trph \
-    --info=progress2 \
-    "${BUILD_SVR}:${BUILD_PATH}/generated" \
-    "${APP_PATH}/"
+    "${BUILD_SVR}:${BUILD_PATH}/${GENERATED_PATH}" \
+    "${REMOTE_PATH}/"
+cp -r "${REMOTE_PATH}/${GENERATED_PATH}" "${CONTROL_SVR_PATH}/"
 
-# Copy to game server
+# Copy remote to game server
+echo "Deploying remote to game server..." >&2
 rsync -trph \
-    --info=progress2 \
     --exclude '.*' \
-    --exclude 'setup.sh' \
+    --exclude 'build.sh' \
     --exclude 'proto/' \
-    "${APP_PATH}/" \
-    "${GAME_SVR_HOST}:${APP_PATH}/"
+    "${REMOTE_PATH}" \
+    "${GAME_SVR_HOST}:"
 
-# Copy to control server
+# Copy launcher to control server
+echo "Deploying launcher to control server..." >&2
 rsync -trph \
-    --info=progress2 \
     --exclude '.*' \
-    --exclude 'setup.sh' \
-    --exclude 'proto/' \
-    "${APP_PATH}/generated" \
-    "${CONTROL_SVR_HOST}:${CONTROL_SVR_PATH}/"
+    --exclude '*.db' \
+    --exclude '*.example' \
+    --exclude '__pycache__' \
+    "${CONTROL_SVR_PATH}" \
+    "${CONTROL_SVR_HOST}:"
 
 # FIXME - copy configs
