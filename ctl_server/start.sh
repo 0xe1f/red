@@ -21,4 +21,4 @@ echo "Activating virtual environment..." >&2
 source .venv/bin/activate
 
 echo "Starting server..." >&2
-./remote.py
+./launcher.py
