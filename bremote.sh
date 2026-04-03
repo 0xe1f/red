@@ -77,6 +77,44 @@ echo "Generating config files for launcher..." >&2
 ./gen-config.py --config launcher-config > ${LOCAL_LAUNCHER_PATH}/config.yaml
 ./gen-config.py --config launcher-games > ${LOCAL_LAUNCHER_PATH}/games.yaml
 
+complete_setup() {
+    local host=$1
+    local service_path=$2
+    local svc_file=$3
+    local executable=$4
+
+    ssh "${host}" "
+        (
+            test -d \"${service_path}/.venv\" 2>/dev/null ||
+            (
+                echo \"Setting up virtual environment...\" >&2 &&
+                cd \"${service_path}\" &&
+                python3 -m venv .venv &&
+                source .venv/bin/activate &&
+                pip install -r requirements.txt
+            )
+        ) &&
+        (
+            SYSTEMD_PATH=\"\${HOME}/.config/systemd/user\" &&
+            SVC_PATH=\"\${SYSTEMD_PATH}/red_${svc_file}\" &&
+            test -f \"\${SVC_PATH}\" 2>/dev/null ||
+            (
+                echo \"Setting up systemd service...\" >&2 &&
+                mkdir -p \"\${SYSTEMD_PATH}\" &&
+                P=\$(readlink -f \"${service_path}/${executable}\") &&
+                cat \"${service_path}/${svc_file}\" | sed \"s|{SERVICE_PATH}|\${P}|g\" > \"\${SVC_PATH}\" &&
+                systemctl --user daemon-reload &&
+                systemctl --user enable \"red_${svc_file}\" &&
+                sudo loginctl enable-linger \"\${USER}\"
+            )
+        ) &&
+        (
+            echo \"Restarting service...\" >&2 &&
+            systemctl --user restart \"red_${svc_file}\"
+        )
+    "
+}
+
 # Copy to build server
 echo "Building protobuf files..." >&2
 rsync -trph \
@@ -103,36 +141,7 @@ rsync -trph \
     "${LOCAL_REMOTE_PATH}/" \
     "${GAME_SVR_HOST}:${GAME_SVR_REMOTE}"
 
-ssh "${GAME_SVR_HOST}" "
-    (
-        test -d \"${GAME_SVR_REMOTE}/.venv\" 2>/dev/null ||
-        (
-            echo \"Setting up virtual environment...\" >&2 &&
-            cd \"${GAME_SVR_REMOTE}\" &&
-            python3 -m venv .venv &&
-            source .venv/bin/activate &&
-            pip install -r requirements.txt
-        )
-    ) &&
-    (
-        SYSTEMD_PATH=\"\${HOME}/.config/systemd/user\" &&
-        SVC_PATH=\"\${SYSTEMD_PATH}/red_${REMOTE_SVC_FILE}\" &&
-        test -f \"\${SVC_PATH}\" 2>/dev/null ||
-        (
-            echo \"Setting up remote systemd service...\" >&2 &&
-            mkdir -p \"\${SYSTEMD_PATH}\" &&
-            P=\$(readlink -f \"${GAME_SVR_REMOTE}/${REMOTE_EXECUTABLE}\") &&
-            cat \"${GAME_SVR_REMOTE}/${REMOTE_SVC_FILE}\" | sed \"s|{SERVICE_PATH}|\${P}|g\" > \"\${SVC_PATH}\" &&
-            systemctl --user daemon-reload &&
-            systemctl --user enable \"red_${REMOTE_SVC_FILE}\" &&
-            sudo loginctl enable-linger \"\${USER}\"
-        )
-    ) &&
-    (
-        echo \"Restarting remote service...\" >&2 &&
-        systemctl --user restart \"red_${REMOTE_SVC_FILE}\"
-    )
-"
+complete_setup "${GAME_SVR_HOST}" "${GAME_SVR_REMOTE}" "${REMOTE_SVC_FILE}" "${REMOTE_EXECUTABLE}"
 
 # Copy launcher to control server
 echo "Deploying launcher to control server..." >&2
@@ -145,33 +154,4 @@ rsync -trph \
     "${LOCAL_LAUNCHER_PATH}/" \
     "${CONTROL_SVR_HOST}:${CONTROL_SVR_PATH}/"
 
-ssh "${CONTROL_SVR_HOST}" "
-    (
-        test -d \"${CONTROL_SVR_PATH}/.venv\" 2>/dev/null ||
-        (
-            echo \"Setting up virtual environment...\" >&2 &&
-            cd \"${CONTROL_SVR_PATH}\" &&
-            python3 -m venv .venv &&
-            source .venv/bin/activate &&
-            pip install -r requirements.txt
-        )
-    ) &&
-    (
-        SYSTEMD_PATH=\"\${HOME}/.config/systemd/user\" &&
-        SVC_PATH=\"\${SYSTEMD_PATH}/red_${LAUNCHER_SVC_FILE}\" &&
-        test -f \"\${SVC_PATH}\" 2>/dev/null ||
-        (
-            echo \"Setting up launcher systemd service...\" >&2 &&
-            mkdir -p \"\${SYSTEMD_PATH}\" &&
-            P=\$(readlink -f \"${CONTROL_SVR_PATH}/${LAUNCHER_EXECUTABLE}\") &&
-            cat \"${CONTROL_SVR_PATH}/${LAUNCHER_SVC_FILE}\" | sed \"s|{SERVICE_PATH}|\${P}|g\" > \"\${SVC_PATH}\" &&
-            systemctl --user daemon-reload &&
-            systemctl --user enable \"red_${LAUNCHER_SVC_FILE}\" &&
-            sudo loginctl enable-linger \"\${USER}\"
-        )
-    ) &&
-    (
-        echo \"Restarting launcher service...\" >&2 &&
-        systemctl --user restart \"red_${LAUNCHER_SVC_FILE}\"
-    )
-"
+complete_setup "${CONTROL_SVR_HOST}" "${CONTROL_SVR_PATH}" "${LAUNCHER_SVC_FILE}" "${LAUNCHER_EXECUTABLE}"
