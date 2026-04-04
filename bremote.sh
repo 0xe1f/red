@@ -66,6 +66,13 @@ LAUNCHER_EXECUTABLE=start.sh
 GENERATED_PATH=generated
 BUILD_PATH="red_builds/${LOCAL_REMOTE_PATH}"
 
+# Need to activate virtual environment to run gen-config.py
+if [ ! -d ".venv" ]; then
+    echo "Setting up virtual environment to generate config..." >&2
+    python3 -m venv .venv
+fi
+source .venv/bin/activate
+
 # Generate config files for remote
 echo "Generating config files for remote..." >&2
 ./gen-config.py --config remote-config > ${LOCAL_REMOTE_PATH}/config.yaml
@@ -109,7 +116,8 @@ complete_setup() {
         ) &&
         (
             echo \"Restarting service...\" >&2 &&
-            systemctl --user restart \"red_${svc_file}\"
+            systemctl --user restart \"red_${svc_file}\" &&
+            rm \"${service_path}/${svc_file}\"
         )
     "
 }

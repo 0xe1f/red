@@ -22,9 +22,11 @@ def write_remote_config(platform_config_path):
     with open(platform_config_path, 'r') as f:
         config = yaml.safe_load(f)
 
-    output_doc = config['game_server']
-    output_doc['nats_url'] = config['common']['nats_url']
-    del output_doc['hostname']
+    output_doc = {
+        'cores_path': config['game_server']['cores_path'],
+        'nats_url': config['common']['nats_url'],
+        'platforms': config['game_server']['platforms'],
+    }
 
     yaml.safe_dump(output_doc, sys.stdout)
 
@@ -50,13 +52,14 @@ def write_launcher_config(platform_config_path):
     with open(platform_config_path, 'r') as f:
         config = yaml.safe_load(f)
 
-    out_config = {}
-    out_config['sensor'] = config['sensor']
-    out_config['game_server'] = {
-        'nats_url': config['common']['nats_url'],
-    }
-    out_config['control_server'] = {
-        'flask_config': config['control_server']['flask_config'],
+    out_config = {
+        'sensor': config['sensor'],
+        'game_server': {
+            'nats_url': config['common']['nats_url'],
+        },
+        'control_server': {
+            'flask_config': config['control_server']['flask_config'],
+        },
     }
 
     yaml.safe_dump(out_config, sys.stdout)

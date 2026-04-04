@@ -1,12 +1,27 @@
 #!/bin/bash
 
+## Copyright (c) 2024 Akop Karapetyan
+##
+## Licensed under the Apache License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##    http://www.apache.org/licenses/LICENSE-2.0
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
 # This script stages projects for build on build server and starts build.
 # It's meant to be executed on the local machine.
 
 BUILD_SVR="$1"
 GAME_SVR_HOST="$2"
-GAME_SVR_PATH="$3"
-BUILD_PATH="red_builds/${GAME_SVR_PATH}"
+LOCAL_CORES_PATH="$3"
+REMOTE_CORES_PATH="$4"
+BUILD_PATH="red_builds/${LOCAL_CORES_PATH}"
 
 # Text formatting constants
 BOLD_WHITE="$(tput bold)$(tput setaf 7)"
@@ -14,13 +29,13 @@ GREEN="$(tput setaf 2)"
 RED="$(tput setaf 1)"
 PLAIN="$(tput sgr0)"
 
-if [ -z "$BUILD_SVR" ] || [ -z "$GAME_SVR_HOST" ] || [ -z "$GAME_SVR_PATH" ]; then
-    echo -e "${RED}Error: missing arguments. Usage: $0 build_server game_server_host game_server_path${PLAIN}" >&2
+if [ -z "${BUILD_SVR}" ] || [ -z "${GAME_SVR_HOST}" ] || [ -z "${LOCAL_CORES_PATH}" ] || [ -z "${REMOTE_CORES_PATH}" ]; then
+    echo -e "${RED}Error: missing arguments. Usage: $0 build_server game_server_host local_cores_path remote_cores_path${PLAIN}" >&2
     exit 1
 fi
 
 cd `dirname $(readlink -f $0)`
-shift 3
+shift 4
 
 ARGS="$@"
 
@@ -55,12 +70,12 @@ stage_project() {
         --info=progress2 \
         --exclude-from common.exclude \
         $EXCLUDE_FILE \
-        "$dirname" \
-        "$BUILD_SVR:$BUILD_PATH/"
+        "${dirname}" \
+        "${BUILD_SVR}:${BUILD_PATH}/"
 }
 
 # Create build directory on build server
-ssh $BUILD_SVR -t "mkdir -p $BUILD_PATH"
+ssh $BUILD_SVR -t "mkdir -p ${BUILD_PATH}"
 
 # Copy common scripts/files to build server
 copy_scripts
@@ -71,4 +86,4 @@ for DIR in $ARGS; do
 done
 
 # Start build on build server
-ssh $BUILD_SVR -t "$BUILD_PATH/build.sh $GAME_SVR_HOST $GAME_SVR_PATH $ARGS"
+ssh "${BUILD_SVR}" -t "${BUILD_PATH}/build.sh ${GAME_SVR_HOST} ${LOCAL_CORES_PATH} ${REMOTE_CORES_PATH} ${ARGS}"

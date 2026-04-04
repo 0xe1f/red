@@ -25,36 +25,33 @@ elif ! command -v yq &> /dev/null; then
     exit 1
 fi
 
-BUILD_SVR=`yq e '.control_server.hostname' deploy.yaml`
-if [ -z "$BUILD_SVR" ]; then
+LOCAL_CORES_DIR="cores"
+
+BUILD_SVR=`yq e '.common.build_host' deploy.yaml`
+if [ -z "${BUILD_SVR}" ]; then
     echo "Error: missing build server hostname in deploy.yaml" >&2
     exit 1
 fi
 
 GAME_SVR_HOST=`yq e '.game_server.hostname' deploy.yaml`
-if [ -z "$GAME_SVR_HOST" ]; then
+if [ -z "${GAME_SVR_HOST}" ]; then
     echo "Error: missing game server hostname in deploy.yaml" >&2
     exit 1
 fi
 
-GAME_SVR_PATH=`yq e '.game_server.path' deploy.yaml`
-if [ -z "$GAME_SVR_PATH" ]; then
-    echo "Error: missing game server path in deploy.yaml" >&2
+CORES_PATH=`yq e '.game_server.cores_path' deploy.yaml`
+if [ -z "${CORES_PATH}" ]; then
+    echo "Error: missing cores path in deploy.yaml" >&2
     exit 1
 fi
 
 ARGS="$@"
-if [ "$1" == "--all" ] || [ "$1" == "-a" ]; then
+if [ -z "${ARGS}" ]; then
+    echo "No cores specified. Building all." >&2
     # List all cores in the cores directory,
     # excluding hidden and dependency directories
-    ARGS=$(find cores/ -mindepth 1 -maxdepth 1 -type d -not -name '.*' -exec basename {} \; | tr -s '[:space:]' ' ')
-    shift
-
-    if [ $# -gt 0 ]; then
-        echo "Error: unexpected arguments after --all" >&2
-        exit 1
-    fi
+    ARGS=$(find "${LOCAL_CORES_DIR}/" -mindepth 1 -maxdepth 1 -type d -not -name '.*' -exec basename {} \; | tr -s '[:space:]' ' ')
 fi
 
 # Run the staging script
-cores/stage.sh "$BUILD_SVR" "$GAME_SVR_HOST" "$GAME_SVR_PATH" $ARGS
+$LOCAL_CORES_DIR/stage.sh "${BUILD_SVR}" "${GAME_SVR_HOST}" "${LOCAL_CORES_DIR}" "${CORES_PATH}" $ARGS
