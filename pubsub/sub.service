@@ -1,9 +1,8 @@
 [Unit]
-Description=RED Remote Service
+Description=RED Frame Subscriber Service
 
 [Service]
-ExecStart={SERVICE_PATH}
-Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/sudo {SERVICE_PATH} {ARGS}
 Restart=on-failure
 Type=simple
 KillSignal=SIGINT

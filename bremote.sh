@@ -51,13 +51,12 @@ if [ -z "$CONTROL_SVR_PATH" ]; then
     exit 1
 fi
 
-BUILD_SVR=`yq e '.control_server.hostname' deploy.yaml`
+BUILD_SVR=`yq e '.common.build_host' deploy.yaml`
 if [ -z "$BUILD_SVR" ]; then
     echo "${CLR_ERR}Error: missing build server hostname in deploy.yaml${CLR_RST}" >&2
     exit 1
 fi
 
-RED_USER=redsvcs
 LOCAL_REMOTE_PATH=remote
 REMOTE_SVC_FILE=remote.service
 REMOTE_EXECUTABLE=start.sh
