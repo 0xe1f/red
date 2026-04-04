@@ -53,8 +53,7 @@ async def request_topic_async(topic, request, response_type):
     subject = f"red.query.{topic}"
     logging.info(f"Requesting subject '{subject}'")
 
-    # FIXME: nats URL
-    nc = await nats.connect(f"nats://{konfig.game_server['ip']}:4222")
+    nc = await nats.connect(konfig.game_server['nats_url'])
     try:
         encoded_data = request.SerializeToString()
         response = await nc.request(subject, encoded_data, timeout=0.5)

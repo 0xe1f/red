@@ -51,14 +51,14 @@ def read_config(platform_config_path, game_config_path):
     with open(platform_config_path, 'r') as f:
         server_config = yaml.safe_load(f)
 
-    if not server_config.get("path"):
-        raise ValueError("Missing server path in configuration")
+    if 'cores_path' not in server_config:
+        raise ValueError("Missing cores path in configuration")
 
-    if not server_config.get("platforms"):
+    if 'platforms' not in server_config:
         raise ValueError("Missing platform configuration")
 
-    if not server_config.get("ip"):
-        raise ValueError("Missing server IP in configuration")
+    if 'nats_url' not in server_config:
+        raise ValueError("Missing NATS URL in configuration")
 
     logging.info(f"Server configuration loaded")
 
@@ -195,7 +195,7 @@ def launch(data):
     logging.info(f"Launching ({app_id}/{title_id})...")
 
     home_dir = pathlib.Path.home()
-    cores_dir = home_dir / server_config["path"]
+    cores_dir = home_dir / server_config['cores_path']
 
     launch_proc = str(cores_dir / LAUNCH_PROCESS_NAME)
     if not pathlib.Path(launch_proc).is_file():
@@ -236,6 +236,7 @@ def launch(data):
     args += [
         "--tag", f"{app_id}:{title_id}",
         "--core", os.path.relpath(so_file, cores_dir),
+        "--server-url", server_config['nats_url'],
         rom_path,
     ]
 
@@ -294,7 +295,7 @@ async def handle_request(msg):
     await msg.respond(response)
 
 async def start_listening():
-    nc = await nats.connect(server_config["ip"])
+    nc = await nats.connect(server_config["nats_url"])
 
     # Subscribe and get notified of any messages
     await nc.subscribe(SUBJECT, cb=handle_request)
