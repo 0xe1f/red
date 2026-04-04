@@ -28,6 +28,7 @@ import http
 import importlib
 import logging
 import nats
+import os
 import re
 import subprocess
 
@@ -41,6 +42,10 @@ RESPONSE_PACKAGE_NAME = "generated.responses_pb2"
 ROM_UPLOAD_FILENAME_REGEX = r'^[A-Za-z0-9]+\.[A-Za-z0-9]{1,7}$'
 ROM_UPLOAD_ALLOWED_TYPES = [ '.zip', '.7z' ]
 ROM_UPLOAD_MAX_FILES = 5
+
+platform_config_file = None
+games_config_file = None
+games_config_last_modified = 0
 
 def deserialize(message, type):
     module_, class_ = type.rsplit('.', 1)
@@ -289,6 +294,13 @@ def sync():
         'orientation': orientation,
     }
 
+@app.before_request
+def check_configs_for_changes():
+    modified = os.path.getmtime(games_config_file)
+    if modified != games_config_last_modified:
+        logging.info("Game config file changed, reloading...")
+        reload_game_config()
+
 def read_process_output(exe, args):
     result = subprocess.run([exe] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if result.returncode != 0:
@@ -296,8 +308,14 @@ def read_process_output(exe, args):
         raise RuntimeError(f'Process {exe} failed: {stderr}')
     return result.stdout.decode('utf-8').rstrip()
 
+def reload_game_config():
+    global game_konfig, games_config_last_modified
+    games_config_last_modified = os.path.getmtime(games_config_file)
+    game_konfig = config.GameConfig(games_config_file)
+    logging.info(f"Loaded game config with {len(game_konfig.game_map)} items")
+
 def main():
-    global konfig, game_konfig
+    global konfig, platform_config_file, games_config_file
 
     # Parse command-line arguments
     parser = argparse.ArgumentParser()
@@ -316,10 +334,13 @@ def main():
         filemode='w' if args.output_overwrite else 'a',
     )
 
-    konfig = config.Config(args.platform_config)
-    game_konfig = config.GameConfig(args.game_config)
-    app.config.update(konfig.control_server['flask_config'])
+    platform_config_file = args.platform_config
+    games_config_file = args.game_config
 
+    konfig = config.Config(platform_config_file)
+    reload_game_config()
+
+    app.config.update(konfig.control_server['flask_config'])
     app.run(host='0.0.0.0', port=8080, debug=True)
 
 if __name__ == '__main__':

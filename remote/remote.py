@@ -38,14 +38,32 @@ APP_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
 TITLE_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
 CORE_PATTERN = "*.so"
 
+game_config_path = None
+platform_config_path = None
 game_configs = {}
 server_config = {}
 
-def read_config(platform_config_path, game_config_path):
+def reload_game_configs():
+    if not pathlib.Path(game_config_path).is_file():
+        raise ValueError(f"Game configuration file missing: {game_config_path}")
+
+    global game_configs
+    game_configs = {}
+    with open(game_config_path, 'r') as f:
+        for game in yaml.safe_load(f):
+            if not game.get("app_id"):
+                raise ValueError("Game missing app_id")
+            if not game.get("title_id"):
+                raise ValueError("Game missing title_id")
+
+            id = (game["app_id"], game["title_id"])
+            game_configs[id] = game
+
+    logging.info(f"Game configurations loaded for {len(game_configs)} items")
+
+def reload_platform_config():
     if not pathlib.Path(platform_config_path).is_file():
         raise ValueError(f"Platform configuration file not found: {platform_config_path}")
-    if not pathlib.Path(game_config_path).is_file():
-        raise ValueError(f"Game configuration file not found: {game_config_path}")
 
     global server_config
     with open(platform_config_path, 'r') as f:
@@ -61,19 +79,6 @@ def read_config(platform_config_path, game_config_path):
         raise ValueError("Missing NATS URL in configuration")
 
     logging.info(f"Server configuration loaded")
-
-    global game_configs
-    with open(game_config_path, 'r') as f:
-        for game in yaml.safe_load(f):
-            if not game.get("app_id"):
-                raise ValueError("Game missing app_id")
-            if not game.get("title_id"):
-                raise ValueError("Game missing title_id")
-
-            id = (game["app_id"], game["title_id"])
-            game_configs[id] = game
-
-    logging.info(f"Game configurations loaded for {len(game_configs)} items")
 
 def find_proc_and_tag():
     found_proc = None
@@ -301,8 +306,20 @@ async def start_listening():
     await nc.subscribe(SUBJECT, cb=handle_request)
     logging.info(f"Subscribed to '{SUBJECT}'...")
 
-    # Keep the program running to listen for messages
-    await asyncio.Future()
+    # Monitor config files for changes and reload if needed
+    logging.info(f"Monitoring configs for changes...")
+    last_modified = os.path.getmtime(game_config_path)
+    while True:
+        try:
+            current_modified = os.path.getmtime(game_config_path)
+            if current_modified != last_modified:
+                logging.info(f"{game_config_path} has changed; reloading...")
+                last_modified = current_modified
+                reload_game_configs()
+        except Exception as e:
+            logging.warning(f"Error checking file: {e}")
+
+        await asyncio.sleep(2)
 
 def main():
     # Parse command-line arguments
@@ -323,10 +340,20 @@ def main():
     }
     logging.basicConfig(**log_config)
 
-    # Load configuration from files
-    read_config(args.platform_config, args.game_config)
+    global game_config_path, platform_config_path
+    game_config_path = args.game_config
+    platform_config_path = args.platform_config
 
-    asyncio.run(start_listening())
+    # Load configuration from files
+    reload_platform_config()
+    reload_game_configs()
+
+    try:
+        asyncio.run(start_listening())
+    except KeyboardInterrupt:
+        logging.info("Shutting down...")
+
+    logging.info("All done.")
 
 if __name__ == "__main__":
     main()
