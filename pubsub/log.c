@@ -46,6 +46,13 @@ void log_set_level(LogLevel level)
     current_level = level;
 }
 
+void vlog_v(const char *tag, const char *fmt, va_list args)
+{
+    if (current_level >= LOG_VERBOSE) {
+        vlog(tag, LOG_VERBOSE, fmt, args);
+    }
+}
+
 void vlog_d(const char *tag, const char *fmt, va_list args)
 {
     if (current_level >= LOG_DEBUG) {

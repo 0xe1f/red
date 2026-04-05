@@ -105,7 +105,10 @@ static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
     va_list va;
     va_start(va, fmt);
-    if (level == RETRO_LOG_DEBUG) {
+    if (args.chatty_core) {
+        // Some cores are too chatty; bordering on harmful to perf. (e.g. mgba)
+        vlog_v(LOG_CORE, fmt, va);
+    } else if (level == RETRO_LOG_DEBUG) {
         vlog_d(LOG_CORE, fmt, va);
     } else if (level == RETRO_LOG_INFO) {
         vlog_i(LOG_CORE, fmt, va);
@@ -615,6 +618,10 @@ int main(int argc, const char **argv)
 
         log_i(LOG_TAG, "%s output to '%s'\n",
             args.log_overwrite ? "Writing" : "Appending", args.log_path);
+    }
+
+    if (args.chatty_core) {
+        log_w(LOG_TAG, "In chatty core mode; all core logs are VERBOSE\n");
     }
 
     if (!(solib = dlopen(args.so_path, RTLD_NOW))) {

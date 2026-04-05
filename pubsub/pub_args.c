@@ -209,6 +209,8 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
             // A tag is for external applications to identify critical data.
             // We'll record it, but not use it for anything internally.
             opts->tag = *(++arg);
+        } else if (strcmp(*arg, "--chatty-core") == 0 || strcmp(*arg, "-cc") == 0) {
+            opts->chatty_core = true;
         } else if (**arg == '-') {
             log_e(LOG_TAG, "Unrecognized switch: %s\n", *arg);
             return false;

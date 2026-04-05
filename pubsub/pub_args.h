@@ -39,6 +39,7 @@ typedef struct {
     KvStore input_configs;
     DeferredKeypress *autopress;
     const char *tag;
+    bool chatty_core;
 } ArgsOptions;
 
 bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_store);
