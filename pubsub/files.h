@@ -15,8 +15,13 @@
 #ifndef __FILES_H__
 #define __FILES_H__
 
+#include <stdbool.h>
+
 const char* files_system_path();
 const char* files_save_path();
+
+bool files_save_sram(const char *rom_path, const void *sram_data, size_t sram_size);
+bool files_restore_sram(const char *rom_path, void *sram_data, size_t sram_size);
 
 bool files_load(const char *path);
 void files_mkdirs(const char *base_path);

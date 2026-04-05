@@ -54,6 +54,12 @@ DEFINE_SYMBOL(retro_run, void, void)
 DEFINE_SYMBOL(retro_unload_game, void, void)
 DEFINE_SYMBOL(retro_deinit, void, void)
 DEFINE_SYMBOL(retro_get_system_av_info, void, struct retro_system_av_info*)
+DEFINE_SYMBOL(retro_reset, void, void)
+DEFINE_SYMBOL(retro_serialize_size, size_t, void)
+DEFINE_SYMBOL(retro_serialize, bool, void*, size_t)
+DEFINE_SYMBOL(retro_unserialize, bool, const void*, size_t)
+DEFINE_SYMBOL(retro_get_memory_data, void*, unsigned);
+DEFINE_SYMBOL(retro_get_memory_size, size_t, unsigned);
 
 struct retro_system_info system_info;
 const struct retro_system_content_info_override *content_info;
@@ -622,6 +628,12 @@ int main(int argc, const char **argv)
     LOAD_SYMBOL(retro_unload_game)
     LOAD_SYMBOL(retro_deinit)
     LOAD_SYMBOL(retro_get_system_av_info)
+    // LOAD_SYMBOL(retro_reset)
+    // LOAD_SYMBOL(retro_serialize_size)
+    // LOAD_SYMBOL(retro_serialize)
+    // LOAD_SYMBOL(retro_unserialize)
+    LOAD_SYMBOL(retro_get_memory_data)
+    LOAD_SYMBOL(retro_get_memory_size)
 
     audio_init(&audio);
     files_mkdirs(dirname((char *)args.so_path));
@@ -636,13 +648,8 @@ int main(int argc, const char **argv)
     retro_set_environment(callback_environment_set);
 
     // void retro_set_controller_port_device(unsigned port, unsigned device)
-    // void retro_reset(void)
     // unsigned retro_get_region(void)
     // bool retro_load_game_special(unsigned, const struct retro_game_info *, size_t)
-    // size_t retro_serialize_size(void)
-    // bool retro_serialize(void *data, size_t size)
-    // bool retro_unserialize(const void *data, size_t size)
-    // size_t retro_get_memory_size(unsigned id)
     // void retro_cheat_reset(void)
     // void retro_cheat_set(unsigned index, bool enabled, const char *code)
 
@@ -686,6 +693,21 @@ int main(int argc, const char **argv)
         input_schedule_keypress(args.autopress);
     }
 
+    if (args.rom_path) {
+        int sram_size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+        if (sram_size > 0) {
+            log_d(LOG_TAG, "Restoring SRAM data for '%s'...\n", args.rom_path);
+            void *sram_data = retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+            if (sram_data) {
+                files_restore_sram(args.rom_path, sram_data, sram_size);
+            } else {
+                log_w(LOG_TAG, "Received NULL SRAM data\n");
+            }
+        } else {
+            log_d(LOG_TAG, "No SRAM data for '%s'\n", args.rom_path);
+        }
+    }
+
     signal(SIGINT, sigint_handler);
     while (is_running) {
         retro_run();
@@ -697,6 +719,21 @@ int main(int argc, const char **argv)
                 log_i(LOG_TAG, "FPS: %u\n", timing_fps());
                 last_us = current_us;
             }
+        }
+    }
+
+    if (args.rom_path) {
+        log_d(LOG_TAG, "Saving SRAM data for '%s'\n", args.rom_path);
+        int sram_size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+        if (sram_size > 0) {
+            void *sram_data = retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+            if (sram_data) {
+                files_save_sram(args.rom_path, sram_data, sram_size);
+            } else {
+                log_w(LOG_TAG, "Received NULL SRAM data\n");
+            }
+        } else {
+            log_d(LOG_TAG, "No SRAM data for '%s'\n", args.rom_path);
         }
     }
 

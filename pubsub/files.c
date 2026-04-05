@@ -30,6 +30,7 @@ static const char *system_path_name = "bios";
 static const char *save_path_name = "save";
 static char system_path[1024];
 static char save_path[1024];
+static const char* get_filename(const char *path, bool include_ext);
 
 extern struct retro_system_info system_info;
 extern const struct retro_system_content_info_override *content_info;
@@ -103,6 +104,10 @@ static bool load_zip(const char *path)
     static char archived_ext[512];
     static char dir[1024];
     void *data = NULL;
+    *archived_path = '\0';
+    *archived_filename = '\0';
+    *archived_ext = '\0';
+    *dir = '\0';
 
     const char *slash = strrchr(path, '/');
     if (slash) {
@@ -377,6 +382,25 @@ static bool load_direct(const char *path)
     return true;
 }
 
+static const char* get_filename(const char *path, bool include_ext)
+{
+    static char filename[1024];
+    *filename = '\0';
+    const char *slash = strrchr(path, '/');
+    if (slash) {
+        strncat(filename, slash + 1, sizeof(filename) - 1);
+    } else {
+        strncat(filename, path, sizeof(filename) - 1);
+    }
+    if (!include_ext) {
+        char *dot = strrchr(filename, '.');
+        if (dot) {
+            *dot = '\0';
+        }
+    }
+    return filename;
+}
+
 bool files_load(const char *path)
 {
     if (is_path_supported(path, system_info.valid_extensions)) {
@@ -427,4 +451,58 @@ const char* files_system_path()
 const char* files_save_path()
 {
     return save_path;
+}
+
+bool files_save_sram(const char *rom_path, const void *sram_data, size_t sram_size)
+{
+    char path[1024];
+    snprintf(path, sizeof(path), "%s/%s.srm", save_path, get_filename(rom_path, false));
+    FILE *f = fopen(path, "wb");
+    if (!f) {
+        log_e(LOG_TAG, "Failed to save SRAM to '%s'\n", path);
+        return false;
+    }
+
+    fwrite(sram_data, 1, sram_size, f);
+    fclose(f);
+
+    return true;
+}
+
+bool files_restore_sram(const char *rom_path, void *sram_data, size_t sram_size)
+{
+    char path[1024];
+    snprintf(path, sizeof(path), "%s/%s.srm", save_path, get_filename(rom_path, false));
+    if (access(path, F_OK) == -1) {
+        log_d(LOG_TAG, "No SRAM file for '%s'\n", path);
+        return true;
+    }
+
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        log_e(LOG_TAG, "Couldn't read SRAM file from '%s'\n", path);
+        return false;
+    }
+
+    fseek(f, 0, SEEK_END);
+    size_t file_size = (size_t) ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    if (file_size != sram_size) {
+        log_w(LOG_TAG, "SRAM file size mismatch for '%s' (expected: %zu, got: %zu)\n",
+            path, sram_size, file_size);
+        fclose(f);
+        return false;
+    }
+
+    size_t read = fread(sram_data, 1, sram_size, f);
+    fclose(f);
+
+    if (read != sram_size) {
+        log_e(LOG_TAG, "Failed to read SRAM data from '%s' (expected: %zu, got: %zu)\n",
+            path, sram_size, read);
+        return false;
+    }
+
+    return true;
 }
