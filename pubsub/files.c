@@ -488,21 +488,22 @@ bool files_restore_sram(const char *rom_path, void *sram_data, size_t sram_size)
     size_t file_size = (size_t) ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    if (file_size != sram_size) {
-        log_w(LOG_TAG, "SRAM file size mismatch for '%s' (expected: %zu, got: %zu)\n",
+    if (file_size > sram_size) {
+        log_w(LOG_TAG, "File '%s' is larger than expected SRAM size (expected: %zu, got: %zu)\n",
             path, sram_size, file_size);
         fclose(f);
         return false;
     }
 
-    size_t read = fread(sram_data, 1, sram_size, f);
+    size_t read = fread(sram_data, 1, file_size, f);
     fclose(f);
 
-    if (read != sram_size) {
+    if (read != file_size) {
         log_e(LOG_TAG, "Failed to read SRAM data from '%s' (expected: %zu, got: %zu)\n",
-            path, sram_size, read);
-        return false;
+            path, file_size, read);
+    } else {
+        log_i(LOG_TAG, "Restored SRAM data from '%s' (size: %zu bytes)\n", path, read);
     }
 
-    return true;
+    return read == file_size;
 }
