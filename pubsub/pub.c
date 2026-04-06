@@ -309,9 +309,11 @@ static bool callback_environment_set(unsigned cmd, void *data)
         return false;
     case RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT\n");
-        // FIXME
-        // struct retro_savestate_context *savestate = (struct retro_savestate_context *)data;
-        return false;
+        int *context = (int *) data;
+        if (context) {
+            *context = RETRO_SAVESTATE_CONTEXT_UNKNOWN;
+        }
+        break;
     case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY\n");
         *(const char **)data = files_save_path();
@@ -394,10 +396,10 @@ static bool callback_environment_set(unsigned cmd, void *data)
 
         struct retro_input_descriptor *desc = (struct retro_input_descriptor *)data;
 
-        // FIXME: is this right?
         unsigned count = 0;
         for (struct retro_input_descriptor *d = desc; d->description; d++, count++);
 
+        free(input_descriptors);
         input_descriptors = (struct retro_input_descriptor *)malloc(sizeof(struct retro_input_descriptor) * (count + 1));
         if (input_descriptors) {
             for (unsigned i = 0; i < count; i++) {

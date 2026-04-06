@@ -134,8 +134,6 @@ static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *
         // log_i(LOG_TAG, "size: %d => %d\n", frame->content.len, decomp_size);
 
         // Replace compressed content with decompressed content in the frame
-        // FIXME: I don't think I'm leaking here (arena allocator),
-        //        but... am I leaking here? доверяй, но проверяй.
         frame->content.data = (u_int8_t *) decomp_buff;
         frame->content.len = decomp_size;
 
