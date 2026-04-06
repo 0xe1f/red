@@ -1,55 +1,57 @@
+common:
+  nats_url: nats://192.168.1.100:4222
+  build_host: red-build.local
 game_server:
-  hostname: red1.local
-  ip: 192.168.1.101
-  path: cores
-  extra_args: >-
-    -background
-    --output-dims=320x256
-    --scale-mode=shortestxaspect
-    --max-clients=2
-game_clients:
-  - hostname: red0.local
-    client_ip: 192.168.1.102
-    server_ip: 192.168.1.101
-    path: rgbclient
-    exe: rgbclient
-    extra_args: >-
-      --retry-count=10
-      --retry-delay=500
-      --led-rows=64
-      --led-cols=64
-      --led-chain=5
-      --led-parallel=2
-      --led-slowdown-gpio=4
-      --led-gpio-mapping=regular
-      --led-pwm-bits=6
-      --src-rect=0,0-320,128
-      --dest-rect=0,0-320,128
-      --content-rect=0,0-320,256
-  - hostname: red1.local
-    client_ip: 192.168.1.101
-    server_ip: 192.168.1.101
-    path: rgbclient
-    exe: rgbclient
-    extra_args: >-
-      --retry-count=10
-      --retry-delay=500
-      --led-rows=64
-      --led-cols=64
-      --led-chain=5
-      --led-parallel=2
-      --led-slowdown-gpio=4
-      --led-gpio-mapping=regular
-      --led-pwm-bits=6
-      --src-rect=0,128-320,256
-      --dest-rect=0,0-320,128
-      --content-rect=0,0-320,256
-    unused: >-
-      --led-scan-mode=1
-      --led-no-busy-waiting
-      --led-pwm-dither-bits=1
-      --led-pwm-lsb-nanoseconds=50
-      --led-limit-refresh=30
+  hostname: red-pub.local
+  cores_path: red/cores
+  remote_path: red/remote
+  platforms:
+    common:
+      extra_args: >-
+        --background
+        --output-dims 320x256
+        --mouse-device /dev/input/by-id/usb-mouse
+        --keyboard-device /dev/input/by-id/usb-keyboard
+    snes9x:
+      extra_args: >-
+        --keyvalue "snes9x_hires_blend=merge"
+        --input-config 03001a0da30c00002400000011010000:x,a,b,y,_,_,l,r,select,start
+sensor:
+  device: /dev/ttyACM0
+subscribers:
+  - hostname: red-pub.local
+    path: red/sub
+    args: >-
+      --led-rows=64 \
+      --led-cols=64 \
+      --led-chain=5 \
+      --led-parallel=2 \
+      --led-slowdown-gpio=4 \
+      --led-gpio-mapping=regular \
+      --led-pwm-bits=6 \
+      --src-rect 0,0-320,128 \
+      --dest-rect 0,0-320,128 \
+      --content-rect 0,0-320,256 \
+      --server-url nats://192.168.1.100:4222
+  - hostname: red-sub.local
+    path: red/sub
+    args: >-
+      --led-rows=64 \
+      --led-cols=64 \
+      --led-chain=5 \
+      --led-parallel=2 \
+      --led-slowdown-gpio=4 \
+      --led-gpio-mapping=regular \
+      --led-pwm-bits=6 \
+      --src-rect 0,128-320,256 \
+      --dest-rect 0,0-320,128 \
+      --content-rect 0,0-320,256 \
+      --server-url nats://192.168.1.100:4222
 control_server:
-  hostname: red0.local
-  path: ctl_server
+  hostname: red-sub.local
+  path: red/launcher
+  flask_config:
+    SECRET_KEY: <CHANGE THIS VALUE!>
+    PERMANENT_SESSION_LIFETIME: 2678400
+    MAX_CONTENT_LENGTH: 128000000
+    DATABASE_NAME: games.db

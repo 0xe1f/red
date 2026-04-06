@@ -59,7 +59,7 @@ if [ -z "$CONTROL_SVR_PATH" ]; then
 fi
 
 LOCAL_REMOTE_PATH=remote
-LOCAL_LAUNCHER_PATH=ctl_server
+LOCAL_LAUNCHER_PATH=launcher
 
 # Need to activate virtual environment to run gen-config.py
 if [ ! -d ".venv" ]; then

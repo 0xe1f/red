@@ -60,7 +60,7 @@ fi
 LOCAL_REMOTE_PATH=remote
 REMOTE_SVC_FILE=remote.service
 REMOTE_EXECUTABLE=start.sh
-LOCAL_LAUNCHER_PATH=ctl_server
+LOCAL_LAUNCHER_PATH=launcher
 LAUNCHER_SVC_FILE=launcher.service
 LAUNCHER_EXECUTABLE=start.sh
 GENERATED_PATH=generated

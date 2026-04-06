@@ -1,25 +1,15 @@
-- id: mvscu
-  title: "Marvel Vs. Capcom: Clash of Super Heroes"
+- title_id: swat
+  title: "SWAT"
   genres:
-    - head-to-head
-  tags:
-    - cps2
-  series:
-    - marvel
-- id: digdug2
-  title: "Dig Dug 2"
-  orientation: portrait
-- id: galaga
-  title: "Galaga"
-  year: "1981"
-  company: "Namco"
-  system: "Miscellaneous"
+    - action
+  app_id: atari800
+  system: atari_800
+- title_id: warcraft_2
+  title: "Warcraft 2: Tides of Darkness"
   genres:
-    - shooter
-  orientation: portrait
-- id: pacman
-  title: "Pac-Man"
-  year: "1980"
-  company: "Namco"
-  system: "Pac-man"
-  orientation: portrait
+    - strategy
+  app_id: dosbox
+  system: msdos
+  extra_args: >-
+    --scale-mode half
+    --autopress 0:32:1

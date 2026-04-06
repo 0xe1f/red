@@ -70,7 +70,7 @@ approach works just as well - especially when rendering clients are
 
 ### Control Server
 
-[Control Server](ctl_server) is a small Python3 service that produces a basic HTML page and
+[Launcher](launcher) is a small Python3 service that produces a basic HTML page and
 allows the user to select a game. When a game is selected, Game Server and the Rendering Clients
 are restarted.
 

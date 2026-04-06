@@ -63,16 +63,16 @@ class GameConfig:
                     } for k, v in self.systems.items()], key=lambda x: x['name'].lower()),
                 "prefix": 'y',
             },
-            {
-                "id": 'platform',
-                "label": 'Platform',
-                "options": sorted([
-                    {
-                        "name": k,
-                        "count": len(v),
-                    } for k, v in self.platforms.items()], key=lambda x: x['name'].lower()),
-                "prefix": 'p',
-            },
+            # {
+            #     "id": 'platform',
+            #     "label": 'Platform',
+            #     "options": sorted([
+            #         {
+            #             "name": k,
+            #             "count": len(v),
+            #         } for k, v in self.platforms.items()], key=lambda x: x['name'].lower()),
+            #     "prefix": 'p',
+            # },
             {
                 "id": 'genre',
                 "label": 'Genres',
