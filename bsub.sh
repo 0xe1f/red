@@ -37,8 +37,14 @@ elif ! command -v yq &> /dev/null; then
     exit 1
 fi
 
+NATS_URL=`yq e '.common.nats_url' deploy.yaml`
+if [ -z "${NATS_URL}" ]; then
+    echo "${CLR_ERR}Error: missing NATS URL in deploy.yaml${CLR_RST}" >&2
+    exit 1
+fi
+
 BUILD_SVR=`yq e '.common.build_host' deploy.yaml`
-if [ -z "$BUILD_SVR" ]; then
+if [ -z "${BUILD_SVR}" ]; then
     echo "${CLR_ERR}Error: missing build server hostname in deploy.yaml${CLR_RST}" >&2
     exit 1
 fi
@@ -63,7 +69,7 @@ rsync -trph \
     "${BUILD_SVR}:${BUILD_PATH}"
 
 echo -e "${BOLD_WHITE}>> ${CLR_OK}Building... ${CLR_RST}"
-ssh $BUILD_SVR -t "cd ${BUILD_PATH} && make ${TARGET}"
+ssh $BUILD_SVR "cd ${BUILD_PATH} && make ${TARGET}"
 
 TEMP_DIR=`mktemp -d`
 function cleanup {
@@ -93,7 +99,10 @@ complete_setup() {
                 echo \"Setting up systemd service...\" >&2 &&
                 mkdir -p \"\${SYSTEMD_PATH}\" &&
                 P=\$(readlink -f \"${service_path}/${executable}\") &&
-                cat \"${service_path}/${svc_file}\" | sed -e \"s|{SERVICE_PATH}|\${P}|g\" -e \"s|{ARGS}|${args}|g\" > \"\${SVC_PATH}\" &&
+                cat \"${service_path}/${svc_file}\" | sed \
+                    -e \"s|{SERVICE_PATH}|\${P}|g\" \
+                    -e \"s|{ARGS}|${args}|g\" \
+                    -e \"s|{NATS_URL}|${NATS_URL}|g\" > \"\${SVC_PATH}\" &&
                 systemctl --user daemon-reload &&
                 systemctl --user enable \"red_${svc_file}\" &&
                 sudo loginctl enable-linger \"\${USER}\"
@@ -114,7 +123,7 @@ for CLIENT in `seq 0 $CLIENT_COUNT`; do
     CL_ARGS=`yq e ".subscribers[$CLIENT].args" deploy.yaml`
 
     echo -e "${BOLD_WHITE}>> ${CLR_OK}Deploying to ${CL_HOST}... ${CLR_RST}"
-    ssh "${CL_HOST}" -t "mkdir -p ${CL_PATH}"
+    ssh "${CL_HOST}" "mkdir -p ${CL_PATH}"
     rsync -trph \
         "${TEMP_DIR}/${TARGET}" \
         "${LOCAL_APP_PATH}/${SUB_SVC_FILE}" \

@@ -2,7 +2,7 @@
 Description=RED Frame Subscriber Service
 
 [Service]
-ExecStart=/usr/bin/sudo {SERVICE_PATH} {ARGS}
+ExecStart=/usr/bin/sudo {SERVICE_PATH} --server-url {NATS_URL} {ARGS}
 Restart=on-failure
 Type=simple
 KillSignal=SIGINT

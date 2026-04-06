@@ -31,8 +31,7 @@ subscribers:
       --led-pwm-bits=6 \
       --src-rect 0,0-320,128 \
       --dest-rect 0,0-320,128 \
-      --content-rect 0,0-320,256 \
-      --server-url nats://192.168.1.100:4222
+      --content-rect 0,0-320,256
   - hostname: red-sub.local
     path: red/sub
     args: >-
@@ -45,8 +44,7 @@ subscribers:
       --led-pwm-bits=6 \
       --src-rect 0,128-320,256 \
       --dest-rect 0,0-320,128 \
-      --content-rect 0,0-320,256 \
-      --server-url nats://192.168.1.100:4222
+      --content-rect 0,0-320,256
 control_server:
   hostname: red-sub.local
   path: red/launcher
