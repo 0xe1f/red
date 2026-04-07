@@ -17,7 +17,10 @@
 #include <string.h>
 #include "geometry.pb-c.h"
 #include "libretro.h"
+#include "log.h"
 #include "video.h"
+
+#define LOG_TAG  "video"
 
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #define MAX(a,b) ((a)>(b)?(a):(b))
@@ -32,6 +35,10 @@
 #define BLUE_ARGB8888(x) ((x)&0xff)
 #define RGB_ARGB8888(r,g,b) (0xff<<24)|(((r)&0xff)<<16)|(((g)&0xff)<<8)|(((b)&0xff))
 
+#define PIXEL_FORMAT_BPP(pf) \
+    ((pf) == RED__GEOMETRY__PIXEL_FORMAT__PF_RGBA8888 || (pf) == RED__GEOMETRY__PIXEL_FORMAT__PF_ARGB8888 ? 4 : \
+     (pf) == RED__GEOMETRY__PIXEL_FORMAT__PF_RGB565 || (pf) == RED__GEOMETRY__PIXEL_FORMAT__PF_RGBA5551 ? 2 : 0)
+
 extern VideoBuffer video_buffer;
 extern struct retro_system_av_info av_info;
 extern Rotation rotation;
@@ -43,6 +50,26 @@ static void blit_scale(
     const void *data, unsigned width, unsigned height, size_t pitch,
     unsigned int dest_width, unsigned int dest_height
 );
+
+void realloc_buffer_if_needed(VideoBuffer *buffer, int width, int height)
+{
+    if (buffer->data) {
+        free(buffer->data);
+        buffer->data = NULL;
+    }
+
+    if (width > 0 && height > 0) {
+        buffer->width = width;
+        buffer->height = height;
+        buffer->bpp = PIXEL_FORMAT_BPP(pixel_format);
+        buffer->pitch = buffer->width * buffer->bpp;
+        buffer->size = buffer->pitch * buffer->height;
+        buffer->data = calloc(buffer->size, 1);
+
+        log_d(LOG_TAG, "Creating interim buffer of size %ux%u (bpp=%d)\n",
+            buffer->width, buffer->height, buffer->bpp);
+    }
+}
 
 void blit(
     ScaleMode scale_mode,

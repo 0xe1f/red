@@ -96,11 +96,6 @@ static void set_core_options(const struct retro_core_option_definition *option_d
 static void set_variables(const struct retro_variable *vars, bool single);
 static void callback_set_led_state(int led, int state);
 
-// FIXME! move this
-#define PIXEL_FORMAT_BPP(pf) \
-    ((pf) == RED__GEOMETRY__PIXEL_FORMAT__PF_RGBA8888 || (pf) == RED__GEOMETRY__PIXEL_FORMAT__PF_ARGB8888 ? 4 : \
-     (pf) == RED__GEOMETRY__PIXEL_FORMAT__PF_RGB565 || (pf) == RED__GEOMETRY__PIXEL_FORMAT__PF_RGBA5551 ? 2 : 0)
-
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
     va_list va;
@@ -118,25 +113,6 @@ static void callback_log(enum retro_log_level level, const char *fmt, ...)
         vlog_e(LOG_CORE, fmt, va);
     }
     va_end(va);
-}
-
-static void realloc_buffer_if_needed()
-{
-    if (video_buffer.data) {
-        free(video_buffer.data);
-        video_buffer.data = NULL;
-    }
-
-    if (args.output_width > 0 && args.output_height > 0) {
-        video_buffer.width = args.output_width;
-        video_buffer.height = args.output_height;
-        video_buffer.bpp = PIXEL_FORMAT_BPP(pixel_format);
-        log_d(LOG_TAG, "Creating interim buffer of size %ux%u (bpp=%d)\n",
-            video_buffer.width, video_buffer.height, video_buffer.bpp);
-        video_buffer.pitch = video_buffer.width * video_buffer.bpp;
-        video_buffer.size = video_buffer.pitch * video_buffer.height;
-        video_buffer.data = calloc(video_buffer.size, 1);
-    }
 }
 
 static void callback_video_refresh(const void *data, unsigned width, unsigned height, size_t pitch)
@@ -440,7 +416,8 @@ static bool callback_environment_set(unsigned cmd, void *data)
                 *(enum retro_pixel_format *)data);
             return false;
         }
-        realloc_buffer_if_needed();
+        realloc_buffer_if_needed(&video_buffer,
+            args.output_width, args.output_height);
         break;
     case RETRO_ENVIRONMENT_SET_ROTATION:
         rotation = (Rotation)(*(unsigned *)data);
