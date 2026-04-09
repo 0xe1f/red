@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __main__ import app
+from launcher import app
 from flask import g
 from secrets import token_urlsafe
+import logging
 import sqlite3
 
 def get_db():
     db = getattr(g, "_database", None)
     if db is None:
+        logging.info(f"Setting up database...")
         db = g._database = sqlite3.connect(app.config["DATABASE_NAME"])
         db.row_factory = make_dicts
         init_db()

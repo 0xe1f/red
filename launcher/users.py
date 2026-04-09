@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __main__ import app
+from launcher import app
 from data.errors import DataException
 from flask import session
 from flask_login import current_user

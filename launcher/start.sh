@@ -21,4 +21,6 @@ echo "Activating virtual environment..." >&2
 source .venv/bin/activate
 
 echo "Starting server..." >&2
-./launcher.py
+gunicorn \
+    --access-logfile - --error-logfile - \
+    --worker-class eventlet -b :8080 -w 1 launcher:app

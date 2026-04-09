@@ -14,6 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+if os.environ.get('PRODUCTION', False):
+    import eventlet
+    eventlet.monkey_patch()
+
 from collections import defaultdict
 from flask import session
 from generated.common_pb2 import LaunchId
@@ -23,16 +28,18 @@ import asyncio
 import config
 import flask
 import flask_login
+import flask_socketio
 import generated.requests_pb2 as requests
 import http
 import importlib
 import logging
 import nats
-import os
 import re
 import subprocess
 
 app = flask.Flask(__name__)
+
+socketio = flask_socketio.SocketIO(app)
 
 import data.launches as dl
 
@@ -314,7 +321,7 @@ def reload_game_config():
     game_konfig = config.GameConfig(games_config_file)
     logging.info(f"Loaded game config with {len(game_konfig.game_map)} items")
 
-def main():
+def init_service():
     global konfig, platform_config_file, games_config_file
 
     # Parse command-line arguments
@@ -324,7 +331,7 @@ def main():
     parser.add_argument("--output", "-o", help="Path to logging file (default: None, logs to console)")
     parser.add_argument("--output-overwrite", "-oo", help="True to overwrite the logging file (default: False)", action="store_true", default=False)
     parser.add_argument("--log-level", "-l", help="Logging level (default: INFO)", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     # Set up logging
     logging.basicConfig(
@@ -341,7 +348,8 @@ def main():
     reload_game_config()
 
     app.config.update(konfig.control_server['flask_config'])
-    app.run(host='0.0.0.0', port=8080, debug=True)
+
+init_service()
 
 if __name__ == '__main__':
-    main()
+    socketio.run(app, host='0.0.0.0', port='8080', debug=True)
