@@ -40,7 +40,6 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
     opts->background = false;
     opts->show_fps = false;
     char temp[1024];
-    static DeferredKeypress dk;
     for (i = 1, arg = argv + 1; i < argc; i++, arg++) {
         if (strcmp(*arg, "--help") == 0 || strcmp(*arg, "-h") == 0) {
             args_usage(*argv);
@@ -178,11 +177,9 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
                 log_e(LOG_TAG, "Missing argument for %s\n", *arg);
                 return false;
             }
-            if (!input_parse_deferred_keypress(*(++arg), &dk)) {
-                log_e(LOG_TAG, "Invalid autopress spec: '%s'\n", *arg);
+            if (!input_defer_events(*(++arg))) {
                 return false;
             }
-            opts->autopress = &dk;
         } else if (strcmp(*arg, "--mouse-device") == 0 || strcmp(*arg, "-mouse") == 0) {
             if (++i >= argc) {
                 log_e(LOG_TAG, "Missing argument for %s\n", *arg);

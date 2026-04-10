@@ -28,6 +28,7 @@
 
 #define LOG_TAG "input"
 
+#define MAX_INPUT_EVENTS      32
 #define MAX_DEVICES           16
 #define LAST_BUTTON_ID        RETRO_DEVICE_ID_JOYPAD_R3
 #define EMULATED_BUTTON_COUNT (LAST_BUTTON_ID - 3)
@@ -38,6 +39,12 @@ typedef struct {
     int code;
     const char *name;
 } InputDescriptor;
+
+typedef struct {
+    unsigned long delay_us;
+    unsigned int code;
+    bool is_down;
+} InputEvent;
 
 #define ID_KEY(x) { RETROK_##x, #x }
 
@@ -328,6 +335,7 @@ struct KeyboardState {
     bool retro_keycode_states[RETROK_LAST];
 };
 
+static void input_reset_events();
 static int compare_input_descriptor_by_name(const void *a, const void *b);
 static void setup_joypad(struct JoypadDevice *device, SDL_Joystick *joystick);
 static void init_joypads();
@@ -353,18 +361,21 @@ static struct JoypadState joypad_states[MAX_DEVICES] = { 0 };
 static struct JoypadDevice joypad_devices[MAX_DEVICES] = { 0 };
 static struct MouseState mouse_state = { 0 };
 static struct KeyboardState keyboard_state = { 0 };
-static double press_us = 0;
-static double release_us = 0;
-static unsigned int keycode = 0;
 static bool mouse_initialized = false;
 static bool keyboard_initialized = false;
 static int mouse_device_fd = -1;
 static int keyboard_device_fd = -1;
+static InputEvent deferred_events[MAX_INPUT_EVENTS] = { 0 };
+static int deferred_event_count = 0;
+static unsigned long deferred_event_start_us = 0L;
+static int deferred_event_index = 0;
 
 void input_init()
 {
     SDL_InitSubSystem(SDL_INIT_JOYSTICK);
-	SDL_JoystickEventState(SDL_IGNORE);
+    SDL_JoystickEventState(SDL_IGNORE);
+
+    input_reset_events();
 }
 
 void input_clean_up()
@@ -399,12 +410,17 @@ int16_t callback_input_state(unsigned int port, unsigned int device, unsigned in
     return ret;
 }
 
-bool input_parse_deferred_keypress(const char *spec, DeferredKeypress *out)
+bool input_defer_events(const char *spec)
 {
     if (strlen(spec) >= 512) {
         return false;
     }
 
+    deferred_event_index = 0;
+    deferred_event_start_us = 0L;
+    deferred_event_count = 0;
+
+    // Build a map of keycode name to code for fast searching
     int keycode_map_by_name_count = 0;
     InputDescriptor **keycode_map_by_name = malloc(keycode_map_count * sizeof(InputDescriptor *));
     if (!keycode_map_by_name) {
@@ -430,65 +446,83 @@ bool input_parse_deferred_keypress(const char *spec, DeferredKeypress *out)
         sizeof(InputDescriptor *),
         compare_input_descriptor_by_name);
 
-    char buffer[512];
-    strncpy(buffer, spec, sizeof(buffer) - 1);
-    char *token = strtok(buffer, ":");
-    if (!token) {
-        log_e(LOG_TAG, "Missing delay\n");
-        free(keycode_map_by_name);
-        return false;
+    char spec_buffer[512];
+    strncpy(spec_buffer, spec, sizeof(spec_buffer) - 1);
+
+    bool success = true;
+    char tmp[32];
+    char *token;
+    int index;
+
+    unsigned long last_event_us = 0;
+    for (
+        token = strtok(spec_buffer, ","), index = 0;
+        token && index < MAX_INPUT_EVENTS;
+        token = strtok(NULL, ","), index++
+    ) {
+        const char *delim = strchr(token, ':');
+        if (!delim) {
+            log_e(LOG_TAG, "Missing delimiter for press: '%s'\n", token);
+            success = false;
+            break;
+        }
+        strncpy(tmp, token, delim - token);
+        tmp[delim - token] = '\0';
+
+        const InputDescriptor key = { .name = delim + 1 };
+        const InputDescriptor *kp = &key;
+        InputDescriptor **entry = bsearch(
+            &kp,
+            keycode_map_by_name,
+            keycode_map_by_name_count,
+            sizeof(InputDescriptor *),
+            compare_input_descriptor_by_name);
+
+        if (!entry) {
+            log_e(LOG_TAG, "Unrecognized keycode name '%s'\n", token);
+            success = false;
+            break;
+        }
+
+        // convert delay from seconds to microseconds
+        last_event_us += (unsigned long)(atof(tmp) * 1000000);
+        deferred_events[index] = (InputEvent) {
+            .delay_us = last_event_us,
+            .code = (*entry)->code,
+            .is_down = true,
+        };
+
+        if (++index < MAX_INPUT_EVENTS) {
+            last_event_us += 250000;
+            deferred_events[index] = (InputEvent) {
+                .delay_us = last_event_us,
+                .code = (*entry)->code,
+                .is_down = false,
+            };
+        }
     }
-    out->delay_ms = (unsigned long)(atof(token) * 1000);
 
-    token = strtok(NULL, ":");
-    if (!token) {
-        log_e(LOG_TAG, "Missing keycode\n");
-        free(keycode_map_by_name);
-        return false;
+    if (index >= MAX_INPUT_EVENTS && token) {
+        log_e(LOG_TAG, "Too many events; max is %d\n", MAX_INPUT_EVENTS);
+        success = false;
     }
 
-    const InputDescriptor key = { .name = token };
-    const InputDescriptor *kp = &key;
-    InputDescriptor **entry = bsearch(
-        &kp,
-        keycode_map_by_name,
-        keycode_map_by_name_count,
-        sizeof(InputDescriptor *),
-        compare_input_descriptor_by_name);
-
-    if (!entry) {
-        log_e(LOG_TAG, "Unrecognized keycode name '%s'\n", token);
-        free(keycode_map_by_name);
-        return false;
-    }
-    out->keycode = (*entry)->code;
-
-    token = strtok(NULL, ":");
-    if (!token) {
-        log_e(LOG_TAG, "Missing duration\n");
-        free(keycode_map_by_name);
-        return false;
-    }
-    out->duration_ms = (unsigned long)(atof(token) * 1000);
-
-    if (out->duration_ms == 0) {
-        log_e(LOG_TAG, "Duration must be greater than 0\n");
-        free(keycode_map_by_name);
-        return false;
+    if (success) {
+        deferred_event_count = index;
     }
 
     free(keycode_map_by_name);
-    return true;
+    return success;
 }
 
-void input_schedule_keypress(const DeferredKeypress *keypress)
+static void input_reset_events()
 {
-    double now_us = micros();
-    press_us = now_us + keypress->delay_ms * 1000;
-    release_us = press_us + keypress->duration_ms * 1000;
-    keycode = keypress->keycode;
-    log_v(LOG_TAG, "Scheduled autopress of keycode %d in %lu ms for duration %lu ms\n",
-        keycode, keypress->delay_ms, keypress->duration_ms);
+    deferred_event_index = 0;
+    deferred_event_start_us = micros();
+
+    if (deferred_event_count > 0) {
+        log_i(LOG_TAG, "Scheduled %d deferred events\n", deferred_event_count);
+    }
 }
 
 static int compare_input_descriptor_by_name(const void *a, const void *b)
@@ -784,16 +818,13 @@ static void deinit_keyboard()
 static void poll_keyboard()
 {
     const retro_keyboard_event_t callback = keyboard_event_callback;
-    if (callback) {
-        double now_us = micros();
-        if (press_us > 0 && now_us >= press_us) {
-            log_d(LOG_TAG, "Autopress: pressing keycode %d\n", keycode);
-            callback(true, keycode, 0, 0);
-            press_us = 0;
-        } else if (release_us > 0 && now_us >= release_us) {
-            log_d(LOG_TAG, "Autopress: releasing keycode %d\n", keycode);
-            callback(false, keycode, 0, 0);
-            release_us = 0;
+    if (callback && deferred_event_index < deferred_event_count) {
+        InputEvent *event = &deferred_events[deferred_event_index];
+        unsigned long event_time = event->delay_us;
+        unsigned long current_time = micros() - deferred_event_start_us;
+        if (current_time > event_time) {
+            deferred_event_index++;
+            callback(event->is_down, event->code, 0, 0);
         }
     }
 

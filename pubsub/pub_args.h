@@ -37,7 +37,6 @@ typedef struct {
     bool disable_preloading;
     bool force_preloading;
     KvStore input_configs;
-    DeferredKeypress *autopress;
     const char *tag;
     bool chatty_core;
 } ArgsOptions;

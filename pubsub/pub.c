@@ -689,10 +689,6 @@ int main(int argc, const char **argv)
     xm_init(args.server_url);
     input_init();
 
-    if (args.autopress) {
-        input_schedule_keypress(args.autopress);
-    }
-
     if (args.rom_path) {
         // Restore SRAM if available
         int sram_size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);

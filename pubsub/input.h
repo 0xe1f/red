@@ -18,17 +18,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef struct {
-    unsigned long delay_ms;
-    unsigned long duration_ms;
-    unsigned int keycode;
-} DeferredKeypress;
-
 void input_init();
 void input_poll();
 void input_clean_up();
 int16_t callback_input_state(unsigned port, unsigned device, unsigned index, unsigned id);
-bool input_parse_deferred_keypress(const char *spec, DeferredKeypress *out);
-void input_schedule_keypress(const DeferredKeypress *keypress);
+bool input_defer_events(const char *spec);
 
 #endif // __INPUT_H__
