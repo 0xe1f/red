@@ -31,3 +31,6 @@
 [submodule "cores/prboom"]
 	path = cores/prboom
 	url = https://github.com/libretro/libretro-prboom.git
+[submodule "cores/lbm_animator"]
+	path = cores/lbm_animator
+	url = https://github.com/0xe1f/lbm_animator.git
