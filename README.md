@@ -1,9 +1,28 @@
 RED (Retro Emulation Display)
 ===
-This project aims to build a 320x256 LED display using 20 64x64 LED panels,
-primarily for retro video games. It uses two Pi 4 units to drive each half
-of the screen, with one of the units also serving as emulator (producing
-sound, capturing input, etc).
+**red** is a ~4 ft (diagonal) LED matrix made of 20 64x64 panels.
+I built it primarily as an art installation, but it is also fully playable.
+The project was inspired by large retro-style LED arcade displays at
+amusement arcades that often run modified versions of Pac-Man and
+Space Invaders.
+
+The current build targets 320x256 pixels, but it can scale to other
+resolutions with enough Raspberry Pis and power. Each 320x128 half uses a
+60 A AC/DC converter, with peak power draw at high-density or high-brightness
+output.
+
+The network layer uses a standard NATS server to publish full-screen frame
+data. Subscribers can apply additional scaling as needed. Frames can also be
+pre-scaled (for aspect-ratio correction) and are compressed before delivery.
+
+The system runs on two Raspberry Pi 4 units: one runs the emulation
+[core](cores)/publisher, and the other runs the [web server](launcher). Both
+units drive the display, with one unit handling each half of the screen. The
+unit can rotate between portrait and landscape modes, with portrait used mostly
+for older arcade games (e.g. Pac-Man).
+
+Emulation is handled by a [custom libretro frontend](pubsub) that manages
+input, video, audio, and runtime orchestration.
 
 ![Img](doc/284cdc71602cc19c.png)
 
@@ -26,10 +45,6 @@ sound, capturing input, etc).
 ### Other
 * An assortment of M3, M4 and M5 bolts and washers
 * A number of [3D-printed components](stl)
-
-## Design
-
-pending
 
 ### Images
 
