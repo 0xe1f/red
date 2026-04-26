@@ -34,3 +34,6 @@
 [submodule "cores/lbm_animator"]
 	path = cores/lbm_animator
 	url = https://github.com/0xe1f/lbm_animator.git
+[submodule "cores/neocd"]
+	path = cores/neocd
+	url = https://github.com/libretro/neocd_libretro.git
