@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en-US">
-  <head profile="http://www.w3.org/2005/10/profile">
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     {% include 'fonts.html' %}
     <link rel="stylesheet" type="text/css" href="{{ url_for("static", filename="style/style.css") }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for("static", filename="style/menus.css") }}">
@@ -21,12 +21,22 @@
     <div id="status">
       <a class="app-name" href="https://github.com/0xe1f/red" target="_blank">RED</a>
       <span class="title"></span>
+      <button id="filters-toggle" type="button" aria-controls="filters" aria-expanded="false">Filters</button>
       <svg id="stop" viewBox="0 -960 960 960" fill="#5f6368">
         <title>Stop</title>
         <path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/>
       </svg>
+      <button id="volume-toggle" type="button" aria-controls="volume-panel" aria-expanded="false" title="Volume">
+        Volume
+      </button>
       <input id="search" type="text" autocomplete="off" placeholder="Search" />
       <button class="user-options dropdown" data-dropdown="menu-user-options" title="{{ current_user.email_address }}">{{ current_user.email_address }}</button>
+    </div>
+    <div id="volume-panel">
+      <span id="volume-label">Volume</span>
+      <span id="volume-value">0%</span>
+      <input type="range" id="volume-slider" min="0" max="100" step="1" />
+      <button id="volume-mute" type="button">Mute</button>
     </div>
     <div id="content">
       <div id="filters">
@@ -34,11 +44,13 @@
       <div id="games">
       </div>
     </div>
+    <div id="filters-scrim"></div>
+    <div id="volume-scrim"></div>
     {% if uploads_supported %}
       <div id="drop_target">
         <span>Drop Here</span>
       </div>
     {% endif %}
-    <a id="sign-out" href="{{ url_for("logout") }}" style="visibility: collapse;">sign out</a>
+    <a id="sign-out" href="{{ url_for("logout") }}">sign out</a>
   </body>
 </html>

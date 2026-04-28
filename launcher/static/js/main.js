@@ -18,6 +18,7 @@
 $(function() {
     const cookies = Cookies.withAttributes({ expires: 31 });
     const orientations = [ 'portrait', 'landscape' ];
+    const compactLayoutQuery = window.matchMedia("(max-width: 800px)");
     var syncTimeoutId = -1;
     var lastSync = 0;
     var lastSensorOrientation = null;
@@ -205,6 +206,48 @@ $(function() {
         select(0);
         syncGameList();
     };
+    const isCompactLayout = function() {
+        return compactLayoutQuery.matches;
+    };
+    const setFiltersDrawerOpen = function(open) {
+        if (!isCompactLayout()) {
+            open = false;
+        }
+        $("body").toggleClass("filters-open", open);
+        $("#filters-toggle").attr("aria-expanded", open ? "true" : "false");
+    };
+    const closeFiltersDrawer = function() {
+        setFiltersDrawerOpen(false);
+    };
+    const setVolumePanelOpen = function(open) {
+        $("body").toggleClass("volume-open", open);
+        $("#volume-toggle").attr("aria-expanded", open ? "true" : "false");
+        if (open) {
+            positionVolumePanel();
+        }
+    };
+    const closeVolumePanel = function() {
+        setVolumePanelOpen(false);
+    };
+    const positionVolumePanel = function() {
+        const $panel = $("#volume-panel");
+        const $button = $("#volume-toggle");
+        if (!$button.length || !$button[0]) {
+            return;
+        }
+        const rect = $button[0].getBoundingClientRect();
+        const panelWidth = $panel.outerWidth() || 260;
+        const minLeft = 8;
+        const maxLeft = Math.max(minLeft, window.innerWidth - panelWidth - 8);
+        const desiredLeft = rect.right - panelWidth;
+        const left = Math.max(minLeft, Math.min(desiredLeft, maxLeft));
+        const top = rect.bottom + 8;
+        $panel.css({
+            top: `${Math.round(top)}px`,
+            left: `${Math.round(left)}px`,
+            right: "auto",
+        });
+    };
     const initFilters = function() {
         // Set up filter click handlers
         $('.filter')
@@ -222,6 +265,9 @@ $(function() {
                 $filters
                     .toggleClass('active', $filters.find('.selected').length > 0);
                 syncGameList();
+                if (isCompactLayout()) {
+                    closeFiltersDrawer();
+                }
             });
         syncSidebar();
         syncGameList();
@@ -297,6 +343,23 @@ $(function() {
         $('#volume-slider')
             .val(value)
             .trigger('change');
+        $('#volume-value')
+            .text(`${value}%`);
+        $('#volume-mute')
+            .text(value > 0 ? 'Mute' : 'Unmute');
+    };
+    const toggleMute = function() {
+        const vol = uiVolume();
+        if (vol > 0) {
+            cookies.set('pre_mute_vol', vol);
+            setVolume(0, false);
+        } else {
+            const preMute = cookies.get('pre_mute_vol');
+            if (preMute) {
+                const newVol = parseInt(preMute, 10);
+                setVolume(newVol);
+            }
+        }
     };
     const fetchFilters = function() {
         $.ajax({
@@ -395,6 +458,16 @@ $(function() {
     const onKeyPressed = function(e) {
         const $search = $("#search");
         var handled = false;
+        if (e.keyCode == 27 && $("body").hasClass("filters-open")) {
+            closeFiltersDrawer();
+            handled = true;
+            return !handled;
+        }
+        if (e.keyCode == 27 && $("body").hasClass("volume-open")) {
+            closeVolumePanel();
+            handled = true;
+            return !handled;
+        }
         if ($search.is(":focus")) {
             if (e.keyCode == 27) {
                 // esc
@@ -445,17 +518,7 @@ $(function() {
                 handled = true;
             } else if (e.keyCode == 77) {
                 // mute
-                const vol = parseInt($('#volume-slider').val(), 10) || 0;
-                if (vol > 0) {
-                    cookies.set('pre_mute_vol', vol);
-                    setVolume(0, false);
-                } else {
-                    const preMute = cookies.get('pre_mute_vol');
-                    if (preMute) {
-                        const newVol = parseInt(preMute, 10);
-                        setVolume(newVol);
-                    }
-                }
+                toggleMute();
                 handled = true;
             } else if (e.keyCode == 80) {
                 // 'p', previous
@@ -505,6 +568,53 @@ $(function() {
         // set up search handler
         $("#search").on("input", function(e) {
             syncGameList();
+        });
+        $("#filters-toggle").on("click", function() {
+            const shouldOpen = !$("body").hasClass("filters-open");
+            if (shouldOpen) {
+                closeVolumePanel();
+            }
+            setFiltersDrawerOpen(shouldOpen);
+        });
+        $("#filters-scrim").on("click", function() {
+            closeFiltersDrawer();
+        });
+        $("#volume-toggle").on("click", function(e) {
+            e.stopPropagation();
+            const shouldOpen = !$("body").hasClass("volume-open");
+            if (shouldOpen) {
+                closeFiltersDrawer();
+                $$menu.hideAll();
+            }
+            setVolumePanelOpen(shouldOpen);
+        });
+        $("#volume-mute").on("click", function() {
+            toggleMute();
+        });
+        $("#volume-scrim").on("click", function() {
+            closeVolumePanel();
+        });
+        $("#volume-panel").on("click", function(e) {
+            e.stopPropagation();
+        });
+        $(document).on("click", function() {
+            closeVolumePanel();
+        });
+        const onCompactLayoutChange = function() {
+            if (!isCompactLayout()) {
+                closeFiltersDrawer();
+            }
+            positionVolumePanel();
+        };
+        if (compactLayoutQuery.addEventListener) {
+            compactLayoutQuery.addEventListener("change", onCompactLayoutChange);
+        } else {
+            compactLayoutQuery.addListener(onCompactLayoutChange);
+        }
+        $(window).on("resize", function() {
+            if ($("body").hasClass("volume-open")) {
+                positionVolumePanel();
+            }
         });
         // set up keyboard handler
         $(document).on("keyup", onKeyPressed);
@@ -576,10 +686,6 @@ $(function() {
     const initMenus = function() {
         $("body")
             .append($("<ul />", { "id": "menu-user-options", "class": "menu" })
-                .append($("<li />", { "class": "menu-volume" })
-                    .append($("<input />", { "type": "range", "id": "volume-slider" }))
-                )
-                .append($("<li />", { "class": "divider" }))
                 .append($("<li />", { "class": "menu-sign-out" }).text("Sign out"))
             )
         ;

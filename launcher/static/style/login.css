@@ -17,6 +17,7 @@
 
 .fields ul {
     grid-area: 1 / 1 / span 1 / span 2;
+    margin-bottom: 0.25em;
 }
 
 .fields input[type=text] {
@@ -29,8 +30,10 @@
 
 .fields a {
     grid-area: 4 / 1 / span 1 / span 1;
+    align-self: center;
 }
 
 .fields input[type=submit] {
     grid-area: 4 / 2 / span 1 / span 1;
+    justify-self: end;
 }

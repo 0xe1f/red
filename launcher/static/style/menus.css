@@ -18,48 +18,62 @@
 button.dropdown {
     background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20height%3D%2220px%22%20viewBox%3D%220%20-960%20960%20960%22%20width%3D%2220px%22%20fill%3D%22%231f1f1f%22%3E%3Cpath%20d%3D%22M480-384%20288-576h384L480-384Z%22%2F%3E%3C%2Fsvg%3E");
     background-repeat: no-repeat;
-    background-position: right center;
-    padding: 0.5em 20px 0.5em 20px;
+    background-position: right 10px center;
+    padding: 0.45em 30px 0.45em 12px;
 }
 
 .dropdown {
-    border: none;
+    border: solid 1px #d7dde8;
+    border-radius: 999px;
     box-shadow: none;
-    padding: 3px 25px 0.25em 1em;
-    background-color: transparent;
+    padding: 0.38em 28px 0.38em 0.75em;
+    background-color: #f8fafc;
     cursor: pointer;
     font-weight: normal;
-    font-size: 12pt;
+    font-size: 0.95rem;
     height: auto;
-    color: #777;
+    color: #475467;
+    max-width: min(30vw, 320px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 0 1 auto;
 }
 
 .dropdown:hover {
-    color: #000;
+    color: #1f2937;
+    border-color: #c7ceda;
+    background-color: #f2f5fa;
+}
+
+.dropdown:focus-visible {
+    outline: 2px solid rgba(249, 74, 55, 0.45);
+    outline-offset: 1px;
 }
 
 ul.menu {
     position: absolute;
     display: none;
     margin: 0;
-    padding-left: 0;
+    padding: 0.3em 0;
     background-color: #fff;
     list-style-type: none;
-    border: solid 1px #ccc;
-    border-radius: 2px;
-    box-shadow: 2px 2px 2px #ddd;
+    border: solid 1px #dde2ec;
+    border-radius: 10px;
+    box-shadow: 0 12px 30px rgba(2, 8, 20, 0.15);
     min-width: 13em;
+    z-index: 30;
 }
 
 .menu li {
-    color: #555;
-    padding: 0.5em 1em;
+    color: #334155;
+    padding: 0.48em 0.95em;
 }
 
 .menu li:hover,
 .menu li.hovered {
     cursor: pointer;
-    background-color: #ccc;
+    background-color: #f2f5fa;
 }
 
 .menu li.divider,
@@ -67,7 +81,7 @@ ul.menu {
     cursor: default;
     height: 1px;
     padding: 0;
-    background-color: #ccc;
+    background-color: #e5e7eb;
 }
 
 .menu li.selected-menu-item span {
