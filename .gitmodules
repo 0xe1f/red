@@ -37,3 +37,6 @@
 [submodule "cores/neocd"]
 	path = cores/neocd
 	url = https://github.com/libretro/neocd_libretro.git
+[submodule "cores/tyrquake"]
+	path = cores/tyrquake
+	url = https://github.com/libretro/tyrquake.git
