@@ -244,6 +244,18 @@ static bool callback_environment_set(unsigned cmd, void *data)
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION\n");
         *((unsigned *)data) = 1;
         break;
+    case RETRO_ENVIRONMENT_GET_CURRENT_SOFTWARE_FRAMEBUFFER:
+        return false;
+        // log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_CURRENT_SOFTWARE_FRAMEBUFFER\n");
+        // {
+        //     struct retro_framebuffer *framebuffer = (struct retro_framebuffer *)data;
+        //     log_d(LOG_TAG, "format: %d, pitch: %d, height: %d\n", framebuffer->format, framebuffer->width, framebuffer->height);
+        //     framebuffer->format = RETRO_PIXEL_FORMAT_XRGB8888;
+        //     framebuffer->pitch = 512;
+        //     framebuffer->data = malloc(framebuffer->pitch * framebuffer->height * 4);
+        //     framebuffer->memory_flags = RETRO_MEMORY_TYPE_CACHED;
+        // }
+        break;
     case RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION\n");
         *(unsigned *)data = 0;
@@ -297,6 +309,14 @@ static bool callback_environment_set(unsigned cmd, void *data)
     case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY\n");
         *(const char **)data = files_system_path();
+        break;
+    case RETRO_ENVIRONMENT_GET_TARGET_REFRESH_RATE:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_TARGET_REFRESH_RATE\n");
+        *((float *)data) = 60.0f;
+        break;
+    case RETRO_ENVIRONMENT_GET_USERNAME:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_USERNAME\n");
+        *(const char **)data = "red";
         break;
     case RETRO_ENVIRONMENT_GET_VARIABLE: {
         struct retro_variable *var = (struct retro_variable *)data;
