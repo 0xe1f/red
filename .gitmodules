@@ -40,3 +40,6 @@
 [submodule "cores/tyrquake"]
 	path = cores/tyrquake
 	url = https://github.com/libretro/tyrquake.git
+[submodule "cores/mame2003"]
+	path = cores/mame2003
+	url = https://github.com/libretro/mame2003-libretro.git
