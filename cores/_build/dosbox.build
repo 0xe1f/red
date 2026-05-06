@@ -1,0 +1,6 @@
+# Do not launch standalone
+
+cd libretro && \
+    make BUNDLED_AUDIO_CODECS=1 BUNDLED_LIBSNDFILE=1 BUNDLED_SDL=1 WITH_DYNAREC=arm64 deps && \
+    make BUNDLED_AUDIO_CODECS=1 BUNDLED_LIBSNDFILE=1 BUNDLED_SDL=1 WITH_DYNAREC=arm64 -j`nproc` && \
+    echo "done:libretro/dosbox_core_libretro.so"

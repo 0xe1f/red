@@ -50,7 +50,7 @@ if [ -z "${ARGS}" ]; then
     echo "No cores specified. Building all." >&2
     # List all cores in the cores directory,
     # excluding hidden and dependency directories
-    ARGS=$(find "${LOCAL_CORES_DIR}/" -mindepth 1 -maxdepth 1 -type d -not -name '.*' -exec basename {} \; | tr -s '[:space:]' ' ')
+    ARGS=$(find "${LOCAL_CORES_DIR}/" -mindepth 1 -maxdepth 1 -type d -not -name '.*' -not -name '_*' -exec basename {} \; | tr -s '[:space:]' ' ')
 fi
 
 # Run the staging script

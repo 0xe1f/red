@@ -30,7 +30,8 @@ RED="$(tput setaf 1)"
 PLAIN="$(tput sgr0)"
 
 if [ -z "${BUILD_SVR}" ] || [ -z "${GAME_SVR_HOST}" ] || [ -z "${LOCAL_CORES_PATH}" ] || [ -z "${REMOTE_CORES_PATH}" ]; then
-    echo -e "${RED}Error: missing arguments. Usage: $0 build_server game_server_host local_cores_path remote_cores_path${PLAIN}" >&2
+    # echo -e "${RED}Error: missing arguments. Usage: $0 build_server game_server_host local_cores_path remote_cores_path${PLAIN}" >&2
+    echo -e "ERROR: Run bcores.sh from root" >&2
     exit 1
 fi
 
@@ -62,14 +63,18 @@ stage_project() {
     local dirname="$1"
 
     echo -e "${BOLD_WHITE}>> ${GREEN}Staging build for $dirname... ${PLAIN}"
-    EXCLUDE_FILE=""
-    if [ -f "${dirname}.exclude" ]; then
-        EXCLUDE_FILE="--exclude-from ${dirname}.exclude"
+    EXCLUDED=""
+    if [ -f "_exclude/common.exclude" ]; then
+        EXCLUDED="$EXCLUDED --exclude-from _exclude/common.exclude"
+    fi
+    if [ -f "_exclude/${dirname}.exclude" ]; then
+        EXCLUDED="$EXCLUDED --exclude-from _exclude/${dirname}.exclude"
     fi
     rsync -trph \
         --info=progress2 \
-        --exclude-from common.exclude \
-        $EXCLUDE_FILE \
+        --ignore-missing-args \
+        $EXCLUDED \
+        "_build/${dirname}.build" \
         "${dirname}" \
         "${BUILD_SVR}:${BUILD_PATH}/"
 }

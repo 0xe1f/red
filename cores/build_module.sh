@@ -19,61 +19,42 @@ try_libretro_build() {
     local mf_dir
 
     if [ -n "$makefile" ]; then
+        echo "Using Makefile: $makefile"
         mf_dir=$(dirname "$makefile")
         pushd "$mf_dir" > /dev/null && \
             make -f "$(basename "$makefile")" && \
             popd > /dev/null && \
-            echo "done:$(find "$mf_dir" -maxdepth 1 -type f -name '*_libretro.so')"
+            echo "done:$(find "$mf_dir" -maxdepth 1 -type f -name '*_libretro.so')" && \
+            exit 0
+        exit 1
+    fi
+}
+
+try_custom_build() {
+    if [ -f "../${MODULE_NAME}.build" ]; then
+        echo "Running custom build script for $MODULE_NAME"
+        source "../${MODULE_NAME}.build" || exit $?
         exit 0
     fi
 }
 
 MODULE_NAME=$1
 if [ -z "$MODULE_NAME" ]; then
-    echo "Error: module_name is missing" >&2
+    echo "ERROR: Run bcores.sh from root" >&2
+    # echo "Error: module_name is missing" >&2
     exit 1
 fi
 
 cd $MODULE_NAME
 
-case "$MODULE_NAME" in
-    mgba)
-        if [ ! -f build/Makefile ]; then
-            mkdir -p build && cd build && cmake \
-                -DBUILD_SHARED=OFF \
-                -DBUILD_STATIC=ON \
-                -DBUILD_SDL=OFF \
-                -DBUILD_QT=OFF \
-                -DBUILD_LIBRETRO=ON \
-                -DUSE_SQLITE3=OFF \
-                -DENABLE_DEBUGGERS=OFF \
-                -DUSE_DISCORD_RPC=OFF \
-                -DENABLE_GDB_STUB=OFF \
-                -DENABLE_SCRIPTING=OFF \
-                -DCMAKE_INSTALL_PREFIX:PATH=/usr .. || exit 1
-            cd ..
-        fi
+# Try a custom build script first, if it exists
+try_custom_build
+# See if there's a Makefile.libretro and build that
+try_libretro_build `find . -type f -name "Makefile.libretro"`
+# See if there's a Makefile in a libretro subdirectory and build that
+try_libretro_build `find . -path '*/libretro/*' -name "Makefile" -type f | head -1`
+# Finally, see if there's a Makefile anywhere and build that
+try_libretro_build `find . -name "Makefile" -type f | head -1`
 
-        cd build && \
-            make && \
-            echo "done:build/mgba_libretro.so"
-        ;;
-    dosbox)
-        cd libretro && \
-            make BUNDLED_AUDIO_CODECS=1 BUNDLED_LIBSNDFILE=1 BUNDLED_SDL=1 WITH_DYNAREC=arm64 deps && \
-            make BUNDLED_AUDIO_CODECS=1 BUNDLED_LIBSNDFILE=1 BUNDLED_SDL=1 WITH_DYNAREC=arm64 -j`nproc` && \
-            echo "done:libretro/dosbox_core_libretro.so"
-        ;;
-    *)
-        # See if there's a Makefile.libretro and build that
-        try_libretro_build `find . -type f -name "Makefile.libretro"`
-        # See if there's a Makefile in a libretro subdirectory and build that
-        try_libretro_build `find . -path '*/libretro/*' -name "Makefile" -type f | head -1`
-        # Finally, see if there's a Makefile anywhere and build that
-        try_libretro_build `find . -name "Makefile" -type f | head -1`
-
-        # Well, shit...
-        echo "Unknown or unbuildable module: $MODULE_NAME" >&2
-        exit 1
-        ;;
-esac
+echo "Unrecognized or unbuildable core: $MODULE_NAME" >&2
+exit 1

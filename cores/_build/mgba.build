@@ -1,0 +1,21 @@
+# Do not launch standalone
+
+if [ ! -f build/Makefile ]; then
+    mkdir -p build && cd build && cmake \
+        -DBUILD_SHARED=OFF \
+        -DBUILD_STATIC=ON \
+        -DBUILD_SDL=OFF \
+        -DBUILD_QT=OFF \
+        -DBUILD_LIBRETRO=ON \
+        -DUSE_SQLITE3=OFF \
+        -DENABLE_DEBUGGERS=OFF \
+        -DUSE_DISCORD_RPC=OFF \
+        -DENABLE_GDB_STUB=OFF \
+        -DENABLE_SCRIPTING=OFF \
+        -DCMAKE_INSTALL_PREFIX:PATH=/usr .. || exit 1
+    cd ..
+fi
+
+cd build && \
+    make && \
+    echo "done:build/mgba_libretro.so"

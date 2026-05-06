@@ -29,7 +29,8 @@ RED="$(tput setaf 1)"
 PLAIN="$(tput sgr0)"
 
 if [ -z "${GAME_SVR_HOST}" ] || [ -z "${LOCAL_CORES_PATH}" ] || [ -z "${REMOTE_CORES_PATH}" ]; then
-    echo -e "${RED}Error: missing arguments. Usage: $0 game_server_host local_cores_path remote_cores_path${PLAIN}" >&2
+    echo -e "ERROR: Run bcores.sh from root" >&2
+    # echo -e "${RED}Error: missing arguments. Usage: $0 game_server_host local_cores_path remote_cores_path${PLAIN}" >&2
     exit 1
 fi
 
