@@ -1,7 +1,7 @@
 libretro cores
 ===
 
-This directory contains libretro cores plus build helpers used to stage,
+This directory contains libretro cores, plus build helpers used to stage,
 build, and deploy core binaries to the game server.
 
 ## Prerequisites

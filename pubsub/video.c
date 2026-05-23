@@ -181,7 +181,6 @@ static void blit_half(const void *data, unsigned width, unsigned height, size_t 
     unsigned char *dst = (unsigned char *) video_buffer.data;
     const unsigned char *src = (const unsigned char *) data;
 
-    // Calculate source dimensions to blit
     unsigned int src_width = width;
     bool halve_width = src_width > video_buffer.width;
     unsigned int src_px_factor = halve_width ? 2 : 1;
@@ -196,39 +195,53 @@ static void blit_half(const void *data, unsigned width, unsigned height, size_t 
     unsigned int dst_width = video_buffer.width;
     unsigned int dst_height = video_buffer.height;
 
-    // If source is larger, center it in destination
-    int offset_x = (dst_width > src_width) ? (dst_width - src_width) / 2 : 0;
-    int offset_y = (dst_height > src_height) ? (dst_height - src_height) / 2 : 0;
+    int offset_x = (dst_width > src_width) ? (int)(dst_width - src_width) / 2 : 0;
+    int offset_y = (dst_height > src_height) ? (int)(dst_height - src_height) / 2 : 0;
 
-    // Clamp source dimensions to destination if larger
     unsigned int blit_width = (src_width > dst_width) ? dst_width : src_width;
     unsigned int blit_height = (src_height > dst_height) ? dst_height : src_height;
 
-    // If source is larger, start from center
     unsigned int src_offset_x = (src_width > dst_width) ? (src_width - dst_width) / 2 : 0;
     unsigned int src_offset_y = (src_height > dst_height) ? (src_height - dst_height) / 2 : 0;
 
-    // Blit source to destination
     size_t bpp = video_buffer.bpp;
-    for (unsigned int y = 0; y < blit_height; y++) {
-        unsigned int sy = y;
-        if (halve_height) {
-            sy <<= 1;
-        }
-        unsigned char *dr = dst + (offset_y + y) * video_buffer.pitch + offset_x * bpp;
-        const unsigned char *sr = src + (src_offset_y + sy) * pitch + src_offset_x * bpp * src_px_factor;
-        if (halve_width) {
-            for (unsigned int x = 0; x < blit_width; x++) {
-                if (bpp == 2) {
-                    *(unsigned short *)dr = *(const unsigned short *)sr;
-                } else if (bpp == 4) {
-                    *(unsigned int *)dr = *(const unsigned int *)sr;
+    size_t src_row_step = halve_height ? pitch * 2 : pitch;
+
+    const unsigned char *sr_row = src + src_offset_y * pitch + src_offset_x * bpp * src_px_factor;
+    unsigned char *dr_row = dst + offset_y * video_buffer.pitch + offset_x * bpp;
+
+    if (halve_width) {
+        size_t src_px_step = bpp * 2;
+        if (bpp == 2) {
+            for (unsigned int y = 0; y < blit_height; y++) {
+                const unsigned char *sr = sr_row;
+                unsigned char *dr = dr_row;
+                for (unsigned int x = 0; x < blit_width; x++) {
+                    *(unsigned short *) dr = *(const unsigned short *) sr;
+                    sr += src_px_step;
+                    dr += 2;
                 }
-                sr += bpp << 1;
-                dr += bpp;
+                sr_row += src_row_step;
+                dr_row += video_buffer.pitch;
             }
-        } else {
-            memcpy(dr, sr, blit_width * bpp);
+        } else if (bpp == 4) {
+            for (unsigned int y = 0; y < blit_height; y++) {
+                const unsigned char *sr = sr_row;
+                unsigned char *dr = dr_row;
+                for (unsigned int x = 0; x < blit_width; x++) {
+                    *(unsigned int *) dr = *(const unsigned int *) sr;
+                    sr += src_px_step;
+                    dr += 4;
+                }
+                sr_row += src_row_step;
+                dr_row += video_buffer.pitch;
+            }
+        }
+    } else {
+        for (unsigned int y = 0; y < blit_height; y++) {
+            memcpy(dr_row, sr_row, blit_width * bpp);
+            sr_row += src_row_step;
+            dr_row += video_buffer.pitch;
         }
     }
 }
@@ -238,71 +251,73 @@ static void blit_scale(
     unsigned int dest_width, unsigned int dest_height
 )
 {
-    // Based on https://www.reddit.com/r/C_Programming/comments/16j7k4d/optimizing_image_downsampling_for_speed/
     unsigned char *dst = (unsigned char *) video_buffer.data;
     const unsigned char *src = (const unsigned char *) data;
 
-    // clamp dimensions
     dest_width = MIN(dest_width, video_buffer.width);
     dest_height = MIN(dest_height, video_buffer.height);
 
-    // clamp offsets
     int offset_y = MAX((video_buffer.height - (int) dest_height) / 2, 0);
     int offset_x = MAX((video_buffer.width - (int) dest_width) / 2, 0);
 
-    int src_width = width;
-    int src_height = height;
     int bpp = video_buffer.bpp;
+    bool is_argb = (pixel_format == RED__GEOMETRY__PIXEL_FORMAT__PF_ARGB8888);
 
-    float rx = src_width / (float) (dest_width + 1);
-    float ry = src_height / (float) (dest_height + 1);
+    // Fixed-point 16.16 step sizes mapping dest [0, dest-1] onto src [0, src-1]
+    uint32_t step_x = (width  > 1) ? ((width  - 1) << 16) / (dest_width  > 1 ? dest_width  - 1 : 1) : 0;
+    uint32_t step_y = (height > 1) ? ((height - 1) << 16) / (dest_height > 1 ? dest_height - 1 : 1) : 0;
 
     dst += offset_y * video_buffer.pitch;
-    for (int y = 0; y < (int) dest_height; ++y) {
-        int y1 = y * ry;
-        int y2 = (y + 1) * ry;
-        if (y1 == y2) {
-            y2++; // ensure at least one row is sampled
-        }
 
-        const unsigned char *sr = src + y1 * src_width * bpp;
+    uint32_t fy = 0;
+    for (int y = 0; y < (int) dest_height; y++, fy += step_y) {
+        int y0 = fy >> 16;
+        int y1 = MIN(y0 + 1, (int) height - 1);
+        uint32_t wy1 = fy & 0xffff;
+        uint32_t wy0 = 0x10000 - wy1;
+
+        const unsigned char *row0 = src + y0 * pitch;
+        const unsigned char *row1 = src + y1 * pitch;
         unsigned char *dr = dst + offset_x * bpp;
 
-        for (int x = 0; x < (int) dest_width; ++x) {
-            int x1 = x * rx;
-            int x2 = (x + 1) * rx;
+        uint32_t fx = 0;
+        for (int x = 0; x < (int) dest_width; x++, fx += step_x) {
+            int x0 = fx >> 16;
+            int x1 = MIN(x0 + 1, (int) width - 1);
+            uint32_t wx1 = fx & 0xffff;
+            uint32_t wx0 = 0x10000 - wx1;
 
-            unsigned int r = 0;
-            unsigned int g = 0;
-            unsigned int b = 0;
-            const unsigned char *pixels = sr;
+            // Bilinear weights (each in 0..65536, sum = 65536)
+            uint32_t w00 = (wx0 * wy0) >> 16;
+            uint32_t w10 = (wx1 * wy0) >> 16;
+            uint32_t w01 = (wx0 * wy1) >> 16;
+            uint32_t w11 = (wx1 * wy1) >> 16;
 
-            for (int i = y1; i < y2; ++i) {
-                for (int j = x1; j < x2; ++j) {
-                    if (pixel_format == RED__GEOMETRY__PIXEL_FORMAT__PF_ARGB8888) {
-                        unsigned int c = ((unsigned int *)pixels)[j];
-                        r += RED_ARGB8888(c);
-                        g += GREEN_ARGB8888(c);
-                        b += BLUE_ARGB8888(c);
-                    } else if (pixel_format == RED__GEOMETRY__PIXEL_FORMAT__PF_RGB565) {
-                        unsigned short c = ((unsigned short *)pixels)[j];
-                        r += RED_RGB565(c);
-                        g += GREEN_RGB565(c);
-                        b += BLUE_RGB565(c);
-                    }
-                }
-                pixels += src_width * bpp;
-            }
-
-            int pixel_count = (x2 - x1) * (y2 - y1);
-            r /= pixel_count;
-            g /= pixel_count;
-            b /= pixel_count;
-
-            if (pixel_format == RED__GEOMETRY__PIXEL_FORMAT__PF_ARGB8888) {
-                (*(unsigned int *)dr) = RGB_ARGB8888(r,g,b);
-            } else if (pixel_format == RED__GEOMETRY__PIXEL_FORMAT__PF_RGB565) {
-                (*(unsigned short *)dr) = RGB_RGB565(r,g,b);
+            uint32_t r, g, b;
+            if (is_argb) {
+                uint32_t p00 = ((const uint32_t *) row0)[x0];
+                uint32_t p10 = ((const uint32_t *) row0)[x1];
+                uint32_t p01 = ((const uint32_t *) row1)[x0];
+                uint32_t p11 = ((const uint32_t *) row1)[x1];
+                r = (RED_ARGB8888(p00)*w00 + RED_ARGB8888(p10)*w10
+                   + RED_ARGB8888(p01)*w01 + RED_ARGB8888(p11)*w11) >> 16;
+                g = (GREEN_ARGB8888(p00)*w00 + GREEN_ARGB8888(p10)*w10
+                   + GREEN_ARGB8888(p01)*w01 + GREEN_ARGB8888(p11)*w11) >> 16;
+                b = (BLUE_ARGB8888(p00)*w00 + BLUE_ARGB8888(p10)*w10
+                   + BLUE_ARGB8888(p01)*w01 + BLUE_ARGB8888(p11)*w11) >> 16;
+                *(uint32_t *) dr = RGB_ARGB8888(r, g, b);
+            } else {
+                uint16_t p00 = ((const uint16_t *) row0)[x0];
+                uint16_t p10 = ((const uint16_t *) row0)[x1];
+                uint16_t p01 = ((const uint16_t *) row1)[x0];
+                uint16_t p11 = ((const uint16_t *) row1)[x1];
+                r = (RED_RGB565(p00)*w00 + RED_RGB565(p10)*w10
+                   + RED_RGB565(p01)*w01 + RED_RGB565(p11)*w11) >> 16;
+                g = (GREEN_RGB565(p00)*w00 + GREEN_RGB565(p10)*w10
+                   + GREEN_RGB565(p01)*w01 + GREEN_RGB565(p11)*w11) >> 16;
+                b = (BLUE_RGB565(p00)*w00 + BLUE_RGB565(p10)*w10
+                   + BLUE_RGB565(p01)*w01 + BLUE_RGB565(p11)*w11) >> 16;
+                *(uint16_t *) dr = RGB_RGB565(r, g, b);
             }
 
             dr += bpp;
