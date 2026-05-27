@@ -43,6 +43,10 @@ static ViewRect blit_dest;
 static Red__Geometry geometry;
 static double last_frame_time = 0;
 
+// x_dir is +1 for normal left-to-right, -1 for horizontally mirrored (rot180)
+typedef void (*RowRenderFn)(struct LedCanvas *canvas, const uint8_t *row,
+                            int src_x, int dst_x, int dst_y, int count, int x_dir);
+
 static bool init_rgb(int argc, char **argv);
 static void render(const Red__Frame *frame);
 static inline void log_fps();
@@ -52,6 +56,17 @@ static void xm_callback(const Red__Frame *frame);
 static void inspect_geometry(const Red__Geometry *fg);
 static void matrix_clear();
 static void clean_up();
+
+static void render_row_rgb565(struct LedCanvas *canvas, const uint8_t *row,
+                               int src_x, int dst_x, int dst_y, int count, int x_dir);
+static void render_row_argb8888(struct LedCanvas *canvas, const uint8_t *row,
+                                int src_x, int dst_x, int dst_y, int count, int x_dir);
+static void render_row_rgba8888(struct LedCanvas *canvas, const uint8_t *row,
+                                int src_x, int dst_x, int dst_y, int count, int x_dir);
+static void render_row_rgba5551(struct LedCanvas *canvas, const uint8_t *row,
+                                int src_x, int dst_x, int dst_y, int count, int x_dir);
+
+static RowRenderFn row_render_fn = NULL;
 
 static bool init_rgb(int argc, char **argv)
 {
@@ -74,38 +89,25 @@ static bool init_rgb(int argc, char **argv)
 
 static void render(const Red__Frame *frame)
 {
-    const Red__Geometry *fg = frame->geometry;
-    Pixel pixel = { 255, 255, 255 };
+    if (!row_render_fn) {
+        return;
+    }
 
-    for (int ry = blit_src.sy, yo = 0; ry < blit_src.dy; ry++, yo++) {
-        if (ry >= fg->height) {
-            break; // out of bounds
-        }
-        int rry = ry;
-        if (fg->attrs & RED__GEOMETRY__ATTRS__ATTR_ROT180) {
-            rry = fg->height - 1 - ry;
-        }
-        unsigned char *rrow = frame->content.data + rry * fg->pitch;
-        for (int rx = blit_src.sx, xo = 0; rx < blit_src.dx; rx++, xo++) {
-            if (rx >= fg->width) {
-                break; // out of bounds
-            }
-            int wy = blit_dest.sy + yo;
-            int wx = blit_dest.sx + xo;
-            if (wx < screen_width && wy < screen_height) {
-                pixel_unpack(&pixel, fg->pixel_format, rrow, rx);
-                led_canvas_set_pixel(
-                    canvas,
-                    (fg->attrs & RED__GEOMETRY__ATTRS__ATTR_ROT180)
-                        ? vw_origin - wx
-                        : wx,
-                    wy,
-                    pixel.r,
-                    pixel.g,
-                    pixel.b
-                );
-            }
-        }
+    const Red__Geometry *fg = frame->geometry;
+    bool rot180 = fg->attrs & RED__GEOMETRY__ATTRS__ATTR_ROT180;
+    int row_count = blit_src.dy - blit_src.sy;
+    int col_count = blit_src.dx - blit_src.sx;
+
+    // For rot180: vertical flip is handled by rry; horizontal flip uses x_dir=-1
+    // starting from vw_origin - blit_dest.sx so pixel i lands at vw_origin - blit_dest.sx - i
+    int dst_x  = rot180 ? (vw_origin - blit_dest.sx) : blit_dest.sx;
+    int x_dir  = rot180 ? -1 : 1;
+
+    for (int yo = 0; yo < row_count; yo++) {
+        int ry  = blit_src.sy + yo;
+        int rry = rot180 ? (fg->height - 1 - ry) : ry;
+        const uint8_t *row = frame->content.data + rry * fg->pitch;
+        row_render_fn(canvas, row, blit_src.sx, dst_x, blit_dest.sy + yo, col_count, x_dir);
     }
     canvas = led_matrix_swap_on_vsync(matrix, canvas);
 }
@@ -208,8 +210,45 @@ static void inspect_geometry(const Red__Geometry *fg)
         blit_src.sy -= y_delta;
     }
 
+    // Clamp src rect to actual frame dimensions
+    if (blit_src.dx > (int) fg->width) {
+        blit_src.dx = (int) fg->width;
+    }
+    if (blit_src.dy > (int) fg->height) {
+        blit_src.dy = (int) fg->height;
+    }
+    // Clamp dst rect to canvas dimensions
+    int col_count = blit_src.dx - blit_src.sx;
+    int row_count = blit_src.dy - blit_src.sy;
+    if (blit_dest.sx + col_count > screen_width)  {
+        blit_src.dx -= (blit_dest.sx + col_count - screen_width);
+    }
+    if (blit_dest.sy + row_count > screen_height) {
+        blit_src.dy -= (blit_dest.sy + row_count - screen_height);
+    }
+
     if (fg->attrs & RED__GEOMETRY__ATTRS__ATTR_ROT180) {
         vw_origin = blit_dest.dx;
+    }
+
+    // Select format-specific row renderer (no branching in the hot loop)
+    switch (fg->pixel_format) {
+        case RED__GEOMETRY__PIXEL_FORMAT__PF_RGB565:
+            row_render_fn = render_row_rgb565;
+            break;
+        case RED__GEOMETRY__PIXEL_FORMAT__PF_ARGB8888:
+            row_render_fn = render_row_argb8888;
+            break;
+        case RED__GEOMETRY__PIXEL_FORMAT__PF_RGBA8888:
+            row_render_fn = render_row_rgba8888;
+            break;
+        case RED__GEOMETRY__PIXEL_FORMAT__PF_RGBA5551:
+            row_render_fn = render_row_rgba5551;
+            break;
+        default:
+            log_w(LOG_TAG, "Unsupported pixel format: %d\n", fg->pixel_format);
+            row_render_fn = NULL;
+            break;
     }
 
     geometry = *fg;
@@ -220,6 +259,62 @@ static void matrix_clear()
     for (int i = 0; i < 2; i++) {
         led_canvas_clear(canvas);
         canvas = led_matrix_swap_on_vsync(matrix, canvas);
+    }
+}
+
+static void render_row_rgb565(struct LedCanvas *canvas, const uint8_t *row,
+                               int src_x, int dst_x, int dst_y, int count, int x_dir)
+{
+    const uint16_t *p = (const uint16_t *)row + src_x;
+    for (int i = 0; i < count; i++, p++) {
+        uint16_t c = *p;
+        led_canvas_set_pixel(canvas, dst_x + i * x_dir, dst_y,
+            ((c >> 11) & 0x1f) * 255 / 31,
+            ((c >>  5) & 0x3f) * 255 / 63,
+            ( c        & 0x1f) * 255 / 31
+        );
+    }
+}
+
+static void render_row_argb8888(struct LedCanvas *canvas, const uint8_t *row,
+                                 int src_x, int dst_x, int dst_y, int count, int x_dir)
+{
+    const uint32_t *p = (const uint32_t *)row + src_x;
+    for (int i = 0; i < count; i++, p++) {
+        uint32_t c = *p;
+        led_canvas_set_pixel(canvas, dst_x + i * x_dir, dst_y,
+            (c >> 16) & 0xff,
+            (c >>  8) & 0xff,
+             c        & 0xff
+        );
+    }
+}
+
+static void render_row_rgba8888(struct LedCanvas *canvas, const uint8_t *row,
+                                 int src_x, int dst_x, int dst_y, int count, int x_dir)
+{
+    const uint32_t *p = (const uint32_t *)row + src_x;
+    for (int i = 0; i < count; i++, p++) {
+        uint32_t c = *p;
+        led_canvas_set_pixel(canvas, dst_x + i * x_dir, dst_y,
+            (c >> 24) & 0xff,
+            (c >> 16) & 0xff,
+            (c >>  8) & 0xff
+        );
+    }
+}
+
+static void render_row_rgba5551(struct LedCanvas *canvas, const uint8_t *row,
+                                 int src_x, int dst_x, int dst_y, int count, int x_dir)
+{
+    const uint16_t *p = (const uint16_t *)row + src_x;
+    for (int i = 0; i < count; i++, p++) {
+        uint16_t c = *p;
+        led_canvas_set_pixel(canvas, dst_x + i * x_dir, dst_y,
+            ((c >> 11) & 0x1f) * 255 / 31,
+            ((c >>  6) & 0x1f) * 255 / 31,
+            ((c >>  1) & 0x1f) * 255 / 31
+        );
     }
 }
 

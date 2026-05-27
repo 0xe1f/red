@@ -55,6 +55,11 @@ void xm_init(const char *server_url)
         natsOptions_Destroy(opts);
         return;
     }
+    if ((s = natsOptions_SetSendAsap(opts, true)) != NATS_OK) {
+        log_e(LOG_TAG, "Error setting send asap: %s\n", natsStatus_GetText(s));
+        natsOptions_Destroy(opts);
+        return;
+    }
     if ((s = natsOptions_SetURL(opts, server_url)) != NATS_OK) {
         log_e(LOG_TAG, "Error setting NATS server URL: %s\n", natsStatus_GetText(s));
         natsOptions_Destroy(opts);
@@ -85,8 +90,8 @@ void xm_publish_frame(const Red__Geometry *geometry, const unsigned char *conten
     }
 
     // Compress content
-    const int compressed_size = LZ4_compress_default((char *) content, (char *) compressed_data,
-        size, max_compressed_size);
+    const int compressed_size = LZ4_compress_fast((char *) content, (char *) compressed_data,
+        size, max_compressed_size, 4);
 
     // log_i(LOG_TAG, "size: %d => %d\n", size, compressed_size);
 

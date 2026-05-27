@@ -67,6 +67,11 @@ void xm_init(const char *server_url)
         natsOptions_Destroy(opts);
         return;
     }
+    if ((s = natsOptions_SetSendAsap(opts, true)) != NATS_OK) {
+        log_e(LOG_TAG, "Error setting send asap: %s\n", natsStatus_GetText(s));
+        natsOptions_Destroy(opts);
+        return;
+    }
     if ((s = natsOptions_SetURL(opts, server_url)) != NATS_OK) {
         log_e(LOG_TAG, "Error setting NATS server URL: %s\n", natsStatus_GetText(s));
         natsOptions_Destroy(opts);
