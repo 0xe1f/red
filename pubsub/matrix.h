@@ -16,7 +16,7 @@
 #define __MATRIX_H__
 
 #include <stdbool.h>
-#include "geometry.pb-c.h"
+#include "frame.h"
 
 typedef struct {
     short sx;
@@ -35,7 +35,7 @@ bool viewrect_validate(const ViewRect *rect);
 bool viewrect_parse(const char *arg, ViewRect *rect);
 bool viewrect_is_zero(const ViewRect *rect);
 
-void pixel_unpack(Pixel *dest, const Red__Geometry__PixelFormat pixel_format, const unsigned char *src, int offset);
-const char* pixel_format_str(Red__Geometry__PixelFormat pixel_format);
+void pixel_unpack(Pixel *dest, PixelFormat pixel_format, const unsigned char *src, int offset);
+const char* pixel_format_str(PixelFormat pixel_format);
 
 #endif // __MATRIX_H__

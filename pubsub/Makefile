@@ -12,8 +12,6 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 
-GEN_DIR=generated
-PROTO_DIR=proto
 TP_ROOT=3p
 RGB_ROOT=$(TP_ROOT)/rpi-rgb-led-matrix
 LIB7Z_ROOT=$(TP_ROOT)/lib7z
@@ -23,24 +21,20 @@ RGB_LIBDIR=$(RGB_ROOT)/lib
 
 INCLUDE=\
 	-I$(RGB_ROOT)/include \
-	-I$(GEN_DIR) \
-	-I$(TP_ROOT)/arena \
+	-I$(TP_ROOT)/libretro \
 	-I$(MINIZIP_ROOT) \
 	-I$(LIB7Z_ROOT) \
 	-I$(UN7Z_ROOT) \
-	-I$(TP_ROOT)/libretro \
 	`sdl2-config --cflags`
 DEFINE=
 CFLAGS=-Wall -O2
 CXXFLAGS=$(CFLAGS)
-LD_FLAGS=$(LIB) -lnats -lprotobuf-c -llz4
+LD_FLAGS=$(LIB) -lnats -llz4
 LD_SUB_FLAGS=$(LD_FLAGS) -L$(RGB_LIBDIR) -lrgbmatrix
 LD_PUB_FLAGS=$(LD_FLAGS) `sdl2-config --libs` -lz
 SUB_EXE=sub
 PUB_EXE=pub
 
-PROTO_FILES=geometry.proto frame.proto
-PB_OBJECTS=$(patsubst %.proto, %.pb-c.o, $(PROTO_FILES))
 Z7_OBJECTS=$(UN7Z_ROOT)/un7z.o \
 	$(LIB7Z_ROOT)/7zStream.o $(LIB7Z_ROOT)/7zCrc.o $(LIB7Z_ROOT)/7zArcIn.o \
 	$(LIB7Z_ROOT)/7zBuf.o $(LIB7Z_ROOT)/7zDec.o $(LIB7Z_ROOT)/CpuArch.o \
@@ -55,25 +49,16 @@ $(RGB_LIBDIR)/librgbmatrix.a:
 	@echo Building RGB matrix libraries...
 	@cd $(RGB_LIBDIR); $(MAKE)
 
-$(SUB_EXE): $(PB_OBJECTS) \
+$(SUB_EXE): \
 	xm_sub.o log.o matrix.o timing.o sub_args.o \
 	$(SUB_EXE).o $(RGB_LIBDIR)/librgbmatrix.a
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LD_SUB_FLAGS)
 
 $(PUB_EXE): \
-	$(PB_OBJECTS) $(MINIZIP_OBJECTS) $(Z7_OBJECTS) \
+	$(MINIZIP_OBJECTS) $(Z7_OBJECTS) \
 	kv_store.o pub_args.o files.o video.o filter.o input.o audio.o log.o timing.o xm_pub.o \
 	$(PUB_EXE).o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LD_PUB_FLAGS)
-
-%.pb-c.o: $(GEN_DIR)/%.pb-c.c
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(GEN_DIR)/%.pb-c.c: $(PROTO_DIR)/%.proto | $(GEN_DIR)
-	protoc-c -I$(PROTO_DIR) --c_out=$| $(notdir $<)
-
-$(GEN_DIR):
-	mkdir -p $@
 
 %.o: %.c
 	$(CC) $(INCLUDE) $(DEFINE) $(CFLAGS) -c $< -o $@
@@ -82,5 +67,5 @@ $(GEN_DIR):
 	$(CXX) $(INCLUDE) $(DEFINE) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	@rm -rf *.o $(SUB_EXE) $(PUB_EXE) $(GEN_DIR) `find $(TP_ROOT)/ -name *.o`
+	@rm -rf *.o $(SUB_EXE) $(PUB_EXE) `find $(TP_ROOT)/ -name *.o`
 	@cd $(RGB_LIBDIR); $(MAKE) clean

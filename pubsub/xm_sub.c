@@ -12,33 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#define ARENA_IMPLEMENTATION
-
+#include <stdlib.h>
 #include <nats/nats.h>
 #include <lz4.h>
-#include "frame.pb-c.h"
-#include "arena.h"
+#include "frame.h"
 #include "log.h"
 #include "xm_sub.h"
 
 #define LOG_TAG "xm_sub"
 
 static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *msg, void *closure);
-inline static void* allocator_alloc(void *allocator_data, size_t size);
-inline static void allocator_free(void *allocator_data, void *pointer);
 
 static const char *subject = "red.frames";
 
-static natsConnection *conn = NULL;
-static natsSubscription *sub = NULL;
-static xm_callback_t frame_callback = NULL;
-static Arena protobuf_arena = {0};
-static Arena compress_arena = {0};
-static ProtobufCAllocator allocator = {
-    .alloc = allocator_alloc,
-    .free = allocator_free,
-    .allocator_data = &protobuf_arena
-};
+static natsConnection  *conn           = NULL;
+static natsSubscription *sub_handle    = NULL;
+static xm_callback_t    frame_callback = NULL;
+static uint8_t         *decomp_buf     = NULL;
+static size_t           decomp_buf_size = 0;
 
 void xm_init(const char *server_url)
 {
@@ -86,8 +77,8 @@ void xm_init(const char *server_url)
         return;
     }
 
-    // Subscribe to a subject with a message handler
-    s = natsConnection_Subscribe(&sub, conn, subject, message_handler, NULL);
+    // Subscribe to frame subject
+    s = natsConnection_Subscribe(&sub_handle, conn, subject, message_handler, NULL);
     if (s != NATS_OK) {
         log_e(LOG_TAG, "Error subscribing to subject '%s': %s\n",
             subject, natsStatus_GetText(s));
@@ -105,62 +96,65 @@ void xm_set_callback(xm_callback_t callback)
 
 void xm_cleanup()
 {
-    if (sub) {
-        natsSubscription_Destroy(sub);
-        sub = NULL;
+    if (sub_handle) {
+        natsSubscription_Destroy(sub_handle);
+        sub_handle = NULL;
     }
     if (conn) {
         natsConnection_Destroy(conn);
         conn = NULL;
     }
-    arena_free(&protobuf_arena);
-    arena_free(&compress_arena);
+    free(decomp_buf);
+    decomp_buf = NULL;
+    decomp_buf_size = 0;
 }
 
 static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *msg, void *closure)
 {
-    // Receive payload
-    const uint8_t *data = (const uint8_t *) natsMsg_GetData(msg);
-    size_t len = natsMsg_GetDataLength(msg);
+    const uint8_t *data = (const uint8_t *)natsMsg_GetData(msg);
+    int len = natsMsg_GetDataLength(msg);
 
-    // Unpack message
-    Red__Frame *frame = red__frame__unpack(&allocator, len, data);
-    if (frame == NULL) {
-        log_e(LOG_TAG, "Failed to unpack message\n");
-    } else {
-        Red__Geometry *fg = frame->geometry;
-
-        // Decompress content
-        int max_decomp_size = fg->pitch * fg->height;
-        arena_reset(&compress_arena);
-        char *decomp_buff = arena_alloc(&compress_arena, max_decomp_size);
-        int decomp_size = LZ4_decompress_safe((char *) frame->content.data, decomp_buff, frame->content.len, max_decomp_size);
-
-        // log_i(LOG_TAG, "size: %d => %d\n", frame->content.len, decomp_size);
-
-        // Replace compressed content with decompressed content in the frame
-        frame->content.data = (u_int8_t *) decomp_buff;
-        frame->content.len = decomp_size;
-
-        if (frame_callback) {
-            // Invoke the callback with the unpacked frame
-            frame_callback(frame);
-        }
-
-        // Free the unpacked frame
-        red__frame__free_unpacked(frame, &allocator);
+    if (len < (int)sizeof(FrameHeader)) {
+        log_e(LOG_TAG, "Message too short: %d bytes\n", len);
+        natsMsg_Destroy(msg);
+        return;
     }
 
-    // Destroy the NATS message object
+    // Read header directly from message buffer (zero-copy)
+    const FrameHeader *hdr = (const FrameHeader *)data;
+    size_t decomp_size = (size_t)hdr->pitch * hdr->height;
+
+    // Grow decompression buffer only when needed (rare: resolution change)
+    if (decomp_size > decomp_buf_size) {
+        free(decomp_buf);
+        decomp_buf = malloc(decomp_size);
+        if (!decomp_buf) {
+            log_e(LOG_TAG, "Failed to allocate decompression buffer\n");
+            decomp_buf_size = 0;
+            natsMsg_Destroy(msg);
+            return;
+        }
+        decomp_buf_size = decomp_size;
+    }
+
+    // Decompress content
+    const char *compressed = (const char *)(data + sizeof(FrameHeader));
+    int compressed_len = len - (int)sizeof(FrameHeader);
+    int result = LZ4_decompress_safe(compressed, (char *)decomp_buf, compressed_len, decomp_size);
+    if (result < 0) {
+        log_e(LOG_TAG, "LZ4 decompression failed: %d\n", result);
+        natsMsg_Destroy(msg);
+        return;
+    }
+
+    if (frame_callback) {
+        Frame frame = {
+            .header       = *hdr,
+            .content      = decomp_buf,
+            .content_size = (size_t)result,
+        };
+        frame_callback(&frame);
+    }
+
     natsMsg_Destroy(msg);
-}
-
-inline static void* allocator_alloc(void *allocator_data, size_t size)
-{
-    return arena_alloc((Arena *) allocator_data, size);
-}
-
-inline static void allocator_free(void *allocator_data, void *pointer)
-{
-    arena_reset((Arena *) allocator_data);
 }

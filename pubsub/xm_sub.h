@@ -15,11 +15,7 @@
 #ifndef __XM_SUB_H__
 #define __XM_SUB_H__
 
-#include <stdbool.h>
-#include <stddef.h>
-#include "frame.pb-c.h"
-
-typedef void (*xm_callback_t)(const Red__Frame *);
+#include "frame.h"
 
 void xm_init(const char *server_url);
 void xm_set_callback(xm_callback_t callback);

@@ -12,20 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#define ARENA_IMPLEMENTATION
-
+#include <stdlib.h>
+#include <string.h>
 #include <nats/nats.h>
 #include <lz4.h>
-#include "frame.pb-c.h"
+#include "frame.h"
 #include "log.h"
-#include "arena.h"
 #include "xm_pub.h"
 
 #define LOG_TAG "xm_pub"
 
 static natsConnection *conn = NULL;
-static Arena nats_arena = {0};
-static Arena compress_arena = {0};
+static uint8_t *msg_buf      = NULL;
+static size_t   msg_buf_size = 0;
 
 static const char *subject = "red.frames";
 
@@ -78,41 +77,36 @@ void xm_init(const char *server_url)
     log_i(LOG_TAG, "Will publish frames to '%s'\n", subject);
 }
 
-void xm_publish_frame(const Red__Geometry *geometry, const unsigned char *content, size_t size)
+void xm_publish_frame(const FrameHeader *geometry, const unsigned char *content, size_t size)
 {
-    // Prepare space to compress content
-    const int max_compressed_size = LZ4_compressBound(size);
-    arena_reset(&compress_arena);
-    u_int8_t *compressed_data = arena_alloc(&compress_arena, max_compressed_size);
-    if (!compressed_data) {
-        log_v(LOG_TAG, "Failed to get compression buffer\n");
-        return;
+    // Ensure message buffer is large enough for header + worst-case compressed content
+    int max_compressed = LZ4_compressBound(size);
+    size_t needed = sizeof(FrameHeader) + max_compressed;
+    if (needed > msg_buf_size) {
+        free(msg_buf);
+        msg_buf = malloc(needed);
+        if (!msg_buf) {
+            log_e(LOG_TAG, "Failed to allocate message buffer\n");
+            msg_buf_size = 0;
+            return;
+        }
+        msg_buf_size = needed;
     }
 
-    // Compress content
-    const int compressed_size = LZ4_compress_fast((char *) content, (char *) compressed_data,
-        size, max_compressed_size, 4);
-
-    // log_i(LOG_TAG, "size: %d => %d\n", size, compressed_size);
-
-    // Set up frame
-    Red__Frame fm = RED__FRAME__INIT;
-    fm.content.data = compressed_data;
-    fm.content.len = compressed_size;
-    fm.geometry = (Red__Geometry *) geometry;
-
-    // Pack the message
-    size_t len = red__frame__get_packed_size(&fm);
-    arena_reset(&nats_arena);
-    uint8_t *buf = arena_alloc(&nats_arena, len);
-    if (!buf) {
-        log_v(LOG_TAG, "Failed to get NATS buffer\n");
+    // Write header, then compress pixel data directly into the remainder
+    memcpy(msg_buf, geometry, sizeof(FrameHeader));
+    int compressed_size = LZ4_compress_fast(
+        (const char *)content,
+        (char *)msg_buf + sizeof(FrameHeader),
+        size, max_compressed, 4
+    );
+    if (compressed_size <= 0) {
+        log_e(LOG_TAG, "LZ4 compression failed\n");
         return;
     }
-    red__frame__pack(&fm, buf);
 
     // Publish to NATS
-    natsStatus s = natsConnection_Publish(conn, subject, buf, len);
+    natsStatus s = natsConnection_Publish(conn, subject, msg_buf, sizeof(FrameHeader) + compressed_size);
     if (s != NATS_OK) {
         log_e(LOG_TAG, "Error publishing to '%s': %s\n", subject, natsStatus_GetText(s));
     }
@@ -124,6 +118,7 @@ void xm_cleanup()
         natsConnection_Destroy(conn);
         conn = NULL;
     }
-    arena_free(&nats_arena);
-    arena_free(&compress_arena);
+    free(msg_buf);
+    msg_buf = NULL;
+    msg_buf_size = 0;
 }

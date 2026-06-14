@@ -40,7 +40,7 @@ static struct RGBLedMatrix *matrix = NULL;
 static struct LedCanvas *canvas = NULL;
 static ViewRect blit_src;
 static ViewRect blit_dest;
-static Red__Geometry geometry;
+static FrameHeader geometry;
 static double last_frame_time = 0;
 
 // x_dir is +1 for normal left-to-right, -1 for horizontally mirrored (rot180)
@@ -48,17 +48,17 @@ typedef void (*RowRenderFn)(struct LedCanvas *canvas, const uint8_t *row,
                             int src_x, int dst_x, int dst_y, int count, int x_dir);
 
 static bool init_rgb(int argc, char **argv);
-static void render(const Red__Frame *frame);
+static void render(const Frame *frame);
 static inline void log_fps();
 static void run_as_daemon();
 static void sigint_callback(int s);
-static void xm_callback(const Red__Frame *frame);
-static void inspect_geometry(const Red__Geometry *fg);
+static void xm_callback(const Frame *frame);
+static void inspect_geometry(const FrameHeader *hdr);
 static void matrix_clear();
 static void clean_up();
 
 static void render_row_rgb565(struct LedCanvas *canvas, const uint8_t *row,
-                               int src_x, int dst_x, int dst_y, int count, int x_dir);
+                              int src_x, int dst_x, int dst_y, int count, int x_dir);
 static void render_row_argb8888(struct LedCanvas *canvas, const uint8_t *row,
                                 int src_x, int dst_x, int dst_y, int count, int x_dir);
 static void render_row_rgba8888(struct LedCanvas *canvas, const uint8_t *row,
@@ -87,26 +87,26 @@ static bool init_rgb(int argc, char **argv)
     return true;
 }
 
-static void render(const Red__Frame *frame)
+static void render(const Frame *frame)
 {
     if (!row_render_fn) {
         return;
     }
 
-    const Red__Geometry *fg = frame->geometry;
-    bool rot180 = fg->attrs & RED__GEOMETRY__ATTRS__ATTR_ROT180;
+    const FrameHeader *hdr = &frame->header;
+    bool rot180 = hdr->attrs & ATTR_ROT180;
     int row_count = blit_src.dy - blit_src.sy;
     int col_count = blit_src.dx - blit_src.sx;
 
     // For rot180: vertical flip is handled by rry; horizontal flip uses x_dir=-1
     // starting from vw_origin - blit_dest.sx so pixel i lands at vw_origin - blit_dest.sx - i
-    int dst_x  = rot180 ? (vw_origin - blit_dest.sx) : blit_dest.sx;
-    int x_dir  = rot180 ? -1 : 1;
+    int dst_x = rot180 ? (vw_origin - blit_dest.sx) : blit_dest.sx;
+    int x_dir = rot180 ? -1 : 1;
 
     for (int yo = 0; yo < row_count; yo++) {
         int ry  = blit_src.sy + yo;
-        int rry = rot180 ? (fg->height - 1 - ry) : ry;
-        const uint8_t *row = frame->content.data + rry * fg->pitch;
+        int rry = rot180 ? (hdr->height - 1 - ry) : ry;
+        const uint8_t *row = frame->content + rry * hdr->pitch;
         row_render_fn(canvas, row, blit_src.sx, dst_x, blit_dest.sy + yo, col_count, x_dir);
     }
     canvas = led_matrix_swap_on_vsync(matrix, canvas);
@@ -155,30 +155,30 @@ static void sigint_callback(int s)
     exit_main_loop = true;
 }
 
-static void xm_callback(const Red__Frame *frame)
+static void xm_callback(const Frame *frame)
 {
     last_frame_time = micros();
     if (args.show_fps) {
         log_fps();
     }
-    inspect_geometry(frame->geometry);
+    inspect_geometry(&frame->header);
     render(frame);
 }
 
-static void inspect_geometry(const Red__Geometry *fg)
+static void inspect_geometry(const FrameHeader *hdr)
 {
-    if (fg->width == geometry.width &&
-        fg->height == geometry.height &&
-        fg->pixel_format == geometry.pixel_format &&
-        fg->attrs == geometry.attrs
+    if (hdr->width == geometry.width &&
+        hdr->height == geometry.height &&
+        hdr->pixel_format == geometry.pixel_format &&
+        hdr->attrs == geometry.attrs
     ) {
         return; // same geometry, no need to recalculate blit rectangles
     }
 
     log_d(LOG_TAG, "Received frame with geometry: %dx%d (pitch: %d), %s, attrs: 0x%02x\n",
-        fg->width, fg->height, fg->pitch,
-        pixel_format_str(fg->pixel_format),
-        fg->attrs);
+        hdr->width, hdr->height, hdr->pitch,
+        pixel_format_str(hdr->pixel_format),
+        hdr->attrs);
 
     matrix_clear();
 
@@ -186,11 +186,11 @@ static void inspect_geometry(const Red__Geometry *fg)
     blit_dest = args.dest;
 
     // Center content
-    int x_delta = (args.content.dx - fg->width) / 2;
+    int x_delta = (args.content.dx - hdr->width) / 2;
     if (blit_src.dx - x_delta < 0) {
         x_delta -= blit_src.dx - x_delta;
     }
-    int y_delta = (args.content.dy - fg->height) / 2;
+    int y_delta = (args.content.dy - hdr->height) / 2;
     if (blit_src.dy - y_delta < 0) {
         y_delta -= blit_src.dy - y_delta;
     }
@@ -211,47 +211,47 @@ static void inspect_geometry(const Red__Geometry *fg)
     }
 
     // Clamp src rect to actual frame dimensions
-    if (blit_src.dx > (int) fg->width) {
-        blit_src.dx = (int) fg->width;
+    if (blit_src.dx > (int)hdr->width) {
+        blit_src.dx = (int)hdr->width;
     }
-    if (blit_src.dy > (int) fg->height) {
-        blit_src.dy = (int) fg->height;
+    if (blit_src.dy > (int)hdr->height) {
+        blit_src.dy = (int)hdr->height;
     }
     // Clamp dst rect to canvas dimensions
     int col_count = blit_src.dx - blit_src.sx;
     int row_count = blit_src.dy - blit_src.sy;
-    if (blit_dest.sx + col_count > screen_width)  {
+    if (blit_dest.sx + col_count > screen_width) {
         blit_src.dx -= (blit_dest.sx + col_count - screen_width);
     }
     if (blit_dest.sy + row_count > screen_height) {
         blit_src.dy -= (blit_dest.sy + row_count - screen_height);
     }
 
-    if (fg->attrs & RED__GEOMETRY__ATTRS__ATTR_ROT180) {
+    if (hdr->attrs & ATTR_ROT180) {
         vw_origin = blit_dest.dx;
     }
 
     // Select format-specific row renderer (no branching in the hot loop)
-    switch (fg->pixel_format) {
-        case RED__GEOMETRY__PIXEL_FORMAT__PF_RGB565:
+    switch ((PixelFormat)hdr->pixel_format) {
+        case PF_RGB565:
             row_render_fn = render_row_rgb565;
             break;
-        case RED__GEOMETRY__PIXEL_FORMAT__PF_ARGB8888:
+        case PF_ARGB8888:
             row_render_fn = render_row_argb8888;
             break;
-        case RED__GEOMETRY__PIXEL_FORMAT__PF_RGBA8888:
+        case PF_RGBA8888:
             row_render_fn = render_row_rgba8888;
             break;
-        case RED__GEOMETRY__PIXEL_FORMAT__PF_RGBA5551:
+        case PF_RGBA5551:
             row_render_fn = render_row_rgba5551;
             break;
         default:
-            log_w(LOG_TAG, "Unsupported pixel format: %d\n", fg->pixel_format);
+            log_w(LOG_TAG, "Unsupported pixel format: %d\n", hdr->pixel_format);
             row_render_fn = NULL;
             break;
     }
 
-    geometry = *fg;
+    geometry = *hdr;
 }
 
 static void matrix_clear()

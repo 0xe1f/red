@@ -15,7 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "geometry.pb-c.h"
+#include "frame.h"
 #include "libretro.h"
 #include "log.h"
 #include "video.h"
@@ -36,13 +36,13 @@
 #define RGB_ARGB8888(r,g,b) (0xff<<24)|(((r)&0xff)<<16)|(((g)&0xff)<<8)|(((b)&0xff))
 
 #define PIXEL_FORMAT_BPP(pf) \
-    ((pf) == RED__GEOMETRY__PIXEL_FORMAT__PF_RGBA8888 || (pf) == RED__GEOMETRY__PIXEL_FORMAT__PF_ARGB8888 ? 4 : \
-     (pf) == RED__GEOMETRY__PIXEL_FORMAT__PF_RGB565 || (pf) == RED__GEOMETRY__PIXEL_FORMAT__PF_RGBA5551 ? 2 : 0)
+    ((pf) == PF_RGBA8888 || (pf) == PF_ARGB8888 ? 4 : \
+     (pf) == PF_RGB565   || (pf) == PF_RGBA5551  ? 2 : 0)
 
 extern VideoBuffer video_buffer;
 extern struct retro_system_av_info av_info;
 extern Rotation rotation;
-extern Red__Geometry__PixelFormat pixel_format;
+extern PixelFormat pixel_format;
 
 static void blit_plain(const void *data, unsigned width, unsigned height, size_t pitch);
 static void blit_half(const void *data, unsigned width, unsigned height, size_t pitch);
@@ -261,7 +261,7 @@ static void blit_scale(
     int offset_x = MAX((video_buffer.width - (int) dest_width) / 2, 0);
 
     int bpp = video_buffer.bpp;
-    bool is_argb = (pixel_format == RED__GEOMETRY__PIXEL_FORMAT__PF_ARGB8888);
+    bool is_argb = (pixel_format == PF_ARGB8888);
 
     // Fixed-point 16.16 step sizes mapping dest [0, dest-1] onto src [0, src-1]
     uint32_t step_x = (width  > 1) ? ((width  - 1) << 16) / (dest_width  > 1 ? dest_width  - 1 : 1) : 0;

@@ -15,12 +15,11 @@
 #ifndef __XM_PUB_H__
 #define __XM_PUB_H__
 
-#include <stdbool.h>
 #include <stddef.h>
-#include "geometry.pb-c.h"
+#include "frame.h"
 
 void xm_init(const char *server_url);
-void xm_publish_frame(const Red__Geometry *geometry, const unsigned char *content, size_t size);
+void xm_publish_frame(const FrameHeader *geometry, const unsigned char *content, size_t size);
 void xm_cleanup();
 
 #endif // __XM_PUB_H__

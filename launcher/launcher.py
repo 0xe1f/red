@@ -32,10 +32,14 @@ import flask_socketio
 import generated.requests_pb2 as requests
 import http
 import importlib
+import io
 import logging
+import lz4.block
 import nats
 import re
+import struct
 import subprocess
+from PIL import Image
 
 app = flask.Flask(__name__)
 
@@ -300,6 +304,90 @@ def sync():
     return {
         'orientation': orientation,
     }
+
+FRAME_SUBJECT = "red.frames"
+# Wire format: FrameHeader — pitch(u16), width(u16), height(u16), pixel_format(u8), attrs(u8)
+FRAME_HEADER_FMT  = "<HHHBB"
+FRAME_HEADER_SIZE = struct.calcsize(FRAME_HEADER_FMT)  # 8 bytes
+
+PF_RGB565   = 1
+PF_RGBA8888 = 2
+PF_RGBA5551 = 3
+PF_ARGB8888 = 4
+
+
+@app.route('/snapshot')
+@flask_login.login_required
+def snapshot():
+    try:
+        raw = asyncio.run(grab_snapshot_async())
+    except asyncio.TimeoutError:
+        return {
+            'status': 'ERR',
+            'message': 'No frame available (publisher not running?)',
+        }, http.HTTPStatus.SERVICE_UNAVAILABLE
+    except Exception as e:
+        logging.error(f"Snapshot failed: {e}")
+        return {
+            'status': 'ERR',
+            'message': 'Failed to capture snapshot',
+        }, http.HTTPStatus.INTERNAL_SERVER_ERROR
+
+    pitch, width, height, pixel_format, attrs = struct.unpack(FRAME_HEADER_FMT, raw[:FRAME_HEADER_SIZE])
+    pixels = lz4.block.decompress(raw[FRAME_HEADER_SIZE:], uncompressed_size=pitch * height)
+    img = decode_frame(pixels, width, height, pitch, pixel_format)
+
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return flask.send_file(buf, mimetype='image/png', download_name='snapshot.png')
+
+
+async def grab_snapshot_async():
+    nc = await nats.connect(konfig.game_server['nats_url'])
+    loop = asyncio.get_event_loop()
+    fut = loop.create_future()
+
+    async def handler(msg):
+        if not fut.done():
+            fut.set_result(msg.data)
+
+    sub = await nc.subscribe(FRAME_SUBJECT, cb=handler)
+    try:
+        return await asyncio.wait_for(fut, timeout=2.0)
+    finally:
+        await sub.unsubscribe()
+        await nc.drain()
+
+
+def decode_frame(pixels, width, height, pitch, pixel_format):
+    if pixel_format == PF_ARGB8888:
+        # XRGB8888 in little-endian memory = [B, G, R, X] bytes per pixel
+        return Image.frombuffer('RGB', (width, height), pixels, 'raw', 'BGRX', pitch, 1)
+    elif pixel_format == PF_RGBA8888:
+        return Image.frombuffer('RGB', (width, height), pixels, 'raw', 'RGBX', pitch, 1)
+    elif pixel_format == PF_RGB565:
+        out = bytearray(width * height * 3)
+        for y in range(height):
+            for x in range(width):
+                c, = struct.unpack_from('<H', pixels, y * pitch + x * 2)
+                i = (y * width + x) * 3
+                out[i]   = ((c >> 11) & 0x1F) * 255 // 31
+                out[i+1] = ((c >>  5) & 0x3F) * 255 // 63
+                out[i+2] = ( c        & 0x1F) * 255 // 31
+        return Image.frombytes('RGB', (width, height), bytes(out))
+    elif pixel_format == PF_RGBA5551:
+        out = bytearray(width * height * 3)
+        for y in range(height):
+            for x in range(width):
+                c, = struct.unpack_from('<H', pixels, y * pitch + x * 2)
+                i = (y * width + x) * 3
+                out[i]   = ((c >> 11) & 0x1F) * 255 // 31
+                out[i+1] = ((c >>  6) & 0x1F) * 255 // 31
+                out[i+2] = ((c >>  1) & 0x1F) * 255 // 31
+        return Image.frombytes('RGB', (width, height), bytes(out))
+    raise ValueError(f"Unsupported pixel format: {pixel_format}")
+
 
 @app.before_request
 def check_configs_for_changes():
