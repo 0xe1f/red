@@ -19,6 +19,7 @@
 #include "video.h"
 #include "input.h"
 #include "log.h"
+#include "filter.h"
 
 typedef struct {
     const char *server_url;
@@ -39,6 +40,7 @@ typedef struct {
     KvStore input_configs;
     const char *tag;
     bool chatty_core;
+    FilterOptions filter;
 } ArgsOptions;
 
 bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_store);

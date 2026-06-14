@@ -29,6 +29,7 @@
 #include "log.h"
 #include "xm_pub.h"
 #include "timing.h"
+#include "filter.h"
 
 static void *solib = NULL;
 
@@ -157,6 +158,10 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
     const unsigned char *out;
     size_t out_size;
     blit(args.scale_mode, data, width, height, pitch, &out, &out_size);
+
+    if (video_buffer.data) {
+        filter_apply(&args.filter, &video_buffer);
+    }
 
     xm_publish_frame(&geometry, out, out_size);
 }
@@ -503,6 +508,7 @@ static bool callback_environment_set(unsigned cmd, void *data)
 static void clean_up()
 {
     xm_cleanup();
+    filter_free();
     dlclose(solib);
     free(video_buffer.data);
     video_buffer.data = NULL;

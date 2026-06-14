@@ -39,6 +39,8 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
     opts->log_overwrite = false;
     opts->background = false;
     opts->show_fps = false;
+    opts->filter.brightness = 1.0f;
+    opts->filter.phosphor = 0.0f;
     char temp[1024];
     for (i = 1, arg = argv + 1; i < argc; i++, arg++) {
         if (strcmp(*arg, "--help") == 0 || strcmp(*arg, "-h") == 0) {
@@ -208,6 +210,26 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
             opts->tag = *(++arg);
         } else if (strcmp(*arg, "--chatty-core") == 0 || strcmp(*arg, "-cc") == 0) {
             opts->chatty_core = true;
+        } else if (strcmp(*arg, "--filter-brightness") == 0) {
+            if (++i >= argc) {
+                log_e(LOG_TAG, "Missing argument for %s\n", *arg);
+                return false;
+            }
+            opts->filter.brightness = (float) atof(*(++arg));
+            if (opts->filter.brightness < 0.0f || opts->filter.brightness > 1.0f) {
+                log_e(LOG_TAG, "--filter-brightness must be in [0.0, 1.0]\n");
+                return false;
+            }
+        } else if (strcmp(*arg, "--filter-phosphor") == 0) {
+            if (++i >= argc) {
+                log_e(LOG_TAG, "Missing argument for %s\n", *arg);
+                return false;
+            }
+            opts->filter.phosphor = (float) atof(*(++arg));
+            if (opts->filter.phosphor < 0.0f || opts->filter.phosphor >= 1.0f) {
+                log_e(LOG_TAG, "--filter-phosphor must be in [0.0, 1.0)\n");
+                return false;
+            }
         } else if (**arg == '-') {
             log_e(LOG_TAG, "Unrecognized switch: %s\n", *arg);
             return false;
