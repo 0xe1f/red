@@ -43,3 +43,6 @@
 [submodule "cores/mame2003"]
 	path = cores/mame2003
 	url = https://github.com/libretro/mame2003-libretro.git
+[submodule "cores/beetle-psx-libretro"]
+	path = cores/beetle-psx-libretro
+	url = https://github.com/libretro/beetle-psx-libretro.git
