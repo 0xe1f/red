@@ -82,6 +82,8 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_stor
                 opts->scale_mode = SCALE_MODE_FIT;
             } else if (strcmp(value, "half") == 0) {
                 opts->scale_mode = SCALE_MODE_HALF;
+            } else if (strcmp(value, "upscale") == 0) {
+                opts->scale_mode = SCALE_MODE_UPSCALE;
             } else if (strcmp(value, "none") == 0) {
                 opts->scale_mode = SCALE_MODE_NONE;
             } else {

@@ -31,7 +31,8 @@ typedef enum {
     SCALE_MODE_NONE            = 0,
     SCALE_MODE_SHORTESTXASPECT = 1,
     SCALE_MODE_FIT             = 2,
-    SCALE_MODE_HALF            = 3
+    SCALE_MODE_HALF            = 3,
+    SCALE_MODE_UPSCALE         = 4
 } ScaleMode;
 
 typedef struct {

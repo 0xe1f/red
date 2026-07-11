@@ -132,6 +132,29 @@ void blit(
             }
             break;
         }
+        case SCALE_MODE_UPSCALE: {
+            unsigned int dest_width = width;
+            unsigned int dest_height = height;
+            bool is_portrait = IS_PORTRAIT(rotation);
+
+            if ((width < video_buffer.width && !is_portrait)
+                || (height < video_buffer.height && is_portrait)
+            ) {
+                dest_width = video_buffer.width;
+                dest_height = (int)(dest_width / av_info.geometry.aspect_ratio);
+            } else if ((height < video_buffer.height && !is_portrait)
+                || (width < video_buffer.width && is_portrait)
+            ) {
+                dest_height = video_buffer.height;
+                dest_width = (int)(dest_height * av_info.geometry.aspect_ratio);
+            }
+            if (dest_width != width || dest_height != height) {
+                blit_scale(data, width, height, pitch, dest_width, dest_height);
+            } else {
+                blit_plain(data, width, height, pitch);
+            }
+            break;
+        }
         case SCALE_MODE_NONE:
         default:
             blit_plain(data, width, height, pitch);
