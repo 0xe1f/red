@@ -46,3 +46,6 @@
 [submodule "cores/beetle-psx-libretro"]
 	path = cores/beetle-psx-libretro
 	url = https://github.com/libretro/beetle-psx-libretro.git
+[submodule "cores/gpsp"]
+	path = cores/gpsp
+	url = https://github.com/libretro/gpsp.git

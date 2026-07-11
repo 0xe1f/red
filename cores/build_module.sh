@@ -53,8 +53,9 @@ try_custom_build
 try_libretro_build `find . -type f -name "Makefile.libretro"`
 # See if there's a Makefile in a libretro subdirectory and build that
 try_libretro_build `find . -path '*/libretro/*' -name "Makefile" -type f | head -1`
-# Finally, see if there's a Makefile anywhere and build that
-try_libretro_build `find . -name "Makefile" -type f | head -1`
+# Finally, see if there's a Makefile anywhere and build that -
+# favor the one closest to the root
+try_libretro_build `find . -name "Makefile" -type f -printf "%d %p\n" | sort -n | awk '{ print $2 }' | head -1`
 
 echo "Unrecognized or unbuildable core: $MODULE_NAME" >&2
 exit 1
