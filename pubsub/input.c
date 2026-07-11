@@ -335,6 +335,7 @@ struct KeyboardState {
     bool retro_keycode_states[RETROK_LAST];
 };
 
+static void input_reset_inputs();
 static void input_reset_events();
 static int compare_input_descriptor_by_name(const void *a, const void *b);
 static void setup_joypad(struct JoypadDevice *device, SDL_Joystick *joystick);
@@ -375,6 +376,7 @@ void input_init()
     SDL_InitSubSystem(SDL_INIT_JOYSTICK);
     SDL_JoystickEventState(SDL_IGNORE);
 
+    input_reset_inputs();
     input_reset_events();
 }
 
@@ -513,6 +515,14 @@ bool input_defer_events(const char *spec)
 
     free(keycode_map_by_name);
     return success;
+}
+
+static void input_reset_inputs()
+{
+    for (int joy = 0; joy < MAX_DEVICES; joy++) {
+        struct JoypadState *state = &joypad_states[joy];
+        memset(state->input_ids, 0, sizeof(state->input_ids));
+    }
 }
 
 static void input_reset_events()
