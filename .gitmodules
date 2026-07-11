@@ -49,3 +49,6 @@
 [submodule "cores/gpsp"]
 	path = cores/gpsp
 	url = https://github.com/libretro/gpsp.git
+[submodule "cores/pcsx_rearmed"]
+	path = cores/pcsx_rearmed
+	url = https://github.com/notaz/pcsx_rearmed.git
