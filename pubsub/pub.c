@@ -383,6 +383,10 @@ static bool callback_environment_set(unsigned cmd, void *data)
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE\n");
         // struct retro_disk_control_callback *disk_interface = (struct retro_disk_control_callback *)data;
         break;
+    case RETRO_ENVIRONMENT_SET_FASTFORWARDING_OVERRIDE:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_FASTFORWARDING_OVERRIDE\n");
+        // const struct retro_fastforwarding_override *fastforwarding = (const struct retro_fastforwarding_override *)data;
+        return false;
     case RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK\n");
         // struct retro_frame_time_callback *frame_time = (struct retro_frame_time_callback *)data;
@@ -418,11 +422,19 @@ static bool callback_environment_set(unsigned cmd, void *data)
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_MEMORY_MAPS\n");
         // const struct retro_memory_map *maps = (struct retro_memory_map *)data;
         break;
+    case RETRO_ENVIRONMENT_SET_MESSAGE_EXT:
+        const struct retro_message_ext *message_ext = (const struct retro_message_ext *)data;
+        log_i(LOG_TAG, "RETRO_ENVIRONMENT_SET_MESSAGE_EXT: %s\n", message_ext->msg);
+        break;
     case RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY\n");
         // FIXME
         // unsigned latency = *(unsigned *)data;
         return false;
+    case RETRO_ENVIRONMENT_SET_NETPACKET_INTERFACE:
+        log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_NETPACKET_INTERFACE\n");
+        // const struct retro_netpacket_interface *netpacket_interface = (const struct retro_netpacket_interface *)data;
+        break;
     case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL: %d\n", *(unsigned *)data);
         break;

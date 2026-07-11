@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include "unzip.h"
 #include "un7z.h"
 #include "libretro.h"
@@ -30,6 +31,7 @@ static const char *system_path_name = "bios";
 static const char *save_path_name = "save";
 static char system_path[1024];
 static char save_path[1024];
+static char extracted_tempfile[1024] = {0};
 static const char* get_filename(const char *path, bool include_ext);
 
 extern struct retro_system_info system_info;
@@ -92,6 +94,7 @@ static bool load_zip(const char *path)
     static struct retro_game_info_ext info_local_ext;
     info_local = (struct retro_game_info){ 0 };
     info_local_ext = (struct retro_game_info_ext){ 0 };
+    extracted_tempfile[0] = '\0';
 
     unzFile fd = unzOpen(path);
     if (!fd) {
@@ -147,20 +150,56 @@ static bool load_zip(const char *path)
                             strncat(archived_ext, "", sizeof(archived_ext) - 1);
                         }
 
-                        info_local = (struct retro_game_info){ path, data, size, NULL };
-                        info_local_ext = (struct retro_game_info_ext){
-                            /* full_path */ NULL,
-                            /* archive_path */ path,
-                            /* archive_file */ archived_path,
-                            /* dir */ dir,
-                            /* name */ archived_filename,
-                            /* ext */ archived_ext,
-                            /* meta */ NULL,
-                            /* data */ data,
-                            /* size */ size,
-                            /* file_in_archive */ true,
-                            /* persistent_data */ true
-                        };
+                        if (system_info.need_fullpath) {
+                            // Core needs a real file path - extract to a temp file
+                            snprintf(extracted_tempfile, sizeof(extracted_tempfile),
+                                     "%s/rom_XXXXXX", save_path);
+                            int tmp_fd = mkstemp(extracted_tempfile);
+                            FILE *tf = tmp_fd != -1 ? fdopen(tmp_fd, "wb") : NULL;
+                            if (!tf) {
+                                log_e(LOG_TAG, "Failed to create temp file in %s\n", save_path);
+                                if (tmp_fd != -1) { close(tmp_fd); unlink(extracted_tempfile); }
+                                extracted_tempfile[0] = '\0';
+                                free(data);
+                                data = NULL;
+                                unzCloseCurrentFile(fd);
+                                break;
+                            }
+                            fwrite(data, 1, size, tf);
+                            fclose(tf);
+                            free(data);
+                            data = NULL;
+                            size = 0;
+                            info_local = (struct retro_game_info){ extracted_tempfile, NULL, 0, NULL };
+                            info_local_ext = (struct retro_game_info_ext){
+                                /* full_path */ extracted_tempfile,
+                                /* archive_path */ path,
+                                /* archive_file */ archived_path,
+                                /* dir */ dir,
+                                /* name */ archived_filename,
+                                /* ext */ archived_ext,
+                                /* meta */ NULL,
+                                /* data */ NULL,
+                                /* size */ 0,
+                                /* file_in_archive */ true,
+                                /* persistent_data */ true
+                            };
+                        } else {
+                            info_local = (struct retro_game_info){ path, data, size, NULL };
+                            info_local_ext = (struct retro_game_info_ext){
+                                /* full_path */ NULL,
+                                /* archive_path */ path,
+                                /* archive_file */ archived_path,
+                                /* dir */ dir,
+                                /* name */ archived_filename,
+                                /* ext */ archived_ext,
+                                /* meta */ NULL,
+                                /* data */ data,
+                                /* size */ size,
+                                /* file_in_archive */ true,
+                                /* persistent_data */ true
+                            };
+                        }
 
                         unzCloseCurrentFile(fd);
                         break;
@@ -175,7 +214,7 @@ static bool load_zip(const char *path)
     }
     unzClose(fd);
 
-    if (!info_local.data) {
+    if (system_info.need_fullpath ? (extracted_tempfile[0] == '\0') : !info_local.data) {
         log_w(LOG_TAG, "Nothing loaded from archive: %s\n", path);
         return false;
     }
@@ -192,6 +231,7 @@ static bool load_7z(const char *path)
     static struct retro_game_info_ext info_local_ext;
     info_local = (struct retro_game_info){ 0 };
     info_local_ext = (struct retro_game_info_ext){ 0 };
+    extracted_tempfile[0] = '\0';
 
     _7z_file *z7 = NULL;
     _7z_error z7_err;
@@ -269,20 +309,52 @@ static bool load_7z(const char *path)
                 strncat(archived_ext, "", sizeof(archived_ext) - 1);
             }
 
-            info_local = (struct retro_game_info){ path, data, size, NULL };
-            info_local_ext = (struct retro_game_info_ext){
-                /* full_path */ NULL,
-                /* archive_path */ path,
-                /* archive_file */ archived_path,
-                /* dir */ dir,
-                /* name */ archived_filename,
-                /* ext */ archived_ext,
-                /* meta */ NULL,
-                /* data */ data,
-                /* size */ size,
-                /* file_in_archive */ true,
-                /* persistent_data */ true
-            };
+            if (system_info.need_fullpath) {
+                // Core needs a real file path - extract to a temp file
+                snprintf(extracted_tempfile, sizeof(extracted_tempfile),
+                         "%s/rom_XXXXXX", save_path);
+                int tmp_fd = mkstemp(extracted_tempfile);
+                FILE *tf = tmp_fd != -1 ? fdopen(tmp_fd, "wb") : NULL;
+                if (!tf) {
+                    log_e(LOG_TAG, "Failed to create temp file in %s\n", save_path);
+                    if (tmp_fd != -1) { close(tmp_fd); unlink(extracted_tempfile); }
+                    extracted_tempfile[0] = '\0';
+                    free(data);
+                    break;
+                }
+                fwrite(data, 1, size, tf);
+                fclose(tf);
+                free(data);
+                info_local = (struct retro_game_info){ extracted_tempfile, NULL, 0, NULL };
+                info_local_ext = (struct retro_game_info_ext){
+                    /* full_path */ extracted_tempfile,
+                    /* archive_path */ path,
+                    /* archive_file */ archived_path,
+                    /* dir */ dir,
+                    /* name */ archived_filename,
+                    /* ext */ archived_ext,
+                    /* meta */ NULL,
+                    /* data */ NULL,
+                    /* size */ 0,
+                    /* file_in_archive */ true,
+                    /* persistent_data */ true
+                };
+            } else {
+                info_local = (struct retro_game_info){ path, data, size, NULL };
+                info_local_ext = (struct retro_game_info_ext){
+                    /* full_path */ NULL,
+                    /* archive_path */ path,
+                    /* archive_file */ archived_path,
+                    /* dir */ dir,
+                    /* name */ archived_filename,
+                    /* ext */ archived_ext,
+                    /* meta */ NULL,
+                    /* data */ data,
+                    /* size */ size,
+                    /* file_in_archive */ true,
+                    /* persistent_data */ true
+                };
+            }
 
             break;
         }
@@ -290,7 +362,7 @@ static bool load_7z(const char *path)
 
     _7z_file_close(z7);
 
-    if (!info_local.data) {
+    if (system_info.need_fullpath ? (extracted_tempfile[0] == '\0') : !info_local.data) {
         log_w(LOG_TAG, "Nothing loaded from archive: %s\n", path);
         return false;
     }
@@ -440,6 +512,10 @@ void files_clean_up()
         free((void*)game_info->data);
         game_info = NULL;
         game_info_ext = NULL;
+    }
+    if (extracted_tempfile[0] != '\0') {
+        unlink(extracted_tempfile);
+        extracted_tempfile[0] = '\0';
     }
 }
 
