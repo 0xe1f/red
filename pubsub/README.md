@@ -1,3 +1,21 @@
+Pubsub
+===
+This is the primary emulation driver and related video renderer. It's
+implemented as two distinct, but interdependent components -
+
+* pub is the primary emulation driver - a custom
+  [libretro](https://www.libretro.com/) host that publishes video frames to
+  NATS. Audio and input are rendered and consumed by pub and are not published.
+  Pub is executed as a standard process and killed when no longer needed.
+* sub is a long-running service that subscribes to the published video frames
+  and displays them on an LED matrix of some fixed size and configuration
+
+Frames are always published in a specific fixed size by the publisher;
+subscribers get to decide how much of each frame they will utilize. All scaling,
+filtering and compression is done pre-publish.
+
+## Requirements
+
 ```
 sudo apt install nats-server libprotobuf-c-dev libnats-dev protobuf-c-compiler
 ```
