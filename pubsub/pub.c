@@ -241,6 +241,8 @@ static bool callback_environment_set(unsigned cmd, void *data)
         // 0x08: Hard Disable Audio
         *((unsigned *)data) = 0x3;
         break;
+    case RETRO_ENVIRONMENT_GET_CAN_DUPE:
+        return false;
     case RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY\n");
         *(char **)data = NULL;
