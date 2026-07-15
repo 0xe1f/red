@@ -40,7 +40,7 @@ extern struct retro_game_info *game_info;
 extern struct retro_game_info_ext *game_info_ext;
 extern ArgsOptions args;
 
-static bool is_path_supported(const char *path, const char *ext_delim);
+static bool is_path_supported(const char *path, bool *need_fullpath);
 static bool has_extension(const char *path, const char *ext);
 static bool load_zip(const char *path);
 static bool load_7z(const char *path);
@@ -60,8 +60,9 @@ static bool extension_one_of(const char *ext, const char *ext_delim)
     return false;
 }
 
-static bool is_path_supported(const char *path, const char *ext_delim)
+static bool is_path_supported(const char *path, bool *need_fullpath)
 {
+    *need_fullpath = false;
     const char *ext = strrchr(path, '.');
     if (!ext) {
         log_w(LOG_TAG, "No file extension found: %s\n", path);
@@ -69,14 +70,16 @@ static bool is_path_supported(const char *path, const char *ext_delim)
     }
     ext++; // skip the dot
 
-    if (ext_delim && extension_one_of(ext, ext_delim)) {
-        return true;
-    }
-
     for (const struct retro_system_content_info_override *info = content_info; info && info->extensions; info++) {
         if (extension_one_of(ext, info->extensions)) {
+            *need_fullpath = info->need_fullpath;
             return true;
         }
+    }
+
+    if (system_info.valid_extensions && extension_one_of(ext, system_info.valid_extensions)) {
+        *need_fullpath = system_info.need_fullpath;
+        return true;
     }
 
     return false;
@@ -120,10 +123,11 @@ static bool load_zip(const char *path)
     }
 
     unz_file_info info;
+    bool need_fullpath = false;
     int ret = unzGoToFirstFile(fd);
     while (ret == UNZ_OK) {
         if (unzGetCurrentFileInfo(fd, &info, archived_path, sizeof(archived_path), 0, 0, 0, 0) == UNZ_OK) {
-            if (is_path_supported(archived_path, system_info.valid_extensions)) {
+            if (is_path_supported(archived_path, &need_fullpath)) {
                 if ((ret = unzOpenCurrentFile(fd)) == UNZ_OK) {
                     size_t size = info.uncompressed_size;
                     if (!(data = malloc(size))) {
@@ -150,7 +154,7 @@ static bool load_zip(const char *path)
                             strncat(archived_ext, "", sizeof(archived_ext) - 1);
                         }
 
-                        if (system_info.need_fullpath) {
+                        if (need_fullpath) {
                             // Core needs a real file path - extract to a temp file
                             snprintf(extracted_tempfile, sizeof(extracted_tempfile),
                                      "%s/rom_XXXXXX", save_path);
@@ -214,7 +218,7 @@ static bool load_zip(const char *path)
     }
     unzClose(fd);
 
-    if (system_info.need_fullpath ? (extracted_tempfile[0] == '\0') : !info_local.data) {
+    if (need_fullpath ? !(*extracted_tempfile) : !info_local.data) {
         log_w(LOG_TAG, "Nothing loaded from archive: %s\n", path);
         return false;
     }
@@ -254,6 +258,7 @@ static bool load_7z(const char *path)
     }
 
     unsigned short name_utf16[2048];
+    bool need_fullpath = false;
 
     for (int i = 0, n = z7->db.NumFiles; i < n; i++) {
         size_t len = SzArEx_GetFileNameUtf16(&z7->db, i, NULL);
@@ -268,7 +273,7 @@ static bool load_7z(const char *path)
         }
         archived_path[len] = '\0';
 
-        if (is_path_supported(archived_path, system_info.valid_extensions)) {
+        if (is_path_supported(archived_path, &need_fullpath)) {
             unsigned long size = SzArEx_GetFileSize(&z7->db, i);
             void *data = malloc(size);
             if (!data) {
@@ -309,7 +314,7 @@ static bool load_7z(const char *path)
                 strncat(archived_ext, "", sizeof(archived_ext) - 1);
             }
 
-            if (system_info.need_fullpath) {
+            if (need_fullpath) {
                 // Core needs a real file path - extract to a temp file
                 snprintf(extracted_tempfile, sizeof(extracted_tempfile),
                          "%s/rom_XXXXXX", save_path);
@@ -362,7 +367,7 @@ static bool load_7z(const char *path)
 
     _7z_file_close(z7);
 
-    if (system_info.need_fullpath ? (extracted_tempfile[0] == '\0') : !info_local.data) {
+    if (need_fullpath ? !(*extracted_tempfile) : !info_local.data) {
         log_w(LOG_TAG, "Nothing loaded from archive: %s\n", path);
         return false;
     }
@@ -475,7 +480,8 @@ static const char* get_filename(const char *path, bool include_ext)
 
 bool files_load(const char *path)
 {
-    if (is_path_supported(path, system_info.valid_extensions)) {
+    bool need_fullpath = false;
+    if (is_path_supported(path, &need_fullpath)) {
         return load_direct(path);
     } else if (has_extension(path, "7z")) {
         return load_7z(path);
