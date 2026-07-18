@@ -21,6 +21,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "libretro.h"
+#include "core.h"
 #include "audio.h"
 #include "pub_args.h"
 #include "files.h"
@@ -31,42 +32,10 @@
 #include "timing.h"
 #include "filter.h"
 
-static void *solib = NULL;
-
 #define LOG_TAG  "host"
 #define LOG_CORE "core"
 
-#define DEFINE_SYMBOL(name, ret_type, ...) \
-    typedef ret_type (*name##_t)(__VA_ARGS__);
-#define LOAD_SYMBOL(so, name) \
-    name##_t name = (name##_t)dlsym(so, #name);
-
-DEFINE_SYMBOL(retro_api_version, unsigned, void)
-DEFINE_SYMBOL(retro_get_system_info, void, struct retro_system_info*)
-DEFINE_SYMBOL(retro_load_game, bool, const struct retro_game_info *)
-DEFINE_SYMBOL(retro_set_video_refresh, void, retro_video_refresh_t)
-DEFINE_SYMBOL(retro_set_audio_sample, void, retro_audio_sample_t)
-DEFINE_SYMBOL(retro_set_audio_sample_batch, void, retro_audio_sample_batch_t)
-DEFINE_SYMBOL(retro_set_input_poll, void, retro_input_poll_t)
-DEFINE_SYMBOL(retro_set_input_state, void, retro_input_state_t)
-DEFINE_SYMBOL(retro_set_environment, void, retro_environment_t)
-DEFINE_SYMBOL(retro_init, void, void)
-DEFINE_SYMBOL(retro_run, void, void)
-DEFINE_SYMBOL(retro_unload_game, void, void)
-DEFINE_SYMBOL(retro_deinit, void, void)
-DEFINE_SYMBOL(retro_get_system_av_info, void, struct retro_system_av_info*)
-// DEFINE_SYMBOL(retro_reset, void, void)
-// DEFINE_SYMBOL(retro_serialize_size, size_t, void)
-// DEFINE_SYMBOL(retro_serialize, bool, void*, size_t)
-// DEFINE_SYMBOL(retro_unserialize, bool, const void*, size_t)
-// DEFINE_SYMBOL(retro_set_controller_port_device, void, unsigned port, unsigned device)
-// DEFINE_SYMBOL(retro_load_game_special, bool, unsigned, const struct retro_game_info *, size_t)
-// DEFINE_SYMBOL(retro_cheat_reset, void, void)
-// DEFINE_SYMBOL(retro_cheat_set, void, unsigned index, bool enabled, const char *code)
-DEFINE_SYMBOL(retro_get_memory_data, void*, unsigned);
-DEFINE_SYMBOL(retro_get_memory_size, size_t, unsigned);
-DEFINE_SYMBOL(retro_get_region, unsigned, void);
-
+CoreFn core = {0};
 struct retro_system_info system_info;
 const struct retro_system_content_info_override *content_info;
 struct retro_game_info *game_info = NULL;
@@ -523,7 +492,7 @@ static void clean_up()
 {
     xm_cleanup();
     filter_free();
-    dlclose(solib);
+    core_close(&core);
     free(video_buffer.data);
     video_buffer.data = NULL;
     free(input_descriptors);
@@ -643,50 +612,24 @@ int main(int argc, const char **argv)
         log_w(LOG_TAG, "In chatty core mode; all core logs are VERBOSE\n");
     }
 
-    if (!(solib = dlopen(args.so_path, RTLD_NOW))) {
+    if (!core_open(&core, args.so_path)) {
         log_f(LOG_TAG, "Failed to load libretro core: %s\n", dlerror());
         return 1;
     }
 
-    LOAD_SYMBOL(solib, retro_api_version)
-    LOAD_SYMBOL(solib, retro_get_system_info)
-    LOAD_SYMBOL(solib, retro_load_game)
-    LOAD_SYMBOL(solib, retro_set_video_refresh)
-    LOAD_SYMBOL(solib, retro_set_audio_sample)
-    LOAD_SYMBOL(solib, retro_set_audio_sample_batch)
-    LOAD_SYMBOL(solib, retro_set_input_poll)
-    LOAD_SYMBOL(solib, retro_set_input_state)
-    LOAD_SYMBOL(solib, retro_set_environment)
-    LOAD_SYMBOL(solib, retro_init)
-    LOAD_SYMBOL(solib, retro_run)
-    LOAD_SYMBOL(solib, retro_unload_game)
-    LOAD_SYMBOL(solib, retro_deinit)
-    LOAD_SYMBOL(solib, retro_get_system_av_info)
-    // LOAD_SYMBOL(solib, retro_reset)
-    // LOAD_SYMBOL(solib, retro_serialize_size)
-    // LOAD_SYMBOL(solib, retro_serialize)
-    // LOAD_SYMBOL(solib, retro_unserialize)
-    // LOAD_SYMBOL(solib, retro_set_controller_port_device)
-    // LOAD_SYMBOL(solib, retro_load_game_special)
-    // LOAD_SYMBOL(solib, retro_cheat_reset)
-    // LOAD_SYMBOL(solib, retro_cheat_set)
-    LOAD_SYMBOL(solib, retro_get_memory_data)
-    LOAD_SYMBOL(solib, retro_get_memory_size)
-    LOAD_SYMBOL(solib, retro_get_region)
-
     audio_init(&audio);
     files_mkdirs(dirname((char *)args.so_path));
 
-    api_version = retro_api_version();
-    retro_get_system_info(&system_info);
-    retro_set_video_refresh(callback_video_refresh);
-    retro_set_audio_sample(callback_audio_sample);
-    retro_set_audio_sample_batch(callback_audio_sample_batch);
-    retro_set_input_poll(callback_input_poll);
-    retro_set_input_state(callback_input_state);
-    retro_set_environment(callback_environment_set);
+    api_version = core.retro_api_version();
+    core.retro_get_system_info(&system_info);
+    core.retro_set_video_refresh(callback_video_refresh);
+    core.retro_set_audio_sample(callback_audio_sample);
+    core.retro_set_audio_sample_batch(callback_audio_sample_batch);
+    core.retro_set_input_poll(callback_input_poll);
+    core.retro_set_input_state(callback_input_state);
+    core.retro_set_environment(callback_environment_set);
 
-    retro_init();
+    core.retro_init();
 
     if (!args.rom_path && !supports_no_game) {
         log_f(LOG_TAG, "Missing rom path\n");
@@ -700,7 +643,7 @@ int main(int argc, const char **argv)
         return 1;
     }
 
-    if (!retro_load_game(game_info)) {
+    if (!core.retro_load_game(game_info)) {
         log_f(LOG_TAG, "Core returned error while loading '%s'\n", args.rom_path);
         dump_env();
         clean_up();
@@ -708,7 +651,7 @@ int main(int argc, const char **argv)
     }
 
     if (args.rom_path) {
-        unsigned int region = retro_get_region();
+        unsigned int region = core.retro_get_region();
         log_i(LOG_TAG, "Successfully loaded: %s (%s)\n", args.rom_path,
             region == RETRO_REGION_NTSC
                 ? "NTSC"
@@ -718,7 +661,7 @@ int main(int argc, const char **argv)
                 );
     }
 
-    retro_get_system_av_info(&av_info);
+    core.retro_get_system_av_info(&av_info);
     reset_audio();
 
     if (args.log_level >= LOG_DEBUG) {
@@ -731,10 +674,10 @@ int main(int argc, const char **argv)
 
     if (args.rom_path) {
         // Restore SRAM if available
-        int sram_size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+        int sram_size = core.retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
         if (sram_size > 0) {
             log_d(LOG_TAG, "Restoring SRAM data for '%s'...\n", args.rom_path);
-            void *sram_data = retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+            void *sram_data = core.retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
             if (sram_data) {
                 files_restore_sram(args.rom_path, sram_data, sram_size);
             } else {
@@ -749,7 +692,7 @@ int main(int argc, const char **argv)
     signal(SIGTERM, signal_handler);
 
     while (is_running) {
-        retro_run();
+        core.retro_run();
         timing_throttle(av_info.timing.fps);
         if (args.show_fps) {
             static double last_us = 0;
@@ -764,9 +707,9 @@ int main(int argc, const char **argv)
     if (args.rom_path) {
         // Save SRAM if available
         log_d(LOG_TAG, "Saving SRAM data for '%s'\n", args.rom_path);
-        int sram_size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+        int sram_size = core.retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
         if (sram_size > 0) {
-            void *sram_data = retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+            void *sram_data = core.retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
             if (sram_data) {
                 files_save_sram(args.rom_path, sram_data, sram_size);
             } else {
@@ -777,8 +720,8 @@ int main(int argc, const char **argv)
         }
     }
 
-    retro_unload_game();
-    retro_deinit();
+    core.retro_unload_game();
+    core.retro_deinit();
 
     clean_up();
 

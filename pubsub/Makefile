@@ -56,7 +56,7 @@ $(SUB_EXE): \
 
 $(PUB_EXE): \
 	$(MINIZIP_OBJECTS) $(Z7_OBJECTS) \
-	kv_store.o pub_args.o files.o video.o filter.o input.o audio.o log.o timing.o xm_pub.o \
+	core.o kv_store.o pub_args.o files.o video.o filter.o input.o audio.o log.o timing.o xm_pub.o \
 	$(PUB_EXE).o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LD_PUB_FLAGS)
 
