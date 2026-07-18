@@ -31,6 +31,7 @@
 #include "xm_pub.h"
 #include "timing.h"
 #include "filter.h"
+#include "replay.h"
 
 #define LOG_TAG  "host"
 #define LOG_CORE "core"
@@ -47,6 +48,7 @@ PixelFormat pixel_format = PF_UNKNOWN; // default is 1555
 struct retro_input_descriptor *input_descriptors = NULL;
 ArgsOptions args;
 retro_keyboard_event_t keyboard_event_callback = NULL;
+Replay replay = {0};
 
 static unsigned int api_version = 0;
 static struct retro_controller_info *ports;
@@ -490,6 +492,9 @@ static bool callback_environment_set(unsigned cmd, void *data)
 
 static void clean_up()
 {
+    if (replay.mode) {
+        replay_stop(&replay);
+    }
     xm_cleanup();
     filter_free();
     core_close(&core);

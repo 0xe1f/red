@@ -22,6 +22,7 @@
 #include <SDL.h>
 #include "libretro.h"
 #include "pub_args.h"
+#include "replay.h"
 #include "log.h"
 #include "timing.h"
 #include "input.h"
@@ -311,6 +312,7 @@ const int keycode_map_count = sizeof(keycode_retro_map) / sizeof(keycode_retro_m
 
 extern ArgsOptions args;
 extern retro_keyboard_event_t keyboard_event_callback;
+extern Replay replay;
 
 struct JoypadState {
     bool input_ids[LAST_BUTTON_ID + 1];
@@ -631,6 +633,11 @@ static void deinit_joypads()
 
 static void poll_joypads()
 {
+    if (replay.mode == MODE_PLAYBACK
+        && replay_read_input(&replay, joypad_states, sizeof(joypad_states))) {
+        return;
+    }
+
     SDL_JoystickUpdate();
 
     int joy_count = SDL_NumJoysticks();
@@ -668,6 +675,10 @@ static void poll_joypads()
         }
     }
     last_joy_count = joy_count;
+
+    if (replay.mode == MODE_RECORD) {
+        replay_write_input(&replay, joypad_states, sizeof(joypad_states));
+    }
 }
 
 static short get_joypad_state(unsigned int port, unsigned int id)
