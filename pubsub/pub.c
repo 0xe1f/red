@@ -32,9 +32,17 @@
 #include "timing.h"
 #include "filter.h"
 #include "replay.h"
+#include "mq.h"
 
 #define LOG_TAG  "host"
 #define LOG_CORE "core"
+
+#define MQ_FIFO_PATH "/tmp/mq_red.fifo"
+#define MQ_POLL_EVERY_US 200000 // 5 times per second
+
+#define MESSAGE_REPLAY_RECORD   1
+#define MESSAGE_REPLAY_PLAYBACK 2
+#define MESSAGE_REPLAY_STOP     3
 
 CoreFn core = {0};
 struct retro_system_info system_info;
@@ -63,10 +71,12 @@ static bool supports_no_game = false;
 static bool variables_updated = false;
 struct retro_disk_control_ext_callback *disk_ext_interface;
 static FILE *log_file = NULL;
+static MessageQueue mq = { -1 };
 
 static void set_core_options(const struct retro_core_option_definition *option_defs);
 static void set_variables(const struct retro_variable *vars, bool single);
 static void callback_set_led_state(int led, int state);
+static void handle_mq_messages(const MessagePayload *payload);
 
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
@@ -492,6 +502,7 @@ static bool callback_environment_set(unsigned cmd, void *data)
 
 static void clean_up()
 {
+    mq_cleanup(&mq);
     if (replay.mode) {
         replay_stop(&replay);
     }
@@ -564,6 +575,11 @@ static void set_core_options(const struct retro_core_option_definition *option_d
     }
 }
 
+static void handle_mq_messages(const MessagePayload *payload)
+{
+    log_i(LOG_TAG, "Received Message ID: %u\n", payload->message_id);
+}
+
 int main(int argc, const char **argv)
 {
     if (!args_parse(argc, argv, &args, &kv_store)) {
@@ -624,6 +640,7 @@ int main(int argc, const char **argv)
 
     audio_init(&audio);
     files_mkdirs(dirname((char *)args.so_path));
+    mq_init(&mq, MQ_FIFO_PATH);
 
     api_version = core.retro_api_version();
     core.retro_get_system_info(&system_info);
@@ -638,6 +655,7 @@ int main(int argc, const char **argv)
 
     if (!args.rom_path && !supports_no_game) {
         log_f(LOG_TAG, "Missing rom path\n");
+        clean_up();
         return 1;
     }
 
@@ -696,8 +714,23 @@ int main(int argc, const char **argv)
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
+    double last_mq_check = micros();
+    MessagePayload payload;
+
     while (is_running) {
+        // Run core for one frame
         core.retro_run();
+
+        // Check the message queue for new messages
+        double now = micros();
+        if (now - last_mq_check >= MQ_POLL_EVERY_US) {
+            last_mq_check = now;
+            while (mq_read_message(&mq, &payload)) {
+                handle_mq_messages(&payload);
+            }
+        }
+
+        // Throttle timing to maintain correct FPS
         timing_throttle(av_info.timing.fps);
         if (args.show_fps) {
             static double last_us = 0;
