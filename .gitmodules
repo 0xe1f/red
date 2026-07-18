@@ -46,3 +46,6 @@
 [submodule "cores/pcsx_rearmed"]
 	path = cores/pcsx_rearmed
 	url = https://github.com/notaz/pcsx_rearmed.git
+[submodule "cores/ffmpeg"]
+	path = cores/ffmpeg
+	url = https://github.com/libretro/FFmpeg.git
