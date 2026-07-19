@@ -16,9 +16,11 @@
 #define __FILES_H__
 
 #include <stdbool.h>
+#include <stddef.h>
 
 const char* files_system_path();
 const char* files_save_path();
+const char* files_rom_recording_path(const char *rom_path);
 
 bool files_save_sram(const char *rom_path, const void *sram_data, size_t sram_size);
 bool files_restore_sram(const char *rom_path, void *sram_data, size_t sram_size);

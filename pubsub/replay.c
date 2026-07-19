@@ -34,13 +34,17 @@ bool replay_start_recording(Replay *replay, const char *path)
     if (replay->mode == MODE_RECORD) {
         log_w(LOG_TAG, "Already recording\n");
         return false;
-    }
-
-    log_d(LOG_TAG, "Starting recording\n");
-    if (!(replay->file = fopen(path, "w"))) {
-        log_e(LOG_TAG, "Failed to open recording file\n");
+    } else if (replay->mode == MODE_PLAYBACK) {
+        log_w(LOG_TAG, "Can't record while playing back\n");
         return false;
     }
+
+    if (!(replay->file = fopen(path, "w"))) {
+        log_e(LOG_TAG, "Failed to open recording at '%s'\n", path);
+        return false;
+    }
+
+    log_d(LOG_TAG, "Starting recording at '%s'\n", path);
 
     // Write the recording header to the file
     struct RecordingHeader header = { .magic = "REC", .version = 1 };
@@ -84,14 +88,19 @@ bool replay_start_recording(Replay *replay, const char *path)
 bool replay_start_playback(Replay *replay, const char *path)
 {
     if (replay->mode == MODE_RECORD) {
-        replay_stop(replay);
-    }
-
-    log_d(LOG_TAG, "Starting replay\n");
-    if (!(replay->file = fopen(path, "r"))) {
-        log_e(LOG_TAG, "Failed to open recording file\n");
+        log_i(LOG_TAG, "Can't start playback while recording\n");
+        return false;
+    } else if (replay->mode == MODE_PLAYBACK) {
+        log_w(LOG_TAG, "Already in playback mode\n");
         return false;
     }
+
+    if (!(replay->file = fopen(path, "r"))) {
+        log_e(LOG_TAG, "Failed to open recording at '%s'\n", path);
+        return false;
+    }
+
+    log_d(LOG_TAG, "Starting replay from '%s'\n", path);
 
     // Read the recording header from the file
     struct RecordingHeader header;

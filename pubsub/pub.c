@@ -577,7 +577,20 @@ static void set_core_options(const struct retro_core_option_definition *option_d
 
 static void handle_mq_messages(const MessagePayload *payload)
 {
-    log_i(LOG_TAG, "Received Message ID: %u\n", payload->message_id);
+    switch (payload->message_id) {
+        case MESSAGE_REPLAY_RECORD:
+            replay_start_recording(&replay, files_rom_recording_path(args.rom_path));
+            break;
+        case MESSAGE_REPLAY_PLAYBACK:
+            replay_start_playback(&replay, files_rom_recording_path(args.rom_path));
+            break;
+        case MESSAGE_REPLAY_STOP:
+            replay_stop(&replay);
+            break;
+        default:
+            log_w(LOG_TAG, "Unrecognized message ID: %u\n", payload->message_id);
+            break;
+    }
 }
 
 int main(int argc, const char **argv)

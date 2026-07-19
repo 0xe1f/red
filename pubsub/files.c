@@ -29,8 +29,10 @@
 static const char *preload_blocklist = "iso|cue|mp3|chd";
 static const char *system_path_name = "bios";
 static const char *save_path_name = "save";
+static const char *recording_path_name = "rec";
 static char system_path[1024];
 static char save_path[1024];
+static char recording_path[1024];
 static char extracted_tempfile[1024] = {0};
 static const char* get_filename(const char *path, bool include_ext);
 
@@ -501,6 +503,8 @@ void files_mkdirs(const char *base_path)
         base_path, needs_slash ? "/" : "", system_path_name);
     snprintf(save_path, sizeof(save_path), "%s%s%s",
         base_path, needs_slash ? "/" : "", save_path_name);
+    snprintf(recording_path, sizeof(recording_path), "%s%s%s",
+        base_path, needs_slash ? "/" : "", recording_path_name);
 
     struct stat st = {0};
     if (stat(system_path, &st) == -1) {
@@ -508,6 +512,9 @@ void files_mkdirs(const char *base_path)
     }
     if (stat(save_path, &st) == -1) {
         mkdir(save_path, 0755);
+    }
+    if (stat(recording_path, &st) == -1) {
+        mkdir(recording_path, 0755);
     }
 }
 
@@ -588,4 +595,12 @@ bool files_restore_sram(const char *rom_path, void *sram_data, size_t sram_size)
     }
 
     return read == file_size;
+}
+
+const char* files_rom_recording_path(const char *rom_path)
+{
+    static char path[1024];
+    snprintf(path, sizeof(path), "%s/%s.rec", recording_path, get_filename(rom_path, false));
+
+    return path;
 }
