@@ -15,3 +15,12 @@ message StopRequest {
 message LaunchRequest {
     LaunchId launch_id = 1;
 }
+
+message RecordRequest {
+}
+
+message PlaybackRequest {
+}
+
+message StopReplayRequest {
+}

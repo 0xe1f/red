@@ -305,6 +305,87 @@ def sync():
         'orientation': orientation,
     }
 
+@app.route('/record', methods=['POST'])
+@flask_login.login_required
+def record():
+    try:
+        state = request_topic(requests.StateRequest())
+        if not state.is_running:
+            logging.warning(f"Cannot start recording: {state}")
+            return {
+                'status': 'ERR',
+                'message': 'Nothing is running',
+            }, http.HTTPStatus.BAD_REQUEST
+
+        response = request_topic(
+            requests.RecordRequest()
+        )
+
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        return {
+            'status': 'ERR',
+            'message': 'Unexpected error',
+        }, http.HTTPStatus.INTERNAL_SERVER_ERROR
+
+    return {
+        'status': 'OK' if response.result.status == Result.Status.STATUS_OK else 'ERR',
+    }
+
+@app.route('/playback', methods=['POST'])
+@flask_login.login_required
+def playback():
+    try:
+        state = request_topic(requests.StateRequest())
+        if not state.is_running:
+            logging.warning(f"Cannot start playback: {state}")
+            return {
+                'status': 'ERR',
+                'message': 'Nothing is running',
+            }, http.HTTPStatus.BAD_REQUEST
+
+        response = request_topic(
+            requests.PlaybackRequest()
+        )
+
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        return {
+            'status': 'ERR',
+            'message': 'Unexpected error',
+        }, http.HTTPStatus.INTERNAL_SERVER_ERROR
+
+    return {
+        'status': 'OK' if response.result.status == Result.Status.STATUS_OK else 'ERR',
+    }
+
+@app.route('/stop_replay', methods=['POST'])
+@flask_login.login_required
+def stop_replay():
+    try:
+        state = request_topic(requests.StateRequest())
+        if not state.is_running:
+            logging.warning(f"Cannot stop replay: {state}")
+            return {
+                'status': 'ERR',
+                'message': 'Nothing is running',
+            }, http.HTTPStatus.BAD_REQUEST
+
+        response = request_topic(
+            requests.StopReplayRequest()
+        )
+
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        return {
+            'status': 'ERR',
+            'message': 'Unexpected error',
+        }, http.HTTPStatus.INTERNAL_SERVER_ERROR
+
+    return {
+        'status': 'OK' if response.result.status == Result.Status.STATUS_OK else 'ERR',
+    }
+
 FRAME_SUBJECT = "red.frames"
 # Wire format: FrameHeader — pitch(u16), width(u16), height(u16), pixel_format(u8), attrs(u8)
 FRAME_HEADER_FMT  = "<HHHBB"

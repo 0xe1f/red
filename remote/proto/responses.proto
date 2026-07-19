@@ -32,6 +32,18 @@ message LaunchResponse {
     LaunchId launch_id = 2;
 }
 
+message RecordResponse {
+    Result result = 1;
+}
+
+message PlaybackResponse {
+    Result result = 1;
+}
+
+message StopReplayResponse {
+    Result result = 1;
+}
+
 message GeneralResponse {
     Result result = 1;
 }
