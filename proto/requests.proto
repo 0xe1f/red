@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+import "common.proto";
+import "replay.proto";
+
+message StateRequest {
+}
+
+message SetVolumeRequest {
+    uint32 volume = 1;
+}
+
+message StopRequest {
+}
+
+message LaunchRequest {
+    LaunchId launch_id = 1;
+}
+
+message RequestEnvelope {
+    oneof request_payload {
+        ReplayRecordRequest replay_record = 1;
+        ReplayPlaybackRequest replay_playback = 2;
+        ReplayStopRequest replay_stop = 3;
+    }
+}
