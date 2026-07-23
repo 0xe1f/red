@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "common.proto";
+import "replay.proto";
 
 message Result {
     enum Status {
@@ -46,4 +47,13 @@ message StopReplayResponse {
 
 message GeneralResponse {
     Result result = 1;
+}
+
+message ResponseEnvelope {
+    uint32 error_code = 1;
+    oneof payload {
+        ReplayRecordResponse replay_record = 2;
+        ReplayPlaybackResponse replay_playback = 3;
+        ReplayStopResponse replay_stop = 4;
+    }
 }

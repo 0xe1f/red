@@ -33,10 +33,9 @@ protoc -I=proto --python_out="$GENERATED_DIR" proto/*.proto
 # Fix imports in generated files
 TMPFILE=$(mktemp)
 for file in "$GENERATED_DIR"/*; do
-    cat "$file" | sed "s/^import common_pb2/import $GENERATED_DIR.common_pb2/" > "$TMPFILE"
+    cat "$file" | sed "s/^import \([a-zA-Z0-9_]*_pb2\)/import $GENERATED_DIR.\1/" > "$TMPFILE"
     mv "$TMPFILE" "$file"
-    # Set the same permissions as the original file
-    chmod --reference="$GENERATED_DIR/common_pb2.py" "$file"
+    chmod 644 "$file"
 done
 
 # Done

@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+// requests
+
 message ReplayRecordRequest {
 }
 
@@ -7,4 +9,15 @@ message ReplayPlaybackRequest {
 }
 
 message ReplayStopRequest {
+}
+
+// responses
+
+message ReplayRecordResponse {
+}
+
+message ReplayPlaybackResponse {
+}
+
+message ReplayStopResponse {
 }

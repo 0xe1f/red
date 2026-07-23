@@ -18,7 +18,7 @@ message LaunchRequest {
 }
 
 message RequestEnvelope {
-    oneof request_payload {
+    oneof payload {
         ReplayRecordRequest replay_record = 1;
         ReplayPlaybackRequest replay_playback = 2;
         ReplayStopRequest replay_stop = 3;

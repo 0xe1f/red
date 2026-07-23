@@ -16,12 +16,9 @@
 
 from generated.common_pb2 import LaunchId
 from generated.responses_pb2 import Result
-from typing import Any
 import argparse
 import alsaaudio
 import asyncio
-import ctypes
-import errno
 import generated.requests_pb2 as requests
 import generated.responses_pb2 as responses
 import glob
@@ -35,7 +32,6 @@ import shlex
 import subprocess
 import yaml
 
-FIFO_PATH = "/tmp/mq_red.fifo"
 SUBJECT = "red.query.*"
 LAUNCH_PROCESS_NAME = "pub"
 APP_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
@@ -46,17 +42,6 @@ game_config_path = None
 platform_config_path = None
 game_configs = {}
 server_config = {}
-
-MESSAGE_REPLAY_RECORD   = 1
-MESSAGE_REPLAY_PLAYBACK = 2
-MESSAGE_REPLAY_STOP     = 3
-
-class MessagePayload(ctypes.Structure):
-    _fields_ = [
-        ("message_id", ctypes.c_uint32),
-        ("padding", ctypes.c_uint8 * 60),
-        ("data", ctypes.c_uint8 * 4032),
-    ]
 
 def reload_game_configs():
     if not pathlib.Path(game_config_path).is_file():
@@ -284,12 +269,6 @@ def handle_topic(topic, data):
                 response = stop_process(data)
             case "launch":
                 response = launch(data)
-            case "record":
-                response = send_message(MESSAGE_REPLAY_RECORD)
-            case "playback":
-                response = send_message(MESSAGE_REPLAY_PLAYBACK)
-            case "stop_replay":
-                response = send_message(MESSAGE_REPLAY_STOP)
             case _:
                 raise ValueError(f"Unrecognized topic: {topic}")
 
@@ -311,50 +290,6 @@ def handle_topic(topic, data):
         )
 
     return response.SerializeToString()
-
-def send_message(message_id: int, data: Any = None):
-    payload = MessagePayload()
-    payload.message_id = message_id
-
-    if data is not None:
-        payload_bytes = bytes(data)
-        max_capacity = len(payload.data)
-        if len(payload_bytes) > max_capacity:
-            logging.error(f"Data size ({len(payload_bytes)}B) exceeds capacity ({max_capacity}B)")
-            raise ValueError(f"Data exceeds capacity")
-
-        payload.data[:len(payload_bytes)] = payload_bytes
-
-    raw_bytes = bytes(payload)
-    if len(raw_bytes) != ctypes.sizeof(payload):
-        raise ValueError(f"Size mismatch! Expected {ctypes.sizeof(payload)}B, got {len(raw_bytes)}B")
-
-    try:
-        fd = os.open(FIFO_PATH, os.O_WRONLY | os.O_NONBLOCK)
-        bytes_written = os.write(fd, raw_bytes)
-        os.close(fd)
-
-        logging.debug(f"Message {message_id} sent ({bytes_written}B)")
-
-    except OSError as e:
-        if e.errno == errno.ENXIO:
-            logging.warning("No readers are present")
-            raise e
-        elif e.errno == errno.EPIPE:
-            logging.error("Broken pipe")
-            raise e
-        elif e.errno == errno.ENOENT:
-            logging.error(f"FIFO file does not exist")
-            raise e
-        else:
-            logging.error(f"Unexpected FIFO error: {e}")
-            raise e
-
-    return responses.GeneralResponse(
-        result=Result(
-            status=Result.Status.STATUS_OK,
-        )
-    )
 
 async def handle_request(msg):
     logging.debug(f"Received request with subject: '{msg.subject}'")

@@ -124,7 +124,7 @@ complete_setup() {
 
 # Copy to build server
 echo "Building protobuf files..." >&2
-rsync -trph \
+rsync -trphL \
     --exclude '.*' \
     "${LOCAL_REMOTE_PATH}/" \
     "${BUILD_SVR}:${BUILD_PATH}/"

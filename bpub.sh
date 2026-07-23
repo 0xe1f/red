@@ -62,7 +62,7 @@ TARGET=pub
 # Stage build
 echo -e "${BOLD_WHITE}>> ${CLR_OK}Staging build... ${CLR_RST}"
 ssh "${BUILD_SVR}" "mkdir -p \"${BUILD_PATH}\""
-rsync -trph \
+rsync -trphL \
     --info=progress2 \
     --exclude '.*' \
     "${LOCAL_APP_PATH}/" \

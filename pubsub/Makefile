@@ -12,28 +12,34 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 
+GEN_ROOT=generated
+PROTO_ROOT=proto
 TP_ROOT=3p
 RGB_ROOT=$(TP_ROOT)/rpi-rgb-led-matrix
 LIB7Z_ROOT=$(TP_ROOT)/lib7z
 UN7Z_ROOT=$(TP_ROOT)/un7z
 MINIZIP_ROOT=$(TP_ROOT)/minizip
+NANOPB_ROOT=$(TP_ROOT)/nanopb
 RGB_LIBDIR=$(RGB_ROOT)/lib
 
 INCLUDE=\
 	-I$(RGB_ROOT)/include \
 	-I$(TP_ROOT)/libretro \
+	-I$(NANOPB_ROOT) \
 	-I$(MINIZIP_ROOT) \
 	-I$(LIB7Z_ROOT) \
 	-I$(UN7Z_ROOT) \
+	-I$(GEN_ROOT) \
 	`sdl2-config --cflags`
 DEFINE=
 CFLAGS=-Wall -O2
 CXXFLAGS=$(CFLAGS)
-LD_FLAGS=$(LIB) -lnats -llz4
+LD_FLAGS=$(LIB) -lnats -llz4 -lprotobuf-c
 LD_SUB_FLAGS=$(LD_FLAGS) -L$(RGB_LIBDIR) -lrgbmatrix
 LD_PUB_FLAGS=$(LD_FLAGS) `sdl2-config --libs` -lz
 SUB_EXE=sub
 PUB_EXE=pub
+PROTO_FILES = $(wildcard $(PROTO_ROOT)/*.proto)
 
 Z7_OBJECTS=$(UN7Z_ROOT)/un7z.o \
 	$(LIB7Z_ROOT)/7zStream.o $(LIB7Z_ROOT)/7zCrc.o $(LIB7Z_ROOT)/7zArcIn.o \
@@ -42,6 +48,9 @@ Z7_OBJECTS=$(UN7Z_ROOT)/un7z.o \
 	$(LIB7Z_ROOT)/7zCrcOpt.o $(LIB7Z_ROOT)/Delta.o \
 	$(LIB7Z_ROOT)/Bra.o $(LIB7Z_ROOT)/Bra86.o $(LIB7Z_ROOT)/BraIA64.o
 MINIZIP_OBJECTS=$(MINIZIP_ROOT)/unzip.o $(MINIZIP_ROOT)/ioapi.o
+PB_OBJECTS = $(patsubst $(PROTO_ROOT)/%.proto, $(GEN_ROOT)/%.pb-c.o, $(PROTO_FILES))
+NANOPB_OBJECTS=$(NANOPB_ROOT)/pb_encode.o $(NANOPB_ROOT)/pb_decode.o \
+	$(NANOPB_ROOT)/pb_common.o
 
 all: $(SUB_EXE) $(PUB_EXE)
 
@@ -55,11 +64,21 @@ $(SUB_EXE): \
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LD_SUB_FLAGS)
 
 $(PUB_EXE): \
-	$(MINIZIP_OBJECTS) $(Z7_OBJECTS) \
+	$(PB_OBJECTS) \
+	$(MINIZIP_OBJECTS) $(Z7_OBJECTS) $(NANOPB_OBJECTS) \
 	core.o kv_store.o pub_args.o files.o video.o filter.o input.o audio.o \
-	replay.o log.o timing.o xm_pub.o mq.o \
+	replay.o log.o timing.o xm_pub.o \
 	$(PUB_EXE).o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LD_PUB_FLAGS)
+
+$(GEN_ROOT)/%.pb-c.o: $(PROTO_ROOT)/%.pb-c.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(GEN_ROOT)/%.pb-c.c: $(PROTO_ROOT)/%.proto | $(GEN_ROOT)
+	protoc-c -I$(PROTO_ROOT) --c_out=$(GEN_ROOT) $(notdir $<)
+
+$(GEN_ROOT):
+	mkdir -p $@
 
 %.o: %.c
 	$(CC) $(INCLUDE) $(DEFINE) $(CFLAGS) -c $< -o $@
@@ -68,5 +87,5 @@ $(PUB_EXE): \
 	$(CXX) $(INCLUDE) $(DEFINE) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	@rm -rf *.o $(SUB_EXE) $(PUB_EXE) `find $(TP_ROOT)/ -name *.o`
+	@rm -rf *.o $(SUB_EXE) $(PUB_EXE) `find $(TP_ROOT)/ -name *.o` $(GEN_ROOT)
 	@cd $(RGB_LIBDIR); $(MAKE) clean

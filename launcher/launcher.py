@@ -29,7 +29,9 @@ import config
 import flask
 import flask_login
 import flask_socketio
+import generated.responses_pb2 as responses
 import generated.requests_pb2 as requests
+import generated.replay_pb2 as replay
 import http
 import importlib
 import io
@@ -64,6 +66,29 @@ def deserialize(message, type):
     rv = class_()
     rv.ParseFromString(message)
     return rv
+
+async def request_pub_async(request):
+    subject = f"red.pub.request"
+    logging.info(f"Requesting '{subject}'")
+
+    nc = await nats.connect(konfig.game_server['nats_url'])
+    try:
+        encoded_data = request.SerializeToString()
+        response = await nc.request(subject, encoded_data, timeout=0.5)
+        resp = responses.ResponseEnvelope()
+        resp.ParseFromString(response.data)
+
+        logging.debug(f"Received response for subject '{subject}': {resp}")
+    except TimeoutError:
+        # FIXME: return a more specific error to client
+        logging.error("Request timed out")
+
+    await nc.close()
+
+    return resp
+
+def request_pub(request):
+    return asyncio.run(request_pub_async(request))
 
 async def request_topic_async(topic, request, response_type):
     subject = f"red.query.{topic}"
@@ -309,16 +334,10 @@ def sync():
 @flask_login.login_required
 def record():
     try:
-        state = request_topic(requests.StateRequest())
-        if not state.is_running:
-            logging.warning(f"Cannot start recording: {state}")
-            return {
-                'status': 'ERR',
-                'message': 'Nothing is running',
-            }, http.HTTPStatus.BAD_REQUEST
-
-        response = request_topic(
-            requests.RecordRequest()
+        response = request_pub(
+            requests.RequestEnvelope(
+                replay_record=replay.ReplayRecordRequest()
+            )
         )
 
     except Exception as e:
@@ -329,23 +348,17 @@ def record():
         }, http.HTTPStatus.INTERNAL_SERVER_ERROR
 
     return {
-        'status': 'OK' if response.result.status == Result.Status.STATUS_OK else 'ERR',
+        'status': 'OK' if response is not None and response.error_code == 0 else 'ERR',
     }
 
 @app.route('/playback', methods=['POST'])
 @flask_login.login_required
 def playback():
     try:
-        state = request_topic(requests.StateRequest())
-        if not state.is_running:
-            logging.warning(f"Cannot start playback: {state}")
-            return {
-                'status': 'ERR',
-                'message': 'Nothing is running',
-            }, http.HTTPStatus.BAD_REQUEST
-
-        response = request_topic(
-            requests.PlaybackRequest()
+        response = request_pub(
+            requests.RequestEnvelope(
+                replay_playback=replay.ReplayPlaybackRequest()
+            )
         )
 
     except Exception as e:
@@ -356,23 +369,17 @@ def playback():
         }, http.HTTPStatus.INTERNAL_SERVER_ERROR
 
     return {
-        'status': 'OK' if response.result.status == Result.Status.STATUS_OK else 'ERR',
+        'status': 'OK' if response is not None and response.error_code == 0 else 'ERR',
     }
 
 @app.route('/stop_replay', methods=['POST'])
 @flask_login.login_required
 def stop_replay():
     try:
-        state = request_topic(requests.StateRequest())
-        if not state.is_running:
-            logging.warning(f"Cannot stop replay: {state}")
-            return {
-                'status': 'ERR',
-                'message': 'Nothing is running',
-            }, http.HTTPStatus.BAD_REQUEST
-
-        response = request_topic(
-            requests.StopReplayRequest()
+        response = request_pub(
+            requests.RequestEnvelope(
+                replay_stop=replay.ReplayStopRequest()
+            )
         )
 
     except Exception as e:
@@ -383,7 +390,7 @@ def stop_replay():
         }, http.HTTPStatus.INTERNAL_SERVER_ERROR
 
     return {
-        'status': 'OK' if response.result.status == Result.Status.STATUS_OK else 'ERR',
+        'status': 'OK' if response is not None and response.error_code == 0 else 'ERR',
     }
 
 FRAME_SUBJECT = "red.frames"

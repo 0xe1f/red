@@ -32,17 +32,12 @@
 #include "timing.h"
 #include "filter.h"
 #include "replay.h"
-#include "mq.h"
+#include "replay.pb-c.h"
 
 #define LOG_TAG  "host"
 #define LOG_CORE "core"
 
-#define MQ_FIFO_PATH "/tmp/mq_red.fifo"
-#define MQ_POLL_EVERY_US 200000 // 5 times per second
-
-#define MESSAGE_REPLAY_RECORD   1
-#define MESSAGE_REPLAY_PLAYBACK 2
-#define MESSAGE_REPLAY_STOP     3
+#define REQUESTS_POLL_EVERY_US 200000
 
 CoreFn core = {0};
 struct retro_system_info system_info;
@@ -71,12 +66,11 @@ static bool supports_no_game = false;
 static bool variables_updated = false;
 struct retro_disk_control_ext_callback *disk_ext_interface;
 static FILE *log_file = NULL;
-static MessageQueue mq = { -1 };
 
 static void set_core_options(const struct retro_core_option_definition *option_defs);
 static void set_variables(const struct retro_variable *vars, bool single);
 static void callback_set_led_state(int led, int state);
-static void handle_mq_messages(const MessagePayload *payload);
+static void handle_request(const RequestEnvelope *request, ResponseEnvelope *response);
 
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
@@ -502,7 +496,6 @@ static bool callback_environment_set(unsigned cmd, void *data)
 
 static void clean_up()
 {
-    mq_cleanup(&mq);
     if (replay.mode) {
         replay_stop(&replay);
     }
@@ -575,20 +568,37 @@ static void set_core_options(const struct retro_core_option_definition *option_d
     }
 }
 
-static void handle_mq_messages(const MessagePayload *payload)
+static void handle_request(const RequestEnvelope *request, ResponseEnvelope *response)
 {
-    switch (payload->message_id) {
-        case MESSAGE_REPLAY_RECORD:
+    response->error_code = 0;
+    switch (request->payload_case) {
+        case REQUEST_ENVELOPE__PAYLOAD_REPLAY_RECORD: {
+            log_i(LOG_TAG, "Received replay record request\n");
             replay_start_recording(&replay, files_rom_recording_path(args.rom_path));
+            static ReplayRecordResponse r = REPLAY_RECORD_RESPONSE__INIT;
+            response->payload_case = RESPONSE_ENVELOPE__PAYLOAD_REPLAY_RECORD;
+            response->replay_record = &r;
             break;
-        case MESSAGE_REPLAY_PLAYBACK:
+        }
+        case REQUEST_ENVELOPE__PAYLOAD_REPLAY_PLAYBACK: {
+            log_i(LOG_TAG, "Received replay playback request\n");
             replay_start_playback(&replay, files_rom_recording_path(args.rom_path));
+            static ReplayPlaybackResponse r = REPLAY_PLAYBACK_RESPONSE__INIT;
+            response->payload_case = RESPONSE_ENVELOPE__PAYLOAD_REPLAY_PLAYBACK;
+            response->replay_playback = &r;
             break;
-        case MESSAGE_REPLAY_STOP:
+        }
+        case REQUEST_ENVELOPE__PAYLOAD_REPLAY_STOP: {
+            log_i(LOG_TAG, "Received replay stop request\n");
             replay_stop(&replay);
+            static ReplayStopResponse r = REPLAY_STOP_RESPONSE__INIT;
+            response->payload_case = RESPONSE_ENVELOPE__PAYLOAD_REPLAY_STOP;
+            response->replay_stop = &r;
             break;
+        }
+        case REQUEST_ENVELOPE__PAYLOAD__NOT_SET:
         default:
-            log_w(LOG_TAG, "Unrecognized message ID: %u\n", payload->message_id);
+            log_w(LOG_TAG, "Envelope arrived empty or with unknown type\n");
             break;
     }
 }
@@ -653,7 +663,6 @@ int main(int argc, const char **argv)
 
     audio_init(&audio);
     files_mkdirs(dirname((char *)args.so_path));
-    mq_init(&mq, MQ_FIFO_PATH);
 
     api_version = core.retro_api_version();
     core.retro_get_system_info(&system_info);
@@ -727,20 +736,17 @@ int main(int argc, const char **argv)
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
-    double last_mq_check = micros();
-    MessagePayload payload;
+    double last_req_check = micros();
 
     while (is_running) {
         // Run core for one frame
         core.retro_run();
 
-        // Check the message queue for new messages
+        // Check for new requests
         double now = micros();
-        if (now - last_mq_check >= MQ_POLL_EVERY_US) {
-            last_mq_check = now;
-            while (mq_read_message(&mq, &payload)) {
-                handle_mq_messages(&payload);
-            }
+        if (now - last_req_check >= REQUESTS_POLL_EVERY_US) {
+            last_req_check = now;
+            xm_poll_requests(handle_request);
         }
 
         // Throttle timing to maintain correct FPS
