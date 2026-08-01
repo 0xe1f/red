@@ -44,11 +44,13 @@ typedef struct {
     unsigned int size;
 } VideoBuffer;
 
-void realloc_buffer_if_needed(VideoBuffer *buffer, int width, int height);
-void blit(
+void buffer_realloc_if_needed(VideoBuffer *buffer, int width, int height);
+void buffer_free(VideoBuffer *buffer);
+void buffer_blit(VideoBuffer *buffer,
     ScaleMode scale_mode,
     const void *data, unsigned width, unsigned height, size_t pitch,
     const unsigned char **out, size_t *out_size
 );
+void buffer_clear(VideoBuffer *buffer);
 
 #endif // __VIDEO_H__

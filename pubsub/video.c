@@ -39,19 +39,19 @@
     ((pf) == PF_RGBA8888 || (pf) == PF_ARGB8888 ? 4 : \
      (pf) == PF_RGB565   || (pf) == PF_RGBA5551  ? 2 : 0)
 
-extern VideoBuffer video_buffer;
 extern struct retro_system_av_info av_info;
 extern Rotation rotation;
 extern PixelFormat pixel_format;
 
-static void blit_plain(const void *data, unsigned width, unsigned height, size_t pitch);
-static void blit_half(const void *data, unsigned width, unsigned height, size_t pitch);
-static void blit_scale(
+static void blit_plain(VideoBuffer *buffer,
+    const void *data, unsigned width, unsigned height, size_t pitch);
+static void blit_half(VideoBuffer *buffer,
+    const void *data, unsigned width, unsigned height, size_t pitch);
+static void blit_scale(VideoBuffer *buffer,
     const void *data, unsigned width, unsigned height, size_t pitch,
-    unsigned int dest_width, unsigned int dest_height
-);
+    unsigned int dest_width, unsigned int dest_height);
 
-void realloc_buffer_if_needed(VideoBuffer *buffer, int width, int height)
+void buffer_realloc_if_needed(VideoBuffer *buffer, int width, int height)
 {
     if (buffer->data) {
         free(buffer->data);
@@ -71,13 +71,14 @@ void realloc_buffer_if_needed(VideoBuffer *buffer, int width, int height)
     }
 }
 
-void blit(
+void buffer_blit(
+    VideoBuffer *buffer,
     ScaleMode scale_mode,
     const void *data, unsigned width, unsigned height, size_t pitch,
     const unsigned char **out, size_t *out_size
 )
 {
-    if (!video_buffer.data) {
+    if (!buffer->data) {
         // No interim buffer, use source directly
         *out = (const unsigned char *) data;
         *out_size = (int) pitch * height;
@@ -86,26 +87,26 @@ void blit(
 
     switch (scale_mode) {
         case SCALE_MODE_HALF:
-            blit_half(data, width, height, pitch);
+            blit_half(buffer, data, width, height, pitch);
             break;
         case SCALE_MODE_SHORTESTXASPECT: {
             unsigned int dest_width = width;
             unsigned int dest_height = height;
             bool is_portrait = IS_PORTRAIT(rotation);
 
-            if ((width > video_buffer.width && !is_portrait)
-                || (height > video_buffer.height && is_portrait)
+            if ((width > buffer->width && !is_portrait)
+                || (height > buffer->height && is_portrait)
             ) {
                 dest_width = (int)(height * av_info.geometry.aspect_ratio);
-            } else if ((height > video_buffer.height && !is_portrait)
-                || (width > video_buffer.width && is_portrait)
+            } else if ((height > buffer->height && !is_portrait)
+                || (width > buffer->width && is_portrait)
             ) {
                 dest_height = (int)(width * av_info.geometry.aspect_ratio);
             }
             if (dest_width != width || dest_height != height) {
-                blit_scale(data, width, height, pitch, dest_width, dest_height);
+                blit_scale(buffer, data, width, height, pitch, dest_width, dest_height);
             } else {
-                blit_plain(data, width, height, pitch);
+                blit_plain(buffer, data, width, height, pitch);
             }
             break;
         }
@@ -114,21 +115,21 @@ void blit(
             unsigned int dest_height = height;
             bool is_portrait = IS_PORTRAIT(rotation);
 
-            if ((width > video_buffer.width && !is_portrait)
-                || (height > video_buffer.height && is_portrait)
+            if ((width > buffer->width && !is_portrait)
+                || (height > buffer->height && is_portrait)
             ) {
-                dest_width = video_buffer.width;
+                dest_width = buffer->width;
                 dest_height = (int)(dest_width / av_info.geometry.aspect_ratio);
-            } else if ((height > video_buffer.height && !is_portrait)
-                || (width > video_buffer.width && is_portrait)
+            } else if ((height > buffer->height && !is_portrait)
+                || (width > buffer->width && is_portrait)
             ) {
-                dest_height = video_buffer.height;
+                dest_height = buffer->height;
                 dest_width = (int)(dest_height * av_info.geometry.aspect_ratio);
             }
             if (dest_width != width || dest_height != height) {
-                blit_scale(data, width, height, pitch, dest_width, dest_height);
+                blit_scale(buffer, data, width, height, pitch, dest_width, dest_height);
             } else {
-                blit_plain(data, width, height, pitch);
+                blit_plain(buffer, data, width, height, pitch);
             }
             break;
         }
@@ -137,44 +138,45 @@ void blit(
             unsigned int dest_height = height;
             bool is_portrait = IS_PORTRAIT(rotation);
 
-            if ((width < video_buffer.width && !is_portrait)
-                || (height < video_buffer.height && is_portrait)
+            if ((width < buffer->width && !is_portrait)
+                || (height < buffer->height && is_portrait)
             ) {
-                dest_width = video_buffer.width;
+                dest_width = buffer->width;
                 dest_height = (int)(dest_width / av_info.geometry.aspect_ratio);
-            } else if ((height < video_buffer.height && !is_portrait)
-                || (width < video_buffer.width && is_portrait)
+            } else if ((height < buffer->height && !is_portrait)
+                || (width < buffer->width && is_portrait)
             ) {
-                dest_height = video_buffer.height;
+                dest_height = buffer->height;
                 dest_width = (int)(dest_height * av_info.geometry.aspect_ratio);
             }
             if (dest_width != width || dest_height != height) {
-                blit_scale(data, width, height, pitch, dest_width, dest_height);
+                blit_scale(buffer, data, width, height, pitch, dest_width, dest_height);
             } else {
-                blit_plain(data, width, height, pitch);
+                blit_plain(buffer, data, width, height, pitch);
             }
             break;
         }
         case SCALE_MODE_NONE:
         default:
-            blit_plain(data, width, height, pitch);
+            blit_plain(buffer, data, width, height, pitch);
             break;
     }
 
-    *out = (const unsigned char *) video_buffer.data;
-    *out_size = video_buffer.size;
+    *out = (const unsigned char *) buffer->data;
+    *out_size = buffer->size;
 }
 
-static void blit_plain(const void *data, unsigned width, unsigned height, size_t pitch)
+static void blit_plain(VideoBuffer *buffer,
+    const void *data, unsigned width, unsigned height, size_t pitch)
 {
-    unsigned char *dst = (unsigned char *) video_buffer.data;
+    unsigned char *dst = (unsigned char *) buffer->data;
     const unsigned char *src = (const unsigned char *) data;
 
     // Calculate source dimensions to blit
     unsigned int src_width = width;
     unsigned int src_height = height;
-    unsigned int dst_width = video_buffer.width;
-    unsigned int dst_height = video_buffer.height;
+    unsigned int dst_width = buffer->width;
+    unsigned int dst_height = buffer->height;
 
     // If source is larger, center it in destination
     int offset_x = (dst_width > src_width) ? (dst_width - src_width) / 2 : 0;
@@ -189,34 +191,35 @@ static void blit_plain(const void *data, unsigned width, unsigned height, size_t
     unsigned int src_offset_y = (src_height > dst_height) ? (src_height - dst_height) / 2 : 0;
 
     // Blit source to destination
-    size_t bpp = video_buffer.bpp;
+    size_t bpp = buffer->bpp;
     for (unsigned int y = 0; y < blit_height; y++) {
         memcpy(
-            dst + (offset_y + y) * video_buffer.pitch + offset_x * bpp,
+            dst + (offset_y + y) * buffer->pitch + offset_x * bpp,
             src + (src_offset_y + y) * pitch + src_offset_x * bpp,
             blit_width * bpp
         );
     }
 }
 
-static void blit_half(const void *data, unsigned width, unsigned height, size_t pitch)
+static void blit_half(VideoBuffer *buffer,
+    const void *data, unsigned width, unsigned height, size_t pitch)
 {
-    unsigned char *dst = (unsigned char *) video_buffer.data;
+    unsigned char *dst = (unsigned char *) buffer->data;
     const unsigned char *src = (const unsigned char *) data;
 
     unsigned int src_width = width;
-    bool halve_width = src_width > video_buffer.width;
+    bool halve_width = src_width > buffer->width;
     unsigned int src_px_factor = halve_width ? 2 : 1;
     if (halve_width) {
         src_width /= 2;
     }
     unsigned int src_height = height;
-    bool halve_height = src_height > video_buffer.height;
+    bool halve_height = src_height > buffer->height;
     if (halve_height) {
         src_height /= 2;
     }
-    unsigned int dst_width = video_buffer.width;
-    unsigned int dst_height = video_buffer.height;
+    unsigned int dst_width = buffer->width;
+    unsigned int dst_height = buffer->height;
 
     int offset_x = (dst_width > src_width) ? (int)(dst_width - src_width) / 2 : 0;
     int offset_y = (dst_height > src_height) ? (int)(dst_height - src_height) / 2 : 0;
@@ -227,11 +230,11 @@ static void blit_half(const void *data, unsigned width, unsigned height, size_t 
     unsigned int src_offset_x = (src_width > dst_width) ? (src_width - dst_width) / 2 : 0;
     unsigned int src_offset_y = (src_height > dst_height) ? (src_height - dst_height) / 2 : 0;
 
-    size_t bpp = video_buffer.bpp;
+    size_t bpp = buffer->bpp;
     size_t src_row_step = halve_height ? pitch * 2 : pitch;
 
     const unsigned char *sr_row = src + src_offset_y * pitch + src_offset_x * bpp * src_px_factor;
-    unsigned char *dr_row = dst + offset_y * video_buffer.pitch + offset_x * bpp;
+    unsigned char *dr_row = dst + offset_y * buffer->pitch + offset_x * bpp;
 
     if (halve_width) {
         size_t src_px_step = bpp * 2;
@@ -245,7 +248,7 @@ static void blit_half(const void *data, unsigned width, unsigned height, size_t 
                     dr += 2;
                 }
                 sr_row += src_row_step;
-                dr_row += video_buffer.pitch;
+                dr_row += buffer->pitch;
             }
         } else if (bpp == 4) {
             for (unsigned int y = 0; y < blit_height; y++) {
@@ -257,40 +260,40 @@ static void blit_half(const void *data, unsigned width, unsigned height, size_t 
                     dr += 4;
                 }
                 sr_row += src_row_step;
-                dr_row += video_buffer.pitch;
+                dr_row += buffer->pitch;
             }
         }
     } else {
         for (unsigned int y = 0; y < blit_height; y++) {
             memcpy(dr_row, sr_row, blit_width * bpp);
             sr_row += src_row_step;
-            dr_row += video_buffer.pitch;
+            dr_row += buffer->pitch;
         }
     }
 }
 
-static void blit_scale(
+static void blit_scale(VideoBuffer *buffer,
     const void *data, unsigned width, unsigned height, size_t pitch,
     unsigned int dest_width, unsigned int dest_height
 )
 {
-    unsigned char *dst = (unsigned char *) video_buffer.data;
+    unsigned char *dst = (unsigned char *) buffer->data;
     const unsigned char *src = (const unsigned char *) data;
 
-    dest_width = MIN(dest_width, video_buffer.width);
-    dest_height = MIN(dest_height, video_buffer.height);
+    dest_width = MIN(dest_width, buffer->width);
+    dest_height = MIN(dest_height, buffer->height);
 
-    int offset_y = MAX((video_buffer.height - (int) dest_height) / 2, 0);
-    int offset_x = MAX((video_buffer.width - (int) dest_width) / 2, 0);
+    int offset_y = MAX((buffer->height - (int) dest_height) / 2, 0);
+    int offset_x = MAX((buffer->width - (int) dest_width) / 2, 0);
 
-    int bpp = video_buffer.bpp;
+    int bpp = buffer->bpp;
     bool is_argb = (pixel_format == PF_ARGB8888);
 
     // Fixed-point 16.16 step sizes mapping dest [0, dest-1] onto src [0, src-1]
     uint32_t step_x = (width  > 1) ? ((width  - 1) << 16) / (dest_width  > 1 ? dest_width  - 1 : 1) : 0;
     uint32_t step_y = (height > 1) ? ((height - 1) << 16) / (dest_height > 1 ? dest_height - 1 : 1) : 0;
 
-    dst += offset_y * video_buffer.pitch;
+    dst += offset_y * buffer->pitch;
 
     uint32_t fy = 0;
     for (int y = 0; y < (int) dest_height; y++, fy += step_y) {
@@ -345,6 +348,26 @@ static void blit_scale(
 
             dr += bpp;
         }
-        dst += video_buffer.pitch;
+        dst += buffer->pitch;
+    }
+}
+
+void buffer_clear(VideoBuffer *buffer)
+{
+    if (buffer->data) {
+        memset(buffer->data, 0, buffer->size);
+    }
+}
+
+void buffer_free(VideoBuffer *buffer)
+{
+    if (buffer->data) {
+        free(buffer->data);
+        buffer->data = NULL;
+        buffer->width = 0;
+        buffer->height = 0;
+        buffer->bpp = 0;
+        buffer->pitch = 0;
+        buffer->size = 0;
     }
 }

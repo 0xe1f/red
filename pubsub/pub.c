@@ -45,6 +45,7 @@ const struct retro_system_content_info_override *content_info;
 struct retro_game_info *game_info = NULL;
 struct retro_game_info_ext *game_info_ext = NULL;
 VideoBuffer video_buffer = {0};
+VideoBuffer overlay_buffer = {0};
 struct retro_system_av_info av_info;
 Rotation rotation = ROTATE_NONE;
 PixelFormat pixel_format = PF_UNKNOWN; // default is 1555
@@ -66,11 +67,14 @@ static bool supports_no_game = false;
 static bool variables_updated = false;
 struct retro_disk_control_ext_callback *disk_ext_interface;
 static FILE *log_file = NULL;
+static struct retro_message_ext active_message = {0};
+static unsigned long message_last_updated_ms = 0UL;
 
 static void set_core_options(const struct retro_core_option_definition *option_defs);
 static void set_variables(const struct retro_variable *vars, bool single);
 static void callback_set_led_state(int led, int state);
 static void handle_request(const RequestEnvelope *request, ResponseEnvelope *response);
+static void display_osd_message(enum retro_log_level level, enum retro_message_type type, const char *msg, unsigned int progress);
 
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
@@ -106,10 +110,10 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
         ph = height;
         pp = pitch;
         dims_changed = true;
-        if (video_buffer.data) {
-            // clear buffer to avoid artifacts when size changes
-            memset(video_buffer.data, 0, video_buffer.size);
-        }
+
+        // clear buffer to avoid artifacts when size changes
+        buffer_clear(&video_buffer);
+        buffer_clear(&overlay_buffer);
     }
 
     if (video_buffer.data && geometry.width == 0) {
@@ -132,10 +136,26 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
 
     const unsigned char *out;
     size_t out_size;
-    blit(args.scale_mode, data, width, height, pitch, &out, &out_size);
+    buffer_blit(&video_buffer, args.scale_mode, data, width, height, pitch, &out, &out_size);
 
     if (video_buffer.data) {
         filter_apply(&args.filter, &video_buffer);
+    }
+
+    if (active_message.msg) {
+        unsigned long now_ms = micros() / 1000UL;
+        if (now_ms - message_last_updated_ms > active_message.duration) {
+            message_last_updated_ms = 0UL;
+            active_message.msg = NULL;
+        } else {
+            if (active_message.target == RETRO_MESSAGE_TARGET_LOG || active_message.target == RETRO_MESSAGE_TARGET_ALL) {
+                callback_log(active_message.level, "%s\n", active_message.msg);
+            }
+            if (active_message.target == RETRO_MESSAGE_TARGET_OSD || active_message.target == RETRO_MESSAGE_TARGET_ALL) {
+                display_osd_message(active_message.level, active_message.type, active_message.msg, active_message.progress);
+                // TODO: blit overlay_buffer to video_buffer
+            }
+        }
     }
 
     xm_publish_frame(&geometry, out, out_size);
@@ -400,8 +420,9 @@ static bool callback_environment_set(unsigned cmd, void *data)
         // const struct retro_memory_map *maps = (struct retro_memory_map *)data;
         break;
     case RETRO_ENVIRONMENT_SET_MESSAGE_EXT:
-        const struct retro_message_ext *message_ext = (const struct retro_message_ext *)data;
-        log_i(LOG_TAG, "RETRO_ENVIRONMENT_SET_MESSAGE_EXT: %s\n", message_ext->msg);
+        log_v(LOG_TAG, "RETRO_ENVIRONMENT_SET_MESSAGE_EXT\n");
+        active_message = *(const struct retro_message_ext *) data;
+        message_last_updated_ms = micros() / 1000UL;
         break;
     case RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY\n");
@@ -430,7 +451,9 @@ static bool callback_environment_set(unsigned cmd, void *data)
                 *(enum retro_pixel_format *)data);
             return false;
         }
-        realloc_buffer_if_needed(&video_buffer,
+        buffer_realloc_if_needed(&video_buffer,
+            args.output_width, args.output_height);
+        buffer_realloc_if_needed(&overlay_buffer,
             args.output_width, args.output_height);
         break;
     case RETRO_ENVIRONMENT_SET_ROTATION:
@@ -502,8 +525,8 @@ static void clean_up()
     xm_cleanup();
     filter_free();
     core_close(&core);
-    free(video_buffer.data);
-    video_buffer.data = NULL;
+    buffer_free(&video_buffer);
+    buffer_free(&overlay_buffer);
     free(input_descriptors);
     input_descriptors = NULL;
     kvstore_free(&kv_store);
@@ -601,6 +624,11 @@ static void handle_request(const RequestEnvelope *request, ResponseEnvelope *res
             log_w(LOG_TAG, "Envelope arrived empty or with unknown type\n");
             break;
     }
+}
+
+static void display_osd_message(enum retro_log_level level, enum retro_message_type type, const char *msg, unsigned int progress)
+{
+    // callback_log(level, "%s\n", msg);
 }
 
 int main(int argc, const char **argv)
