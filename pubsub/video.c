@@ -43,6 +43,12 @@ extern struct retro_system_av_info av_info;
 extern Rotation rotation;
 extern PixelFormat pixel_format;
 
+static const VideoFont font_8x8 = {
+#include "video_font_8x8.inc"
+};
+
+const VideoFont *Font8x8 = &font_8x8;
+
 static void blit_plain(VideoBuffer *buffer,
     const void *data, unsigned width, unsigned height, size_t pitch);
 static void blit_half(VideoBuffer *buffer,
@@ -350,6 +356,159 @@ static void blit_scale(VideoBuffer *buffer,
         }
         dst += buffer->pitch;
     }
+}
+
+void buffer_print(VideoBuffer *buffer,
+    const VideoFont *font,
+    unsigned short x, unsigned short y, const char *text,
+    unsigned char color_r, unsigned char color_g, unsigned char color_b
+)
+{
+    if (!text || !buffer->data || !font || !font->data
+        || !buffer->width || !buffer->height || !buffer->bpp
+    ) {
+        return;
+    }
+
+    int gw = font->glyph_width;
+    int gh = font->glyph_height;
+    int bytes_per_row = (gw + 7) / 8;
+    int bytes_per_glyph = bytes_per_row * gh;
+    size_t bpp = buffer->bpp;
+    int buf_w = buffer->width;
+    int buf_h = buffer->height;
+    int origin_x = x;
+    int cx = x;
+    int cy = y;
+
+    if (cy >= buf_h) {
+        return;
+    }
+
+    for (const char *c = text; *c; c++) {
+        if (*c == '\n') {
+            cy += gh;
+            cx = origin_x;
+            if (cy >= buf_h) {
+                return;
+            }
+            continue;
+        }
+
+        unsigned char ch = (unsigned char) *c;
+        if (ch < font->first_code || ch > font->last_code) {
+            continue;
+        }
+
+        if (cx >= buf_w) {
+            continue;
+        }
+        if (cx + gw <= 0 || cy + gh <= 0) {
+            cx += gw;
+            continue;
+        }
+
+        const unsigned char *glyph =
+            (const unsigned char *) font->data
+            + (ch - font->first_code) * bytes_per_glyph;
+
+        int j0 = cx < 0 ? -cx : 0;
+        int i0 = cy < 0 ? -cy : 0;
+        int j1 = cx + gw > buf_w ? buf_w - cx : gw;
+        int i1 = cy + gh > buf_h ? buf_h - cy : gh;
+
+        unsigned char *row =
+            (unsigned char *) buffer->data
+            + (cy + i0) * buffer->pitch
+            + (cx + j0) * bpp;
+
+        for (int i = i0; i < i1; i++) {
+            unsigned char *px = row;
+            for (int j = j0; j < j1; j++) {
+                unsigned char bits = glyph[i * bytes_per_row + (j / 8)];
+                if (bits & (1 << (7 - (j % 8)))) {
+                    if (bpp == 2) {
+                        *(unsigned short *) px = RGB_RGB565(color_r, color_g, color_b);
+                    } else if (bpp == 4) {
+                        *(unsigned int *) px = RGB_ARGB8888(color_r, color_g, color_b);
+                    }
+                }
+                px += bpp;
+            }
+            row += buffer->pitch;
+        }
+        cx += gw;
+    }
+}
+
+void buffer_apply_overlay(VideoBuffer *buffer, VideoBuffer *overlay)
+{
+    if (!buffer->data || !overlay->data || buffer->bpp != overlay->bpp) {
+        return;
+    }
+
+    size_t bpp = buffer->bpp;
+    unsigned char *dst = buffer->data;
+    const unsigned char *src = overlay->data;
+    for (int y = 0, h = MIN(buffer->height, overlay->height); y < h; y++) {
+        unsigned char *dst_row = dst;
+        const unsigned char *src_row = src;
+        for (int x = 0, w = MIN(buffer->width, overlay->width); x < w; x++) {
+            if (bpp == 2) {
+                uint16_t p = *(const uint16_t *) src_row;
+                if (p) {
+                    *(uint16_t *) dst_row = p;
+                }
+            } else if (bpp == 4) {
+                uint32_t p = *(const uint32_t *) src_row;
+                if (p) {
+                    *(uint32_t *) dst_row = p;
+                }
+            }
+            dst_row += bpp;
+            src_row += bpp;
+        }
+        dst += buffer->pitch;
+        src += overlay->pitch;
+    }
+}
+
+void buffer_measure_text(const VideoFont *font,
+    const char *text,
+    unsigned short *out_width, unsigned short *out_height)
+{
+    if (!font || !text) {
+        return;
+    }
+
+    unsigned short gw = font->glyph_width;
+    unsigned short gh = font->glyph_height;
+    unsigned int line_width = 0;
+    unsigned int max_width = 0;
+    unsigned int lines = 1;
+
+    for (const char *c = text; *c; c++) {
+        if (*c == '\n') {
+            if (line_width > max_width) {
+                max_width = line_width;
+            }
+            line_width = 0;
+            lines++;
+            continue;
+        }
+
+        unsigned char ch = (unsigned char) *c;
+        if (ch < font->first_code || ch > font->last_code) {
+            continue;
+        }
+        line_width += gw;
+    }
+    if (line_width > max_width) {
+        max_width = line_width;
+    }
+
+    *out_width = (unsigned short) max_width;
+    *out_height = (unsigned short) (lines * gh);
 }
 
 void buffer_clear(VideoBuffer *buffer)

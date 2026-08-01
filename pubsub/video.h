@@ -36,6 +36,14 @@ typedef enum {
 } ScaleMode;
 
 typedef struct {
+    unsigned short glyph_width;
+    unsigned short glyph_height;
+    unsigned short first_code;
+    unsigned short last_code;
+    const void *data;
+} VideoFont;
+
+typedef struct {
     void *data;
     unsigned short width;
     unsigned short height;
@@ -50,6 +58,22 @@ void buffer_blit(VideoBuffer *buffer,
     ScaleMode scale_mode,
     const void *data, unsigned width, unsigned height, size_t pitch,
     const unsigned char **out, size_t *out_size
+);
+
+extern const VideoFont *Font8x8;
+
+void buffer_print(VideoBuffer *buffer,
+    const VideoFont *font,
+    unsigned short x, unsigned short y, const char *text,
+    unsigned char color_r, unsigned char color_g, unsigned char color_b
+);
+void buffer_measure_text(const VideoFont *font,
+    const char *text,
+    unsigned short *width, unsigned short *height
+);
+void buffer_apply_overlay(
+    VideoBuffer *buffer,
+    VideoBuffer *overlay
 );
 void buffer_clear(VideoBuffer *buffer);
 

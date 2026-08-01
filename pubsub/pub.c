@@ -153,9 +153,9 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
             }
             if (active_message.target == RETRO_MESSAGE_TARGET_OSD || active_message.target == RETRO_MESSAGE_TARGET_ALL) {
                 display_osd_message(active_message.level, active_message.type, active_message.msg, active_message.progress);
-                // TODO: blit overlay_buffer to video_buffer
             }
         }
+        buffer_apply_overlay(&video_buffer, &overlay_buffer);
     }
 
     xm_publish_frame(&geometry, out, out_size);
@@ -626,9 +626,25 @@ static void handle_request(const RequestEnvelope *request, ResponseEnvelope *res
     }
 }
 
-static void display_osd_message(enum retro_log_level level, enum retro_message_type type, const char *msg, unsigned int progress)
+static void display_osd_message(
+    enum retro_log_level level,
+    enum retro_message_type type,
+    const char *msg,
+    unsigned int progress
+)
 {
-    // callback_log(level, "%s\n", msg);
+    buffer_clear(&overlay_buffer);
+
+    unsigned short width, height;
+    buffer_measure_text(Font8x8, msg, &width, &height);
+
+    unsigned short x = 0;
+    unsigned short y = overlay_buffer.height - height;
+    if (type == RETRO_MESSAGE_TYPE_NOTIFICATION_ALT) {
+        x = overlay_buffer.width - width;
+    }
+
+    buffer_print(&overlay_buffer, Font8x8, x, y, msg, 255, 255, 255);
 }
 
 int main(int argc, const char **argv)
