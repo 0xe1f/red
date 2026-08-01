@@ -639,7 +639,7 @@ static void display_osd_message(
     buffer_measure_text(Font8x8, msg, &width, &height);
 
     unsigned short x = 0;
-    unsigned short y = overlay_buffer.height - height;
+    unsigned short y = overlay_buffer.height - height - 16; // FIXME: hardcoded margin
     if (type == RETRO_MESSAGE_TYPE_NOTIFICATION_ALT) {
         x = overlay_buffer.width - width;
     }
