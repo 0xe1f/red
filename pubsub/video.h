@@ -41,7 +41,7 @@ typedef struct {
     unsigned short first_code;
     unsigned short last_code;
     const void *data;
-} VideoFont;
+} Font;
 
 typedef struct {
     void *data;
@@ -52,6 +52,15 @@ typedef struct {
     unsigned int size;
 } VideoBuffer;
 
+typedef struct {
+    unsigned short x;
+    unsigned short y;
+    unsigned short width;
+    unsigned short height;
+} Rect;
+
+extern const Font *Font8x8;
+
 void buffer_realloc_if_needed(VideoBuffer *buffer, int width, int height);
 void buffer_free(VideoBuffer *buffer);
 void buffer_blit(VideoBuffer *buffer,
@@ -59,22 +68,28 @@ void buffer_blit(VideoBuffer *buffer,
     const void *data, unsigned width, unsigned height, size_t pitch,
     const unsigned char **out, size_t *out_size
 );
-
-extern const VideoFont *Font8x8;
-
 void buffer_print(VideoBuffer *buffer,
-    const VideoFont *font,
+    const Font *font,
     unsigned short x, unsigned short y, const char *text,
     unsigned char color_r, unsigned char color_g, unsigned char color_b
 );
-void buffer_measure_text(const VideoFont *font,
+void buffer_measure_text(const Font *font,
     const char *text,
     unsigned short *width, unsigned short *height
 );
-void buffer_apply_overlay(
+void buffer_overlay_rect(
     VideoBuffer *buffer,
-    VideoBuffer *overlay
+    VideoBuffer *overlay,
+    const Rect *rect
 );
 void buffer_clear(VideoBuffer *buffer);
+void buffer_clear_rect(VideoBuffer *buffer, const Rect *rect);
+
+void rect_set(Rect *rect,
+    unsigned short x, unsigned short y,
+    unsigned short width, unsigned short height);
+void rect_zero(Rect *rect);
+bool rect_is_zero(const Rect *rect);
+bool rect_equals(const Rect *rect1, const Rect *rect2);
 
 #endif // __VIDEO_H__

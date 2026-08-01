@@ -43,11 +43,11 @@ extern struct retro_system_av_info av_info;
 extern Rotation rotation;
 extern PixelFormat pixel_format;
 
-static const VideoFont font_8x8 = {
+static const Font font_8x8 = {
 #include "video_font_8x8.inc"
 };
 
-const VideoFont *Font8x8 = &font_8x8;
+const Font *Font8x8 = &font_8x8;
 
 static void blit_plain(VideoBuffer *buffer,
     const void *data, unsigned width, unsigned height, size_t pitch);
@@ -359,7 +359,7 @@ static void blit_scale(VideoBuffer *buffer,
 }
 
 void buffer_print(VideoBuffer *buffer,
-    const VideoFont *font,
+    const Font *font,
     unsigned short x, unsigned short y, const char *text,
     unsigned char color_r, unsigned char color_g, unsigned char color_b
 )
@@ -441,19 +441,37 @@ void buffer_print(VideoBuffer *buffer,
     }
 }
 
-void buffer_apply_overlay(VideoBuffer *buffer, VideoBuffer *overlay)
+void buffer_overlay_rect(
+    VideoBuffer *buffer,
+    VideoBuffer *overlay,
+    const Rect *rect)
 {
     if (!buffer->data || !overlay->data || buffer->bpp != overlay->bpp) {
         return;
     }
 
+    unsigned short x0 = 0;
+    unsigned short y0 = 0;
+    unsigned short x1 = MIN(buffer->width, overlay->width);
+    unsigned short y1 = MIN(buffer->height, overlay->height);
+
+    if (rect && !rect_is_zero(rect)) {
+        x0 = rect->x;
+        y0 = rect->y;
+        x1 = MIN(rect->x + rect->width, x1);
+        y1 = MIN(rect->y + rect->height, y1);
+    }
+
     size_t bpp = buffer->bpp;
-    unsigned char *dst = buffer->data;
-    const unsigned char *src = overlay->data;
-    for (int y = 0, h = MIN(buffer->height, overlay->height); y < h; y++) {
+    unsigned char *dst =
+        (unsigned char *) buffer->data + y0 * buffer->pitch + x0 * bpp;
+    const unsigned char *src =
+        (const unsigned char *) overlay->data + y0 * overlay->pitch + x0 * bpp;
+
+    for (int y = y0; y < y1; y++) {
         unsigned char *dst_row = dst;
         const unsigned char *src_row = src;
-        for (int x = 0, w = MIN(buffer->width, overlay->width); x < w; x++) {
+        for (int x = x0; x < x1; x++) {
             if (bpp == 2) {
                 uint16_t p = *(const uint16_t *) src_row;
                 if (p) {
@@ -473,7 +491,7 @@ void buffer_apply_overlay(VideoBuffer *buffer, VideoBuffer *overlay)
     }
 }
 
-void buffer_measure_text(const VideoFont *font,
+void buffer_measure_text(const Font *font,
     const char *text,
     unsigned short *out_width, unsigned short *out_height)
 {
@@ -518,6 +536,17 @@ void buffer_clear(VideoBuffer *buffer)
     }
 }
 
+void buffer_clear_rect(VideoBuffer *buffer, const Rect *rect)
+{
+    if (buffer->data && !rect_is_zero(rect)) {
+        unsigned char *dst = buffer->data + rect->y * buffer->pitch;
+        for (unsigned int y = 0; y < rect->height; y++) {
+            memset(dst + rect->x * buffer->bpp, 0, rect->width * buffer->bpp);
+            dst += buffer->pitch;
+        }
+    }
+}
+
 void buffer_free(VideoBuffer *buffer)
 {
     if (buffer->data) {
@@ -529,4 +558,33 @@ void buffer_free(VideoBuffer *buffer)
         buffer->pitch = 0;
         buffer->size = 0;
     }
+}
+
+void rect_set(Rect *rect,
+    unsigned short x, unsigned short y,
+    unsigned short width, unsigned short height)
+{
+    rect->x = x;
+    rect->y = y;
+    rect->width = width;
+    rect->height = height;
+}
+
+void rect_zero(Rect *rect)
+{
+    rect->x = 0;
+    rect->y = 0;
+    rect->width = 0;
+    rect->height = 0;
+}
+
+bool rect_is_zero(const Rect *rect)
+{
+    return rect->x == 0 && rect->y == 0 && rect->width == 0 && rect->height == 0;
+}
+
+bool rect_equals(const Rect *rect1, const Rect *rect2)
+{
+    return rect1->x == rect2->x && rect1->y == rect2->y
+        && rect1->width == rect2->width && rect1->height == rect2->height;
 }

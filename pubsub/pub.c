@@ -44,8 +44,6 @@ struct retro_system_info system_info;
 const struct retro_system_content_info_override *content_info;
 struct retro_game_info *game_info = NULL;
 struct retro_game_info_ext *game_info_ext = NULL;
-VideoBuffer video_buffer = {0};
-VideoBuffer overlay_buffer = {0};
 struct retro_system_av_info av_info;
 Rotation rotation = ROTATE_NONE;
 PixelFormat pixel_format = PF_UNKNOWN; // default is 1555
@@ -69,6 +67,9 @@ struct retro_disk_control_ext_callback *disk_ext_interface;
 static FILE *log_file = NULL;
 static struct retro_message_ext active_message = {0};
 static unsigned long message_last_updated_ms = 0UL;
+static VideoBuffer video_buffer = {0};
+static VideoBuffer overlay_buffer = {0};
+static Rect rect_osd = {0};
 
 static void set_core_options(const struct retro_core_option_definition *option_defs);
 static void set_variables(const struct retro_variable *vars, bool single);
@@ -134,6 +135,10 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
             : ATTR_NONE;
     }
 
+    if (!rect_is_zero(&rect_osd)) {
+        buffer_clear_rect(&video_buffer, &rect_osd);
+    }
+
     const unsigned char *out;
     size_t out_size;
     buffer_blit(&video_buffer, args.scale_mode, data, width, height, pitch, &out, &out_size);
@@ -147,6 +152,8 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
         if (now_ms - message_last_updated_ms > active_message.duration) {
             message_last_updated_ms = 0UL;
             active_message.msg = NULL;
+            buffer_clear_rect(&overlay_buffer, &rect_osd);
+            rect_zero(&rect_osd);
         } else {
             if (active_message.target == RETRO_MESSAGE_TARGET_LOG || active_message.target == RETRO_MESSAGE_TARGET_ALL) {
                 callback_log(active_message.level, "%s\n", active_message.msg);
@@ -155,7 +162,7 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
                 display_osd_message(active_message.level, active_message.type, active_message.msg, active_message.progress);
             }
         }
-        buffer_apply_overlay(&video_buffer, &overlay_buffer);
+        buffer_overlay_rect(&video_buffer, &overlay_buffer, &rect_osd);
     }
 
     xm_publish_frame(&geometry, out, out_size);
@@ -639,10 +646,11 @@ static void display_osd_message(
     buffer_measure_text(Font8x8, msg, &width, &height);
 
     unsigned short x = 0;
-    unsigned short y = overlay_buffer.height - height - 16; // FIXME: hardcoded margin
+    unsigned short y = overlay_buffer.height - height;
     if (type == RETRO_MESSAGE_TYPE_NOTIFICATION_ALT) {
         x = overlay_buffer.width - width;
     }
+    rect_set(&rect_osd, x, y, width, height);
 
     buffer_print(&overlay_buffer, Font8x8, x, y, msg, 255, 255, 255);
 }
