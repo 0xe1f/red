@@ -22,5 +22,6 @@ message RequestEnvelope {
         ReplayRecordRequest replay_record = 1;
         ReplayPlaybackRequest replay_playback = 2;
         ReplayStopRequest replay_stop = 3;
+        ReplayResumeRecordRequest replay_resume_record = 4;
     }
 }

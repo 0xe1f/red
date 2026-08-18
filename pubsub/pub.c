@@ -527,7 +527,7 @@ static bool callback_environment_set(unsigned cmd, void *data)
 static void clean_up()
 {
     if (replay.mode) {
-        replay_stop(&replay);
+        replay_abort(&replay);
     }
     xm_cleanup();
     filter_free();
@@ -620,10 +620,18 @@ static void handle_request(const RequestEnvelope *request, ResponseEnvelope *res
         }
         case REQUEST_ENVELOPE__PAYLOAD_REPLAY_STOP: {
             log_i(LOG_TAG, "Received replay stop request\n");
-            replay_stop(&replay);
+            replay_end(&replay);
             static ReplayStopResponse r = REPLAY_STOP_RESPONSE__INIT;
             response->payload_case = RESPONSE_ENVELOPE__PAYLOAD_REPLAY_STOP;
             response->replay_stop = &r;
+            break;
+        }
+        case REQUEST_ENVELOPE__PAYLOAD_REPLAY_RESUME_RECORD: {
+            log_i(LOG_TAG, "Received replay resume record request\n");
+            replay_continue_recording(&replay, files_rom_recording_path(args.rom_path));
+            static ReplayResumeRecordResponse r = REPLAY_RESUME_RECORD_RESPONSE__INIT;
+            response->payload_case = RESPONSE_ENVELOPE__PAYLOAD_REPLAY_RESUME_RECORD;
+            response->replay_resume_record = &r;
             break;
         }
         case REQUEST_ENVELOPE__PAYLOAD__NOT_SET:
@@ -652,7 +660,7 @@ static void display_osd_message(
     }
     rect_set(&rect_osd, x, y, width, height);
 
-    buffer_print(&overlay_buffer, Font8x8, x, y, msg, 255, 255, 255);
+    buffer_print(&overlay_buffer, Font8x8, x, y, msg, 0xcc, 0xcc, 0xcc);
 }
 
 int main(int argc, const char **argv)

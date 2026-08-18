@@ -393,6 +393,27 @@ def stop_replay():
         'status': 'OK' if response is not None and response.error_code == 0 else 'ERR',
     }
 
+@app.route('/resume_record', methods=['POST'])
+@flask_login.login_required
+def resume_record():
+    try:
+        response = request_pub(
+            requests.RequestEnvelope(
+                replay_resume_record=replay.ReplayResumeRecordRequest()
+            )
+        )
+
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        return {
+            'status': 'ERR',
+            'message': 'Unexpected error',
+        }, http.HTTPStatus.INTERNAL_SERVER_ERROR
+
+    return {
+        'status': 'OK' if response is not None and response.error_code == 0 else 'ERR',
+    }
+
 FRAME_SUBJECT = "red.frames"
 # Wire format: FrameHeader — pitch(u16), width(u16), height(u16), pixel_format(u8), attrs(u8)
 FRAME_HEADER_FMT  = "<HHHBB"

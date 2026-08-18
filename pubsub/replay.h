@@ -17,6 +17,7 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef enum {
     MODE_NONE = 0,
@@ -26,12 +27,17 @@ typedef enum {
 
 typedef struct {
     ReplayMode mode;
+    const char *file_path;
+    const char *tmp_path;
+    uint64_t stop_offset;
     FILE *file;
 } Replay;
 
 bool replay_start_recording(Replay *replay, const char *path);
+bool replay_continue_recording(Replay *replay, const char *path);
 bool replay_start_playback(Replay *replay, const char *path);
-void replay_stop(Replay *replay);
+void replay_end(Replay *replay);
+void replay_abort(Replay *replay);
 
 bool replay_read_input(Replay *replay, void *input_state, size_t size);
 bool replay_write_input(Replay *replay, const void *input_state, size_t size);

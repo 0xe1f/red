@@ -11,6 +11,9 @@ message ReplayPlaybackRequest {
 message ReplayStopRequest {
 }
 
+message ReplayResumeRecordRequest {
+}
+
 // responses
 
 message ReplayRecordResponse {
@@ -20,4 +23,7 @@ message ReplayPlaybackResponse {
 }
 
 message ReplayStopResponse {
+}
+
+message ReplayResumeRecordResponse {
 }
