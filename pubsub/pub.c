@@ -604,7 +604,8 @@ static void handle_request(const RequestEnvelope *request, ResponseEnvelope *res
     switch (request->payload_case) {
         case REQUEST_ENVELOPE__PAYLOAD_REPLAY_RECORD: {
             log_i(LOG_TAG, "Received replay record request\n");
-            replay_start_recording(&replay, files_rom_recording_path(args.rom_path));
+            replay_start_recording(&replay,
+                files_rom_recording_path(args.rom_path, request->replay_record->slot));
             static ReplayRecordResponse r = REPLAY_RECORD_RESPONSE__INIT;
             response->payload_case = RESPONSE_ENVELOPE__PAYLOAD_REPLAY_RECORD;
             response->replay_record = &r;
@@ -612,7 +613,8 @@ static void handle_request(const RequestEnvelope *request, ResponseEnvelope *res
         }
         case REQUEST_ENVELOPE__PAYLOAD_REPLAY_PLAYBACK: {
             log_i(LOG_TAG, "Received replay playback request\n");
-            replay_start_playback(&replay, files_rom_recording_path(args.rom_path));
+            replay_start_playback(&replay,
+                files_rom_recording_path(args.rom_path, request->replay_playback->slot));
             static ReplayPlaybackResponse r = REPLAY_PLAYBACK_RESPONSE__INIT;
             response->payload_case = RESPONSE_ENVELOPE__PAYLOAD_REPLAY_PLAYBACK;
             response->replay_playback = &r;
@@ -628,7 +630,8 @@ static void handle_request(const RequestEnvelope *request, ResponseEnvelope *res
         }
         case REQUEST_ENVELOPE__PAYLOAD_REPLAY_RESUME_RECORD: {
             log_i(LOG_TAG, "Received replay resume record request\n");
-            replay_continue_recording(&replay, files_rom_recording_path(args.rom_path));
+            replay_continue_recording(&replay,
+                files_rom_recording_path(args.rom_path, request->replay_resume_record->slot));
             static ReplayResumeRecordResponse r = REPLAY_RESUME_RECORD_RESPONSE__INIT;
             response->payload_case = RESPONSE_ENVELOPE__PAYLOAD_REPLAY_RESUME_RECORD;
             response->replay_resume_record = &r;

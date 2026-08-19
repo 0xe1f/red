@@ -333,10 +333,15 @@ def sync():
 @app.route('/record', methods=['POST'])
 @flask_login.login_required
 def record():
+    slot = flask.request.json.get('slot')
+    slot = max(0, min(slot, 9)) if isinstance(slot, int) else 0
+
     try:
         response = request_pub(
             requests.RequestEnvelope(
-                replay_record=replay.ReplayRecordRequest()
+                replay_record=replay.ReplayRecordRequest(
+                    slot = slot
+                )
             )
         )
 
@@ -354,10 +359,15 @@ def record():
 @app.route('/playback', methods=['POST'])
 @flask_login.login_required
 def playback():
+    slot = flask.request.json.get('slot')
+    slot = max(0, min(slot, 9)) if isinstance(slot, int) else 0
+
     try:
         response = request_pub(
             requests.RequestEnvelope(
-                replay_playback=replay.ReplayPlaybackRequest()
+                replay_playback=replay.ReplayPlaybackRequest(
+                    slot = slot
+                )
             )
         )
 
@@ -396,10 +406,15 @@ def stop_replay():
 @app.route('/resume_record', methods=['POST'])
 @flask_login.login_required
 def resume_record():
+    slot = flask.request.json.get('slot')
+    slot = max(0, min(slot, 9)) if isinstance(slot, int) else 0
+
     try:
         response = request_pub(
             requests.RequestEnvelope(
-                replay_resume_record=replay.ReplayResumeRecordRequest()
+                replay_resume_record=replay.ReplayResumeRecordRequest(
+                    slot = slot
+                )
             )
         )
 

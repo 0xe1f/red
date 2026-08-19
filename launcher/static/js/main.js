@@ -81,7 +81,7 @@ $(function() {
     };
     const updateSelection = function(game) {
         $('.game.selected').removeClass('selected');
-        $('#status .title').toggleClass('valid', !!game);
+        $('#status').toggleClass('valid', !!game);
         if (!game) {
             $('#stop').hide();
             $('#status .title')
@@ -150,7 +150,7 @@ $(function() {
             $next[0].scrollIntoView({ behavior: "smooth", block: "center" });
         }
     };
-    var syncState = function() {
+    const syncState = function() {
         (function stateUpdater() {
             const timeoutMs = 5000; // 5 seconds
             const now = new Date().getTime();
@@ -576,6 +576,10 @@ $(function() {
             }
             setFiltersDrawerOpen(shouldOpen);
         });
+        $(".replay a").on("click", function(e) {
+            e.preventDefault();
+            onReplayAction(this);
+        });
         $("#filters-scrim").on("click", function() {
             closeFiltersDrawer();
         });
@@ -703,6 +707,50 @@ $(function() {
     const toggleScrim = function(show) {
         $('body').toggleClass('scrimmed', show);
     };
+    const onReplayAction = function(e) {
+        const endpoint = (() => {
+            switch (e.id) {
+                case 'replay-play':
+                    return {
+                        url: 'playback',
+                        args: { 'slot': 0 },
+                    };
+                case 'replay-stop':
+                    return {
+                        url: 'stop_replay'
+                    };
+                case 'replay-record':
+                    return {
+                        url: 'record',
+                        args: { 'slot': 0 },
+                    };
+                case 'replay-resume-record':
+                    return {
+                        url: 'resume_record',
+                        args: { 'slot': 0 },
+                    };
+                default: return null;
+            }
+        })();
+        if (!endpoint) {
+            console.warn(`Unknown replay action: ${e.id}`);
+            return;
+        }
+
+        $.ajax({
+            url: endpoint.url,
+            type: "POST",
+            data: JSON.stringify(endpoint.args || {}),
+            contentType: "application/json; charset=utf-8",
+            dataType: "json",
+            success: function(response) {
+                // TODO
+            },
+            error: function() {
+            }
+        });
+    };
+
     initialize();
     syncState();
 });

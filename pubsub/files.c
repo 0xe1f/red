@@ -597,10 +597,13 @@ bool files_restore_sram(const char *rom_path, void *sram_data, size_t sram_size)
     return read == file_size;
 }
 
-const char* files_rom_recording_path(const char *rom_path)
+const char* files_rom_recording_path(const char *rom_path, uint32_t slot)
 {
     static char path[1024];
-    snprintf(path, sizeof(path), "%s/%s.rec", recording_path, get_filename(rom_path, false));
+    snprintf(path, sizeof(path), "%s/%s_%u.rec",
+        recording_path,
+        get_filename(rom_path, false),
+        slot < 0 ? 0 : (slot > 9 ? 9 : slot));
 
     return path;
 }

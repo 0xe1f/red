@@ -72,19 +72,41 @@ a {
     text-decoration: none;
 }
 
-#status .title {
+#status .game-content {
     margin-left: 16px;
     margin-right: auto;
+    min-width: 0;
+}
+
+.game-content a {
+    text-decoration: none;
+    font-size: 14pt;
+    padding: 2px 4px;
+    color: var(--text-main);
+}
+
+.game-content a:hover {
+    color: var(--brand);
+}
+
+#status .title {
     font-size: 1.5rem;
     text-overflow: ellipsis;
     white-space: nowrap;
     overflow: hidden;
-    min-width: 0;
     color: var(--text-muted);
 }
 
-#status .title.valid {
+#status .valid .title {
     color: var(--text-main);
+}
+
+.replay {
+    visibility: hidden;
+}
+
+.valid .replay {
+    visibility: visible;
 }
 
 #filters-toggle {
@@ -528,12 +550,15 @@ body.volume-open #volume-panel {
         display: none;
     }
 
-    #status .title {
+    #status .game-content {
         margin-left: 0;
-        font-size: 1.15rem;
         flex: 1 0 100%;
         order: -1;
         padding-right: 52px;
+    }
+
+    #status .title {
+        font-size: 1.15rem;
     }
 
     #stop {

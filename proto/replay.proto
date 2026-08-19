@@ -3,15 +3,18 @@ syntax = "proto3";
 // requests
 
 message ReplayRecordRequest {
+    uint32 slot = 1;
 }
 
 message ReplayPlaybackRequest {
+    uint32 slot = 1;
 }
 
 message ReplayStopRequest {
 }
 
 message ReplayResumeRecordRequest {
+    uint32 slot = 1;
 }
 
 // responses
