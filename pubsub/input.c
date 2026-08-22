@@ -342,7 +342,7 @@ struct MouseState {
 };
 
 struct KeyboardState {
-    bool retro_keycode_states[RETROK_LAST];
+    uint8_t retro_keycode_states[(((RETROK_LAST) + 7) >> 3)];
 };
 
 static void input_reset_inputs();
@@ -363,7 +363,8 @@ static short get_mouse_state(unsigned int port, unsigned int id);
 static void init_keyboard();
 static void deinit_keyboard();
 static void poll_keyboard();
-static unsigned short get_keyboard_state(unsigned int port, unsigned int id);
+static uint16_t get_keyboard_state(unsigned int id);
+static void set_keyboard_state(unsigned int id, bool value);
 
 static const char* find_device(const char *type);
 
@@ -414,7 +415,7 @@ int16_t callback_input_state(unsigned int port, unsigned int device, unsigned in
             ret = get_joypad_state(port, id);
             break;
         case RETRO_DEVICE_KEYBOARD:
-            ret = get_keyboard_state(port, id);
+            ret = get_keyboard_state(id);
             break;
         case RETRO_DEVICE_MOUSE:
             ret = get_mouse_state(port, id);
@@ -534,6 +535,8 @@ static void input_reset_inputs()
         struct JoypadState *state = &joypad_states[joy];
         state->input_ids = 0ULL;
     }
+    memset(keyboard_state.retro_keycode_states,
+        0, sizeof(keyboard_state.retro_keycode_states));
 }
 
 static void input_reset_events()
@@ -882,7 +885,7 @@ static void poll_keyboard()
                     int mapped_code = keycode_retro_map[event.code].code;
                     if (mapped_code != RETROK_DUMMY) {
                         bool is_down = (event.value != 0);
-                        keyboard_state.retro_keycode_states[mapped_code] = is_down;
+                        set_keyboard_state(mapped_code, is_down);
                         if (callback) {
                             callback(is_down, mapped_code, 0, 0);
                         }
@@ -900,13 +903,23 @@ static void poll_keyboard()
     }
 }
 
-static unsigned short get_keyboard_state(unsigned int port, unsigned int id)
+static uint16_t get_keyboard_state(unsigned int id)
 {
-    unsigned short ret = 0;
-    if (id < RETROK_LAST) {
-        ret = keyboard_state.retro_keycode_states[id];
+    if (id < RETROK_LAST && id != RETROK_DUMMY) {
+        return (keyboard_state.retro_keycode_states[id >> 3] & (1 << (id & 7))) ? 1 : 0;
     }
-    return ret;
+    return 0;
+}
+
+static void set_keyboard_state(unsigned int id, bool value)
+{
+    if (id < RETROK_LAST && id != RETROK_DUMMY) {
+        if (value) {
+            keyboard_state.retro_keycode_states[id >> 3] |= (1 << (id & 7));
+        } else {
+            keyboard_state.retro_keycode_states[id >> 3] &= ~(1 << (id & 7));
+        }
+    }
 }
 
 static const char* find_device(const char *type)
