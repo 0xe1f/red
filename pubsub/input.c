@@ -36,6 +36,10 @@
 #define JOY_DEADZONE          0x4000
 #define DEFAULT_CONFIG        "y,x,l,b,a,r,start,select,l2,r2,l3,r3"
 
+#define MOUSE_BUTTON_LEFT     (1 << 0)
+#define MOUSE_BUTTON_MIDDLE   (1 << 1)
+#define MOUSE_BUTTON_RIGHT    (1 << 2)
+
 typedef struct {
     int code;
     const char *name;
@@ -334,11 +338,9 @@ struct JoypadDevice {
 };
 
 struct MouseState {
-    short x_delta;
-    short y_delta;
-    bool left_button;
-    bool middle_button;
-    bool right_button;
+    int16_t x_delta;
+    int16_t y_delta;
+    uint8_t button_states;
 };
 
 struct KeyboardState {
@@ -358,7 +360,7 @@ static void set_joypad_state(unsigned int port, unsigned int id, bool value);
 static void init_mouse();
 static void deinit_mouse();
 static void poll_mouse();
-static short get_mouse_state(unsigned int port, unsigned int id);
+static int16_t get_mouse_state(unsigned int id);
 
 static void init_keyboard();
 static void deinit_keyboard();
@@ -409,19 +411,15 @@ void input_poll()
 
 int16_t callback_input_state(unsigned int port, unsigned int device, unsigned int index, unsigned int id)
 {
-    unsigned short ret = 0;
     switch (device) {
         case RETRO_DEVICE_JOYPAD:
-            ret = get_joypad_state(port, id);
-            break;
+            return get_joypad_state(port, id);
         case RETRO_DEVICE_KEYBOARD:
-            ret = get_keyboard_state(id);
-            break;
+            return get_keyboard_state(id);
         case RETRO_DEVICE_MOUSE:
-            ret = get_mouse_state(port, id);
-            break;
+            return get_mouse_state(id);
     }
-    return ret;
+    return 0;
 }
 
 bool input_defer_events(const char *spec)
@@ -535,8 +533,13 @@ static void input_reset_inputs()
         struct JoypadState *state = &joypad_states[joy];
         state->input_ids = 0ULL;
     }
+
     memset(keyboard_state.retro_keycode_states,
         0, sizeof(keyboard_state.retro_keycode_states));
+
+    mouse_state.x_delta = 0;
+    mouse_state.y_delta = 0;
+    mouse_state.button_states = 0;
 }
 
 static void input_reset_events()
@@ -775,18 +778,30 @@ static void poll_mouse()
         switch (event.type) {
             case EV_REL:
                 if (event.code == REL_X) {
-                    mouse_state.x_delta = (short) event.value;
+                    mouse_state.x_delta = (int16_t) event.value;
                 } else if (event.code == REL_Y) {
-                    mouse_state.y_delta = (short) event.value;
+                    mouse_state.y_delta = (int16_t) event.value;
                 }
                 break;
             case EV_KEY:
                 if (event.code == BTN_LEFT) {
-                    mouse_state.left_button = event.value;
+                    if (event.value) {
+                        mouse_state.button_states |= MOUSE_BUTTON_LEFT;
+                    } else {
+                        mouse_state.button_states &= ~MOUSE_BUTTON_LEFT;
+                    }
                 } else if (event.code == BTN_RIGHT) {
-                    mouse_state.right_button = event.value;
+                    if (event.value) {
+                        mouse_state.button_states |= MOUSE_BUTTON_RIGHT;
+                    } else {
+                        mouse_state.button_states &= ~MOUSE_BUTTON_RIGHT;
+                    }
                 } else if (event.code == BTN_MIDDLE) {
-                    mouse_state.middle_button = event.value;
+                    if (event.value) {
+                        mouse_state.button_states |= MOUSE_BUTTON_MIDDLE;
+                    } else {
+                        mouse_state.button_states &= ~MOUSE_BUTTON_MIDDLE;
+                    }
                 }
                 break;
             default:
@@ -797,30 +812,23 @@ static void poll_mouse()
     }
 }
 
-static short get_mouse_state(unsigned int port, unsigned int id)
+static int16_t get_mouse_state(unsigned int id)
 {
-    unsigned short ret = 0;
     switch (id) {
     case RETRO_DEVICE_ID_MOUSE_X:
-        ret = mouse_state.x_delta;
-        break;
+        return mouse_state.x_delta;
     case RETRO_DEVICE_ID_MOUSE_Y:
-        ret = mouse_state.y_delta;
-        break;
+        return mouse_state.y_delta;
     case RETRO_DEVICE_ID_MOUSE_LEFT:
-        ret = mouse_state.left_button;
-        break;
+        return (mouse_state.button_states & MOUSE_BUTTON_LEFT) ? 1 : 0;
     case RETRO_DEVICE_ID_MOUSE_MIDDLE:
-        ret = mouse_state.middle_button;
-        break;
+        return (mouse_state.button_states & MOUSE_BUTTON_MIDDLE) ? 1 : 0;
     case RETRO_DEVICE_ID_MOUSE_RIGHT:
-        ret = mouse_state.right_button;
-        break;
+        return (mouse_state.button_states & MOUSE_BUTTON_RIGHT) ? 1 : 0;
     default:
         log_v(LOG_TAG, "callback_input_state(RETRO_DEVICE_MOUSE, ? %d)\n", id);
-        break;
+        return 0;
     }
-    return ret;
 }
 
 static void init_keyboard()
