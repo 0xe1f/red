@@ -15,9 +15,10 @@
 #ifndef __REPLAY_H__
 #define __REPLAY_H__
 
-#include <stdio.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
+#include <zlib.h>
 
 typedef enum {
     MODE_NONE = 0,
@@ -29,8 +30,10 @@ typedef struct {
     ReplayMode mode;
     const char *file_path;
     const char *tmp_path;
-    uint64_t stop_offset;
-    FILE *file;
+    uint64_t input_frame_offset;
+    uint64_t input_frame_count;
+    int file_fd;
+    gzFile gz;
 } Replay;
 
 bool replay_start_recording(Replay *replay, const char *path);
