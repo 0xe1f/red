@@ -315,7 +315,15 @@ extern retro_keyboard_event_t keyboard_event_callback;
 extern Replay replay;
 
 struct JoypadState {
-    bool input_ids[LAST_BUTTON_ID + 1];
+#if (LAST_BUTTON_ID < 16)
+    uint16_t input_ids;
+#elif (LAST_BUTTON_ID < 32)
+    uint32_t input_ids;
+#elif (LAST_BUTTON_ID < 64)
+    uint64_t input_ids;
+#else
+    #error "Cannot store more than 64 buttons in the JoypadState struct."
+#endif
 };
 
 struct JoypadDevice {
@@ -344,7 +352,8 @@ static void setup_joypad(struct JoypadDevice *device, SDL_Joystick *joystick);
 static void init_joypads();
 static void deinit_joypads();
 static void poll_joypads();
-static short get_joypad_state(unsigned int port, unsigned int id);
+static uint16_t get_joypad_state(unsigned int port, unsigned int id);
+static void set_joypad_state(unsigned int port, unsigned int id, bool value);
 
 static void init_mouse();
 static void deinit_mouse();
@@ -523,7 +532,7 @@ static void input_reset_inputs()
 {
     for (int joy = 0; joy < MAX_DEVICES; joy++) {
         struct JoypadState *state = &joypad_states[joy];
-        memset(state->input_ids, 0, sizeof(state->input_ids));
+        state->input_ids = 0ULL;
     }
 }
 
@@ -633,6 +642,7 @@ static void deinit_joypads()
 
 static void poll_joypads()
 {
+    // FIXME - assumes incoming joypad state is roughly the same as ours - unsafe
     if (replay.mode == MODE_PLAYBACK
         && replay_read_input(&replay, joypad_states, sizeof(joypad_states))) {
         return;
@@ -660,17 +670,15 @@ static void poll_joypads()
         int x = SDL_JoystickGetAxis(joystick, 0);
         int y = SDL_JoystickGetAxis(joystick, 1);
 
-        struct JoypadState *state = &joypad_states[joy];
-
-        state->input_ids[RETRO_DEVICE_ID_JOYPAD_UP] = (y < -JOY_DEADZONE);
-        state->input_ids[RETRO_DEVICE_ID_JOYPAD_RIGHT] = (x > JOY_DEADZONE);
-        state->input_ids[RETRO_DEVICE_ID_JOYPAD_DOWN] = (y > JOY_DEADZONE);
-        state->input_ids[RETRO_DEVICE_ID_JOYPAD_LEFT] = (x < -JOY_DEADZONE);
+        set_joypad_state(joy, RETRO_DEVICE_ID_JOYPAD_UP, (y < -JOY_DEADZONE));
+        set_joypad_state(joy, RETRO_DEVICE_ID_JOYPAD_RIGHT, (x > JOY_DEADZONE));
+        set_joypad_state(joy, RETRO_DEVICE_ID_JOYPAD_DOWN, (y > JOY_DEADZONE));
+        set_joypad_state(joy, RETRO_DEVICE_ID_JOYPAD_LEFT, (x < -JOY_DEADZONE));
 
         for (int i = 0; i < EMULATED_BUTTON_COUNT; i++) {
             unsigned short button_id = device->emulated_buttons[i];
             if (button_id >= 0 && button_id <= LAST_BUTTON_ID) {
-                state->input_ids[button_id] = SDL_JoystickGetButton(joystick, i);
+                set_joypad_state(joy, button_id, SDL_JoystickGetButton(joystick, i));
             }
         }
     }
@@ -681,7 +689,7 @@ static void poll_joypads()
     }
 }
 
-static short get_joypad_state(unsigned int port, unsigned int id)
+static uint16_t get_joypad_state(unsigned int port, unsigned int id)
 {
     if (port >= MAX_DEVICES) {
         return 0;
@@ -691,19 +699,26 @@ static short get_joypad_state(unsigned int port, unsigned int id)
     unsigned short ret = 0;
     switch (id) {
         case RETRO_DEVICE_ID_JOYPAD_MASK:
-            for (int i = 0; i <= LAST_BUTTON_ID; i++) {
-                if (state->input_ids[i]) {
-                    ret |= (1 << i);
-                }
-            }
-            break;
+            return state->input_ids;
         default:
             if (id <= LAST_BUTTON_ID) {
-                ret = state->input_ids[id];
+                ret = (state->input_ids & (1 << id)) ? 1 : 0;
             }
             break;
     }
     return ret;
+}
+
+static void set_joypad_state(unsigned int port, unsigned int id, bool value)
+{
+    if (port < MAX_DEVICES && id <= LAST_BUTTON_ID) {
+        struct JoypadState *state = &joypad_states[port];
+        if (value) {
+            state->input_ids |= (1ULL << id);
+        } else {
+            state->input_ids &= ~(1ULL << id);
+        }
+    }
 }
 
 static void init_mouse()
