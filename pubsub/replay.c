@@ -275,9 +275,6 @@ bool replay_start_playback(Replay *replay, const char *path)
 void replay_abort(Replay *replay)
 {
     ReplayMode mode = replay->mode;
-    if (replay->tmp_path) {
-        unlink(replay->tmp_path);
-    }
     cleanup(replay);
     if (mode == MODE_RECORD) {
         log_d(LOG_TAG, "Aborted recording\n");
@@ -392,6 +389,10 @@ static void cleanup(Replay *replay)
     if (replay->file_fd >= 0) {
         close(replay->file_fd);
         replay->file_fd = -1;
+    }
+
+    if (replay->tmp_path) {
+        unlink(replay->tmp_path);
     }
 
     free((void *)replay->file_path);

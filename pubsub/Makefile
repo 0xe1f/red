@@ -32,7 +32,7 @@ INCLUDE=\
 	-I$(GEN_ROOT) \
 	`sdl2-config --cflags`
 DEFINE=
-CFLAGS=-Wall -O2
+CFLAGS=-Wall -O2 -MMD -MP
 CXXFLAGS=$(CFLAGS)
 LD_FLAGS=$(LIB) -lnats -llz4 -lprotobuf-c
 LD_SUB_FLAGS=$(LD_FLAGS) -L$(RGB_LIBDIR) -lrgbmatrix
@@ -87,5 +87,7 @@ $(GEN_ROOT):
 	$(CXX) $(INCLUDE) $(DEFINE) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	@rm -rf *.o $(SUB_EXE) $(PUB_EXE) `find $(TP_ROOT)/ -name *.o` $(GEN_ROOT)
+	@rm -rf *.o *.d $(SUB_EXE) $(PUB_EXE) `find $(TP_ROOT)/ -name '*.o'` `find $(TP_ROOT)/ -name '*.d'` $(GEN_ROOT)
 	@cd $(RGB_LIBDIR); $(MAKE) clean
+
+-include $(wildcard *.d) $(wildcard $(GEN_ROOT)/*.d)
