@@ -53,7 +53,6 @@ set -e
 copy_scripts() {
     echo -e "${BOLD_WHITE}>> ${GREEN}Copying common code... ${PLAIN}"
     rsync -tph \
-        --info=progress2 \
         build_module.sh \
         build.sh \
         "$BUILD_SVR:$BUILD_PATH/"
@@ -71,7 +70,6 @@ stage_project() {
         EXCLUDED="$EXCLUDED --exclude-from _exclude/${dirname}.exclude"
     fi
     rsync -trph \
-        --info=progress2 \
         --ignore-missing-args \
         $EXCLUDED \
         "_build/${dirname}.build" \

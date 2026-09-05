@@ -63,7 +63,6 @@ SUB_SVC_FILE=sub.service
 echo -e "${BOLD_WHITE}>> ${CLR_OK}Staging build... ${CLR_RST}"
 ssh "${BUILD_SVR}" "mkdir -p \"${BUILD_PATH}\""
 rsync -trph \
-    --info=progress2 \
     --exclude '.*' \
     "${LOCAL_APP_PATH}/" \
     "${BUILD_SVR}:${BUILD_PATH}"

@@ -63,7 +63,6 @@ TARGET=pub
 echo -e "${BOLD_WHITE}>> ${CLR_OK}Staging build... ${CLR_RST}"
 ssh "${BUILD_SVR}" "mkdir -p \"${BUILD_PATH}\""
 rsync -trphL \
-    --info=progress2 \
     --exclude '.*' \
     "${LOCAL_APP_PATH}/" \
     "${BUILD_SVR}:${BUILD_PATH}"
@@ -82,7 +81,6 @@ rsync -trph \
 echo -e "${BOLD_WHITE}>> ${CLR_OK}Deploying... ${CLR_RST}"
 ssh "${GAME_SVR_HOST}" "mkdir -p \"${CORES_PATH}\""
 rsync -trph \
-    --info=progress2 \
     "${TEMP_FILE}" \
     "${GAME_SVR_HOST}:${CORES_PATH}/${TARGET}"
 
@@ -99,7 +97,6 @@ echo -e "${BOLD_WHITE}>> ${CLR_OK}All done... ${CLR_RST}"
 
 # echo -e "${BOLD_WHITE}>> ${CLR_OK}Staging build... ${CLR_RST}"
 # rsync -trph \
-#     --info=progress2 \
 #     --exclude '.*' \
 #     "${APP_PATH}/" \
 #     "${BUILD_SVR}:${BUILD_PATH}/"
