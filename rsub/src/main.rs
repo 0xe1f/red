@@ -13,14 +13,23 @@
 // limitations under the License.
 
 mod args;
+mod frame;
 
 use std::fs::OpenOptions;
 use std::io;
 use std::sync::Mutex;
+use std::time::{ Duration };
 
-use anyhow::{Context, Result};
+use anyhow::{ Context, Result };
+use async_nats::{ ConnectOptions };
+use futures::StreamExt;
+use tokio::{ select, signal };
 use tracing::{ debug, info, warn };
 use tracing_subscriber::fmt;
+
+const SUBJECT: &str = "red.frames";
+const RECONNECT_WAIT: Duration = Duration::from_millis(250);
+const MAX_RECONNECTS: usize = 50;
 
 fn init_logging(args: &args::Args) -> Result<()> {
     let builder = fmt()
@@ -52,7 +61,8 @@ fn init_logging(args: &args::Args) -> Result<()> {
     Ok(())
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = args::Args::parse();
     init_logging(&args)?;
 
@@ -68,6 +78,41 @@ fn main() -> Result<()> {
         content = ?args.content_rect,
         "display rects unused until render is implemented"
     );
+
+    // Init NATS
+    let client = ConnectOptions::new()
+        .retry_on_initial_connect()
+        .max_reconnects(Some(MAX_RECONNECTS))
+        .reconnect_delay_callback(|_| RECONNECT_WAIT)
+        .connect(&args.server_url)
+        .await
+        .with_context(|| format!("connecting to NATS at '{}'", args.server_url))?;
+    info!("Connected to NATS server at {}", args.server_url);
+
+    let mut subscriber = client
+        .subscribe(SUBJECT)
+        .await
+        .with_context(|| format!("subscribing to '{SUBJECT}'"))?;
+    info!("Subscribed to '{SUBJECT}'");
+
+    let mut frames_total = 0u64;
+
+    loop {
+        select! {
+            _ = signal::ctrl_c() => {
+                info!("Caught SIGINT, exiting...");
+                break;
+            }
+            msg = subscriber.next() => {
+                let Some(msg) = msg else {
+                    warn!("NATS subscription closed");
+                    break;
+                };
+                // FIXME...
+            }
+        }
+    }
+    info!("Done. Received {frames_total} frames");
 
     Ok(())
 }
