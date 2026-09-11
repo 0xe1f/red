@@ -15,23 +15,28 @@
 mod args;
 mod frame;
 
+use crate::args::{ Args };
+use crate::frame::{ FrameHeader, FrameAttr };
+
 use std::fs::OpenOptions;
 use std::io;
 use std::sync::Mutex;
-use std::time::{ Duration };
+use std::time::{ Duration, Instant };
 
-use anyhow::{ Context, Result };
+use anyhow::{ Context, Result, bail };
 use async_nats::{ ConnectOptions };
 use futures::StreamExt;
-use tokio::{ select, signal };
-use tracing::{ debug, info, warn };
+use tokio::{ pin, select, signal, time };
+use tracing::{ debug, info, warn, error };
 use tracing_subscriber::fmt;
 
 const SUBJECT: &str = "red.frames";
 const RECONNECT_WAIT: Duration = Duration::from_millis(250);
+const FPS_INTERVAL: Duration = Duration::from_secs(3);
+const SCREEN_CLEAR_INTERVAL: Duration = Duration::from_secs(1);
 const MAX_RECONNECTS: usize = 50;
 
-fn init_logging(args: &args::Args) -> Result<()> {
+fn init_logging(args: &Args) -> Result<()> {
     let builder = fmt()
         .with_max_level(args.log_level.tracing_level())
         .with_target(true);
@@ -61,9 +66,45 @@ fn init_logging(args: &args::Args) -> Result<()> {
     Ok(())
 }
 
+fn matrix_init() -> Result<(i16, i16)> {
+    // FIXME
+    Ok((320, 240))
+}
+
+fn matrix_clear() {
+    // FIXME
+}
+
+fn extract_frame(payload: &[u8], decomp_buf: &mut Vec<u8>, last_header: &mut Option<FrameHeader>) -> Result<()> {
+    // Parse frame header into struct
+    let header = FrameHeader::parse(payload).context("Message too short")?;
+    let Some(decomp_size) = header.decompressed_size() else {
+        bail!("Invalid frame geometry: {header}");
+    };
+    if last_header.as_ref().is_none_or(|prev| !prev.same_geometry(&header)) {
+        debug!(%header, "Received frame with geometry");
+        *last_header = Some(header);
+    }
+
+    // Sanity checks
+    if decomp_size == 0 {
+        bail!("Empty frame: {header}");
+    }
+    if decomp_buf.len() < decomp_size {
+        decomp_buf.resize(decomp_size, 0);
+    }
+
+    // Decompress
+    let compressed = &payload[FrameHeader::SIZE..];
+    lz4_flex::decompress_into(compressed, &mut decomp_buf[..decomp_size])
+        .context("LZ4 decompression failed")?;
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = args::Args::parse();
+    let args = Args::parse();
     init_logging(&args)?;
 
     if args.background {
@@ -71,13 +112,24 @@ async fn main() -> Result<()> {
         warn!("--background is not implemented; staying in the foreground");
     }
 
-    // FIXME:
-    debug!(
-        source = ?args.src_rect,
-        dest = ?args.dest_rect,
-        content = ?args.content_rect,
-        "display rects unused until render is implemented"
-    );
+    // Initialize matrix
+    let (screen_width, screen_height) = matrix_init()?;
+
+    // Arg check
+    if let Some(rect) = args.src_rect {
+        debug!("Source: {rect}");
+    }
+    if let Some(rect) = args.dest_rect {
+        debug!("Destination: {rect}");
+        if rect.x2 > screen_width {
+            bail!("Destination x2 ({}) exceeds max ({})", rect.x2, screen_width)
+        } else if rect.y2 > screen_height {
+            bail!("Destination y2 ({}) exceeds max ({})", rect.y2, screen_height)
+        }
+    }
+    if let Some(rect) = args.content_rect {
+        debug!("Content: {rect}");
+    }
 
     // Init NATS
     let client = ConnectOptions::new()
@@ -95,11 +147,19 @@ async fn main() -> Result<()> {
         .with_context(|| format!("subscribing to '{SUBJECT}'"))?;
     info!("Subscribed to '{SUBJECT}'");
 
+    let mut decomp_buf = Vec::new();
+    let mut last_header: Option<FrameHeader> = None;
     let mut frames_total = 0u64;
+    let mut frames_window = 0u64;
+    let mut window_started = Instant::now();
+    let mut last_frame_time: Option<Instant> = None;
+
+    let ctrl_c = signal::ctrl_c();
+    pin!(ctrl_c);
 
     loop {
         select! {
-            _ = signal::ctrl_c() => {
+            _ = &mut ctrl_c => {
                 info!("Caught SIGINT, exiting...");
                 break;
             }
@@ -108,7 +168,28 @@ async fn main() -> Result<()> {
                     warn!("NATS subscription closed");
                     break;
                 };
-                // FIXME...
+                if let Err(err) = extract_frame(&msg.payload, &mut decomp_buf, &mut last_header) {
+                    error!("{err:#}");
+                    continue;
+                }
+                frames_total += 1;
+                frames_window += 1;
+                let now = Instant::now();
+                last_frame_time = Some(now);
+                let elapsed = window_started.elapsed();
+                if elapsed >= FPS_INTERVAL {
+                    let fps = frames_window as f64 / elapsed.as_secs_f64();
+                    info!("fps: {fps:.2} ({frames_window} frames, {frames_total} total)");
+                    frames_window = 0;
+                    window_started = now;
+                }
+                // TODO: blit onto matrix
+            }
+            _ = time::sleep(SCREEN_CLEAR_INTERVAL), if last_frame_time.is_some() => {
+                // No frames for a while; clear screen
+                info!("No frames received for {SCREEN_CLEAR_INTERVAL:?}, clearing canvas...");
+                matrix_clear();
+                last_frame_time = None;
             }
         }
     }

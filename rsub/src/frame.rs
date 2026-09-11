@@ -24,11 +24,11 @@ pub struct FrameHeader {
     pub attrs: FrameAttr,
 }
 
-pub const FRAME_HEADER_SIZE: usize = size_of::<FrameHeader>();
-
 impl FrameHeader {
+    pub const SIZE: usize = size_of::<FrameHeader>();
+
     pub fn parse(data: &[u8]) -> Option<Self> {
-        if data.len() < FRAME_HEADER_SIZE {
+        if data.len() < Self::SIZE {
             return None;
         }
         Some(Self {
@@ -38,6 +38,17 @@ impl FrameHeader {
             pixel_format: PixelFormat(data[6]),
             attrs: FrameAttr(data[7]),
         })
+    }
+
+    pub fn decompressed_size(&self) -> Option<usize> {
+        (self.pitch as usize).checked_mul(self.height as usize)
+    }
+
+    pub fn same_geometry(&self, other: &Self) -> bool {
+        self.width == other.width &&
+            self.height == other.height &&
+            self.pixel_format == other.pixel_format &&
+            self.attrs == other.attrs
     }
 }
 
@@ -71,7 +82,7 @@ impl fmt::Display for PixelFormat {
             Self::RGBA5551 => f.write_str("RGBA5551"),
             Self::ARGB8888 => f.write_str("ARGB8888"),
             Self::UNKNOWN => f.write_str("UNKNOWN"),
-            other => f.write_str("({other})"),
+            other => write!(f, "({})", other.0),
         }
     }
 }

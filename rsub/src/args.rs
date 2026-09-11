@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::str::FromStr;
 use std::path::PathBuf;
 
@@ -25,19 +26,19 @@ use clap::{ Parser, ValueEnum };
 )]
 pub struct Args {
     /// NATS server URL
-    #[arg(short = 's', long = "server-url")]
+    #[arg(short = 's', long = "server-url", required = true)]
     pub server_url: String,
 
     /// Source rectangle in the published bitmap (x1,y1-x2,y2)
-    #[arg(long = "src-rect", visible_alias = "sr", value_name = "x1,y1-x2,y2")]
+    #[arg(long = "src-rect", visible_alias = "sr", value_name = "x1,y1-x2,y2", required = true)]
     pub src_rect: Option<ViewRect>,
 
     /// Destination rectangle on this LED panel (x1,y1-x2,y2)
-    #[arg(long = "dest-rect", visible_alias = "dr", value_name = "x1,y1-x2,y2")]
+    #[arg(long = "dest-rect", visible_alias = "dr", value_name = "x1,y1-x2,y2", required = true)]
     pub dest_rect: Option<ViewRect>,
 
     /// Content rectangle on the entire LED screen (x1,y1-x2,y2)
-    #[arg(long = "content-rect", visible_alias = "cr", value_name = "x1,y1-x2,y2")]
+    #[arg(long = "content-rect", visible_alias = "cr", value_name = "x1,y1-x2,y2", required = true)]
     pub content_rect: Option<ViewRect>,
 
     /// Run in background as daemon
@@ -98,6 +99,12 @@ impl FromStr for ViewRect {
         };
         rect.validate()?;
         Ok(rect)
+    }
+}
+
+impl fmt::Display for ViewRect {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({},{})-({},{})", self.x1, self.y1, self.x2, self.y2)
     }
 }
 
