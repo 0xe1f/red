@@ -30,16 +30,16 @@ pub struct Args {
     pub server_url: String,
 
     /// Source rectangle in the published bitmap (x1,y1-x2,y2)
-    #[arg(long = "src-rect", visible_alias = "sr", value_name = "x1,y1-x2,y2", required = true)]
-    pub src_rect: Option<ViewRect>,
+    #[arg(long = "src-rect", visible_alias = "sr", value_name = "x1,y1-x2,y2")]
+    pub source_rect: ViewRect,
 
     /// Destination rectangle on this LED panel (x1,y1-x2,y2)
-    #[arg(long = "dest-rect", visible_alias = "dr", value_name = "x1,y1-x2,y2", required = true)]
-    pub dest_rect: Option<ViewRect>,
+    #[arg(long = "dest-rect", visible_alias = "dr", value_name = "x1,y1-x2,y2")]
+    pub dest_rect: ViewRect,
 
     /// Content rectangle on the entire LED screen (x1,y1-x2,y2)
-    #[arg(long = "content-rect", visible_alias = "cr", value_name = "x1,y1-x2,y2", required = true)]
-    pub content_rect: Option<ViewRect>,
+    #[arg(long = "content-rect", visible_alias = "cr", value_name = "x1,y1-x2,y2")]
+    pub content_rect: ViewRect,
 
     /// Run in background as daemon
     #[arg(long = "background", visible_alias = "bg")]

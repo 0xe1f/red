@@ -14,9 +14,11 @@
 
 mod args;
 mod frame;
+mod screen;
 
 use crate::args::{ Args };
 use crate::frame::{ FrameHeader, FrameAttr };
+use crate::screen::{ Screen };
 
 use std::fs::OpenOptions;
 use std::io;
@@ -66,15 +68,6 @@ fn init_logging(args: &Args) -> Result<()> {
     Ok(())
 }
 
-fn matrix_init() -> Result<(i16, i16)> {
-    // FIXME
-    Ok((320, 240))
-}
-
-fn matrix_clear() {
-    // FIXME
-}
-
 fn extract_frame(payload: &[u8], decomp_buf: &mut Vec<u8>, last_header: &mut Option<FrameHeader>) -> Result<()> {
     // Parse frame header into struct
     let header = FrameHeader::parse(payload).context("Message too short")?;
@@ -113,23 +106,18 @@ async fn main() -> Result<()> {
     }
 
     // Initialize matrix
-    let (screen_width, screen_height) = matrix_init()?;
+    let mut screen = Screen::new(&args)?;
+    let (screen_width, screen_height) = screen.dimensions();
 
-    // Arg check
-    if let Some(rect) = args.src_rect {
-        debug!("Source: {rect}");
+    // Rects
+    debug!("Source: {}", args.source_rect);
+    debug!("Destination: {}", args.dest_rect);
+    if args.dest_rect.x2 > screen_width {
+        bail!("Destination x2 ({}) exceeds max ({})", args.dest_rect.x2, screen_width)
+    } else if args.dest_rect.y2 > screen_height {
+        bail!("Destination y2 ({}) exceeds max ({})", args.dest_rect.y2, screen_height)
     }
-    if let Some(rect) = args.dest_rect {
-        debug!("Destination: {rect}");
-        if rect.x2 > screen_width {
-            bail!("Destination x2 ({}) exceeds max ({})", rect.x2, screen_width)
-        } else if rect.y2 > screen_height {
-            bail!("Destination y2 ({}) exceeds max ({})", rect.y2, screen_height)
-        }
-    }
-    if let Some(rect) = args.content_rect {
-        debug!("Content: {rect}");
-    }
+    debug!("Content: {}", args.content_rect);
 
     // Init NATS
     let client = ConnectOptions::new()
@@ -188,7 +176,7 @@ async fn main() -> Result<()> {
             _ = time::sleep(SCREEN_CLEAR_INTERVAL), if last_frame_time.is_some() => {
                 // No frames for a while; clear screen
                 info!("No frames received for {SCREEN_CLEAR_INTERVAL:?}, clearing canvas...");
-                matrix_clear();
+                screen.clear();
                 last_frame_time = None;
             }
         }
