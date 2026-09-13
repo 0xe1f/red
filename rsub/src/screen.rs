@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::args::{ Args };
+use crate::args::{ Args, LedArgs };
 use crate::frame::{ Frame, FrameHeader, FrameAttr, PixelFormat };
 use crate::viewrect::ViewRect;
 
@@ -49,32 +49,13 @@ impl Screen {
     pub fn new(args: &Args) -> Result<Self> {
         info!("Initializing LED matrix...");
 
-        // Init matrix options
-        let led_args = &args.led;
-
-        let mut options = LedMatrixOptions::new();
-        options.set_rows(led_args.rows);
-        options.set_cols(led_args.cols);
-        options.set_chain_length(led_args.chain_length);
-        options.set_parallel(led_args.parallel);
-        options.set_pwm_bits(led_args.pwm_bits)
-            .map_err(|e| anyhow!("Error setting pwm bits: {e}"))?;
-        options.set_hardware_mapping(&led_args.gpio_mapping);
-        options.set_hardware_pulsing(!led_args.no_hardware_pulse);
-        options.set_pwm_lsb_nanoseconds(led_args.pwm_lsb_nanoseconds);
-        options.set_pwm_dither_bits(led_args.pwm_dither_bits);
-        options.set_refresh_rate(led_args.show_refresh);
-
-        let mut rt_options = LedRuntimeOptions::new();
-        rt_options.set_gpio_slowdown(led_args.gpio_slowdown);
-
         // Init matrix
-        let matrix = LedMatrix::new(Some(options), Some(rt_options))
+        let (mx_options, rt_options) = Self::parse_led_args(&args.led)?;
+        let matrix = LedMatrix::new(mx_options, rt_options)
             .map_err(|e| anyhow!("Error initializing matrix: {e}"))?;
 
         // Init canvas
         let mut canvas = matrix.offscreen_canvas();
-
         canvas.set(0, 0, &LedColor { red: 0, green: 0, blue: 0 });
 
         let (screen_width, screen_height) = canvas.canvas_size();
@@ -109,6 +90,38 @@ impl Screen {
                 self.canvas = Some(self.matrix.swap(canvas));
             }
         }
+    }
+
+    fn parse_led_args(led_args: &LedArgs) -> Result<(Option<LedMatrixOptions>, Option<LedRuntimeOptions>)> {
+        let mut mx_options = LedMatrixOptions::new();
+        mx_options.set_rows(led_args.rows);
+        mx_options.set_cols(led_args.cols);
+        mx_options.set_chain_length(led_args.chain_length);
+        mx_options.set_parallel(led_args.parallel);
+        mx_options.set_pwm_bits(led_args.pwm_bits)
+            .map_err(|e| anyhow!("Error setting pwm bits: {e}"))?;
+        mx_options.set_hardware_mapping(&led_args.gpio_mapping);
+        mx_options.set_hardware_pulsing(!led_args.no_hardware_pulse);
+        mx_options.set_pwm_lsb_nanoseconds(led_args.pwm_lsb_nanoseconds);
+        mx_options.set_pwm_dither_bits(led_args.pwm_dither_bits);
+        mx_options.set_refresh_rate(led_args.show_refresh);
+        mx_options.set_brightness(led_args.brightness)
+            .map_err(|e| anyhow!("Error setting brightness: {e}"))?;
+        mx_options.set_scan_mode(led_args.scan_mode as u32);
+        mx_options.set_row_addr_type(led_args.row_addr_type as u32);
+        mx_options.set_multiplexing(led_args.multiplexing as u32);
+        mx_options.set_led_rgb_sequence(&led_args.rgb_sequence);
+        mx_options.set_pixel_mapper_config(&led_args.pixel_mapper);
+        mx_options.set_panel_type(&led_args.panel_type);
+        mx_options.set_inverse_colors(led_args.inverse_colors);
+        mx_options.set_limit_refresh(led_args.limit_refresh);
+
+        let mut rt_options = LedRuntimeOptions::new();
+        rt_options.set_gpio_slowdown(led_args.gpio_slowdown);
+        rt_options.set_drop_privileges(!led_args.no_priv_drop);
+        rt_options.set_daemon(led_args.daemon);
+
+        Ok((Some(mx_options), Some(rt_options)))
     }
 
     fn inspect_geometry(&mut self, header: &FrameHeader) {

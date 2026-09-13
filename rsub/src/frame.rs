@@ -91,16 +91,37 @@ pub struct FrameAttr(pub u8);
 
 impl FrameAttr {
     pub const ROT180: Self = Self(0x01);
+
+    const FLAGS: &'static [(Self, &'static str)] = &[
+        (Self::ROT180, "rotated"),
+    ];
 }
 
 impl fmt::Display for FrameAttr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // TODO: needs to be updated for additional flags
-        if *self & Self::ROT180 == Self::ROT180 {
-            f.write_str("Rotated")
-        } else {
-            f.write_str("({self})")
+        if self.0 == 0 {
+            return f.write_str("none");
         }
+
+        let mut remaining = self.0;
+        let mut sep = false;
+        for &(flag, name) in Self::FLAGS {
+            if remaining & flag.0 == flag.0 {
+                if sep {
+                    f.write_str("|")?;
+                }
+                f.write_str(name)?;
+                remaining &= !flag.0;
+                sep = true;
+            }
+        }
+        if remaining != 0 {
+            if sep {
+                f.write_str("|")?;
+            }
+            write!(f, "0x{remaining:02x}")?;
+        }
+        Ok(())
     }
 }
 

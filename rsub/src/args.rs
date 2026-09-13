@@ -63,6 +63,50 @@ pub struct LedArgs {
     /// Show refresh rate
     #[arg(long = "led-show-refresh")]
     pub show_refresh: bool,
+
+    /// Brightness in percent
+    #[arg(long = "led-brightness", default_value_t = 100)]
+    pub brightness: u8,
+
+    /// Scan mode. 0 = progressive, 1 = interlaced
+    #[arg(long = "led-scan-mode", default_value_t = 0)]
+    pub scan_mode: u8,
+
+    /// Row addressing. 0 = default, 1 = AB, 2 = direct, 3 = ABC, 4 = ABC+DE
+    #[arg(long = "led-row-addr-type", default_value_t = 0)]
+    pub row_addr_type: u8,
+
+    /// Multiplexing type. 0 = direct
+    #[arg(long = "led-multiplexing", default_value_t = 0)]
+    pub multiplexing: u8,
+
+    /// LED color order if the panel swaps channels
+    #[arg(long = "led-rgb-sequence", default_value = "RGB")]
+    pub rgb_sequence: String,
+
+    /// Semicolon-separated pixel-mappers, e.g. "U-mapper;Rotate:90"
+    #[arg(long = "led-pixel-mapper", default_value = "")]
+    pub pixel_mapper: String,
+
+    /// Special panel init. Supported: FM6126A, FM6127
+    #[arg(long = "led-panel-type", default_value = "")]
+    pub panel_type: String,
+
+    /// Invert displayed colors
+    #[arg(long = "led-inverse")]
+    pub inverse_colors: bool,
+
+    /// Limit refresh rate in Hz. 0 = no limit
+    #[arg(long = "led-limit-refresh", default_value_t = 0)]
+    pub limit_refresh: u32,
+
+    /// Don't drop privileges from root after hardware init
+    #[arg(long = "led-no-drop-privs")]
+    pub no_priv_drop: bool,
+
+    /// Run as a daemon via the LED-matrix library (not --background)
+    #[arg(long = "led-daemon")]
+    pub daemon: bool,
 }
 
 #[derive(Debug, Parser)]
