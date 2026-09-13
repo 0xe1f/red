@@ -15,9 +15,10 @@
 mod args;
 mod frame;
 mod screen;
+mod viewrect;
 
 use crate::args::{ Args };
-use crate::frame::{ FrameHeader, FrameAttr };
+use crate::frame::{ Frame, FrameHeader };
 use crate::screen::{ Screen };
 
 use std::fs::OpenOptions;
@@ -68,13 +69,18 @@ fn init_logging(args: &Args) -> Result<()> {
     Ok(())
 }
 
-fn extract_frame(payload: &[u8], decomp_buf: &mut Vec<u8>, last_header: &mut Option<FrameHeader>) -> Result<()> {
+fn extract_frame<'a>(
+    payload: &[u8],
+    decomp_buf: &'a mut Vec<u8>,
+    last_header: &mut Option<FrameHeader>,
+) -> Result<Frame<'a>> {
     // Parse frame header into struct
     let header = FrameHeader::parse(payload).context("Message too short")?;
     let Some(decomp_size) = header.decompressed_size() else {
         bail!("Invalid frame geometry: {header}");
     };
-    if last_header.as_ref().is_none_or(|prev| !prev.same_geometry(&header)) {
+    // FIXME: reevaluate last_header presence
+    if last_header.as_ref().is_none_or(|prev| *prev != header) {
         debug!(%header, "Received frame with geometry");
         *last_header = Some(header);
     }
@@ -92,7 +98,12 @@ fn extract_frame(payload: &[u8], decomp_buf: &mut Vec<u8>, last_header: &mut Opt
     lz4_flex::decompress_into(compressed, &mut decomp_buf[..decomp_size])
         .context("LZ4 decompression failed")?;
 
-    Ok(())
+    let frame = Frame {
+        header: header,
+        content: &decomp_buf[..decomp_size],
+    };
+
+    Ok(frame)
 }
 
 #[tokio::main]
@@ -156,10 +167,13 @@ async fn main() -> Result<()> {
                     warn!("NATS subscription closed");
                     break;
                 };
-                if let Err(err) = extract_frame(&msg.payload, &mut decomp_buf, &mut last_header) {
-                    error!("{err:#}");
-                    continue;
-                }
+                match extract_frame(&msg.payload, &mut decomp_buf, &mut last_header) {
+                    Ok(frame) => screen.render(&frame),
+                    Err(err) => {
+                        error!("{err:#}");
+                        continue;
+                    },
+                };
                 frames_total += 1;
                 frames_window += 1;
                 let now = Instant::now();
@@ -171,7 +185,6 @@ async fn main() -> Result<()> {
                     frames_window = 0;
                     window_started = now;
                 }
-                // TODO: blit onto matrix
             }
             _ = time::sleep(SCREEN_CLEAR_INTERVAL), if last_frame_time.is_some() => {
                 // No frames for a while; clear screen

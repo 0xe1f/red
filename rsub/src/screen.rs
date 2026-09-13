@@ -12,12 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::args::{ Args, ViewRect };
-use crate::frame::{ FrameHeader, FrameAttr };
+use crate::args::{ Args };
+use crate::frame::{ Frame, FrameHeader, FrameAttr, PixelFormat };
+use crate::viewrect::ViewRect;
 
 use anyhow::{ Result, anyhow };
 use rpi_led_matrix::{ LedMatrix, LedMatrixOptions, LedRuntimeOptions, LedCanvas, LedColor };
-use tracing::{ debug, info };
+use tracing::{ debug, info, warn };
+
+type RowRenderFn = fn(
+    canvas: &mut LedCanvas,
+    row: &[u8],
+    src_x: usize,
+    dst_x: i32,
+    dst_y: i32,
+    count: usize,
+    x_dir: i32,
+);
 
 pub struct Screen {
     matrix: LedMatrix,
@@ -30,6 +41,8 @@ pub struct Screen {
     blit_src: ViewRect,
     blit_dest: ViewRect,
     vw_origin: i16,
+    cached_header: Option<FrameHeader>,
+    row_render_fn: Option<RowRenderFn>,
 }
 
 impl Screen {
@@ -37,18 +50,23 @@ impl Screen {
         info!("Initializing LED matrix...");
 
         // Init matrix options
-        // FIXME: read from args
+        let led_args = &args.led;
+
         let mut options = LedMatrixOptions::new();
-        options.set_rows(64);
-        options.set_cols(64);
-        options.set_chain_length(5);
-        options.set_parallel(2);
-        options.set_pwm_bits(6)
+        options.set_rows(led_args.rows);
+        options.set_cols(led_args.cols);
+        options.set_chain_length(led_args.chain_length);
+        options.set_parallel(led_args.parallel);
+        options.set_pwm_bits(led_args.pwm_bits)
             .map_err(|e| anyhow!("Error setting pwm bits: {e}"))?;
-        options.set_hardware_mapping("regular");
+        options.set_hardware_mapping(&led_args.gpio_mapping);
+        options.set_hardware_pulsing(!led_args.no_hardware_pulse);
+        options.set_pwm_lsb_nanoseconds(led_args.pwm_lsb_nanoseconds);
+        options.set_pwm_dither_bits(led_args.pwm_dither_bits);
+        options.set_refresh_rate(led_args.show_refresh);
 
         let mut rt_options = LedRuntimeOptions::new();
-        rt_options.set_gpio_slowdown(4);
+        rt_options.set_gpio_slowdown(led_args.gpio_slowdown);
 
         // Init matrix
         let matrix = LedMatrix::new(Some(options), Some(rt_options))
@@ -73,6 +91,8 @@ impl Screen {
             blit_src: args.source_rect,
             blit_dest: args.dest_rect,
             vw_origin: 0,
+            cached_header: None,
+            row_render_fn: None,
         };
 
         Ok(screen)
@@ -91,8 +111,10 @@ impl Screen {
         }
     }
 
-    pub fn inspect_geometry(&mut self, header: &FrameHeader) {
-        // FIXME: check geo
+    fn inspect_geometry(&mut self, header: &FrameHeader) {
+        if self.cached_header.is_some_and(|cached| cached == *header) {
+            return;
+        }
 
         debug!("Received frame {}", header);
 
@@ -153,41 +175,173 @@ impl Screen {
             self.vw_origin = 0;
         }
 
-        // FIXME: finish
+        // Select format-specific row renderer (no branching in the hot loop)
+        self.row_render_fn = match header.pixel_format {
+            PixelFormat::RGB565 => Some(row_render_rgb565),
+            PixelFormat::RGBA8888 => Some(row_render_rgba8888),
+            PixelFormat::RGBA5551 => Some(row_render_rgba5551),
+            PixelFormat::ARGB8888 => Some(row_render_argb8888),
+            other => {
+                warn!("No renderer for format {}", other);
+                None
+            },
+        };
+
+        self.cached_header = Some(*header);
+    }
+
+    pub fn render(&mut self, frame: &Frame) {
+        let header = &frame.header;
+        // FIXME: shite name
+        self.inspect_geometry(header);
+
+        let Some(row_render_fn) = self.row_render_fn else {
+            return;
+        };
+
+        let rot180 = header.attrs & FrameAttr::ROT180 == FrameAttr::ROT180;
+        let row_count = (self.blit_src.y2 - self.blit_src.y1) as usize;
+        let col_count = (self.blit_src.x2 - self.blit_src.x1) as usize;
+
+        // For rot180: vertical flip is handled by rry; horizontal flip uses x_dir=-1
+        // starting from vw_origin - blit_dest.sx so pixel i lands at vw_origin - blit_dest.sx - i
+        let dst_x = if rot180 {
+            self.vw_origin - self.blit_dest.x1
+        } else {
+            self.blit_dest.x1
+        } as i32;
+        let x_dir = if rot180 {
+            -1
+        } else {
+            1
+        } as i32;
+
+        let Some(mut canvas) = self.canvas.take() else {
+            return;
+        };
+
+        for yo in 0..row_count {
+            let ry = self.blit_src.y1 as usize + yo;
+            let rry = if rot180 {
+                header.height as usize - 1 - ry
+            } else {
+                ry
+            };
+            let pitch = frame.header.pitch as usize;
+            let start = rry * pitch;
+            let row = &frame.content[start..start + pitch];
+
+            row_render_fn(
+                &mut canvas,
+                row,
+                self.blit_src.x1 as usize,
+                dst_x,
+                (self.blit_dest.y1 as usize + yo) as i32,
+                col_count,
+                x_dir,
+            );
+        }
+
+        self.canvas = Some(self.matrix.swap(canvas));
     }
 }
 
-// static void inspect_geometry(const FrameHeader *hdr)
-// {
-//     if (hdr->width == geometry.width &&
-//         hdr->height == geometry.height &&
-//         hdr->pixel_format == geometry.pixel_format &&
-//         hdr->attrs == geometry.attrs
-//     ) {
-//         return; // same geometry, no need to recalculate blit rectangles
-//     }
+fn row_render_rgb565(
+    canvas: &mut LedCanvas,
+    row: &[u8],
+    src_x: usize,
+    dst_x: i32,
+    dst_y: i32,
+    count: usize,
+    x_dir: i32,
+) {
+    let start = src_x * 2;
+    let pixels = &row[start..start + count * 2];
+    for (i, chunk) in pixels.chunks_exact(2).enumerate() {
+        let c = u16::from_le_bytes([chunk[0], chunk[1]]);
+        canvas.set(
+            dst_x + i as i32 * x_dir,
+            dst_y,
+            &LedColor {
+                red: (((c >> 11) & 0x1f) * 255 / 31) as u8,
+                green: (((c >> 5) & 0x3f) * 255 / 63) as u8,
+                blue: ((c & 0x1f) * 255 / 31) as u8,
+            },
+        )
+    }
+}
 
-// ....
+fn row_render_argb8888(
+    canvas: &mut LedCanvas,
+    row: &[u8],
+    src_x: usize,
+    dst_x: i32,
+    dst_y: i32,
+    count: usize,
+    x_dir: i32,
+) {
+    let start = src_x * 4;
+    let pixels = &row[start..start + count * 4];
+    for (i, chunk) in pixels.chunks_exact(4).enumerate() {
+        let c = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        canvas.set(
+            dst_x + i as i32 * x_dir,
+            dst_y,
+            &LedColor {
+                red: ((c >> 16) & 0xff) as u8,
+                green: ((c >> 8) & 0xff) as u8,
+                blue: (c & 0xff) as u8,
+            }
+        )
+    }
+}
 
-//     // Select format-specific row renderer (no branching in the hot loop)
-//     switch ((PixelFormat)hdr->pixel_format) {
-//         case PF_RGB565:
-//             row_render_fn = render_row_rgb565;
-//             break;
-//         case PF_ARGB8888:
-//             row_render_fn = render_row_argb8888;
-//             break;
-//         case PF_RGBA8888:
-//             row_render_fn = render_row_rgba8888;
-//             break;
-//         case PF_RGBA5551:
-//             row_render_fn = render_row_rgba5551;
-//             break;
-//         default:
-//             log_w(LOG_TAG, "Unsupported pixel format: %d\n", hdr->pixel_format);
-//             row_render_fn = NULL;
-//             break;
-//     }
+fn row_render_rgba8888(
+    canvas: &mut LedCanvas,
+    row: &[u8],
+    src_x: usize,
+    dst_x: i32,
+    dst_y: i32,
+    count: usize,
+    x_dir: i32,
+) {
+    let start = src_x * 4;
+    let pixels = &row[start..start + count * 4];
+    for (i, chunk) in pixels.chunks_exact(4).enumerate() {
+        let c = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        canvas.set(
+            dst_x + i as i32 * x_dir,
+            dst_y,
+            &LedColor {
+                red: ((c >> 24) & 0xff) as u8,
+                green: ((c >> 16) & 0xff) as u8,
+                blue: ((c >> 8) & 0xff) as u8,
+            }
+        )
+    }
+}
 
-//     geometry = *hdr;
-// }
+fn row_render_rgba5551(
+    canvas: &mut LedCanvas,
+    row: &[u8],
+    src_x: usize,
+    dst_x: i32,
+    dst_y: i32,
+    count: usize,
+    x_dir: i32,
+) {
+    let start = src_x * 2;
+    let pixels = &row[start..start + count * 2];
+    for (i, chunk) in pixels.chunks_exact(2).enumerate() {
+        let c = u16::from_le_bytes([chunk[0], chunk[1]]);
+        canvas.set(
+            dst_x + i as i32 * x_dir,
+            dst_y,
+            &LedColor {
+                red: (((c >> 11) & 0x1f) * 255 / 31) as u8,
+                green: (((c >> 6) & 0x1f) * 255 / 31) as u8,
+                blue: (((c >> 1) & 0x1f) * 255 / 31) as u8,
+            },
+        )
+    }
+}

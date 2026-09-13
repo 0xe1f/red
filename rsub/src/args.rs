@@ -12,17 +12,63 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
-use std::str::FromStr;
 use std::path::PathBuf;
 
 use clap::{ Parser, ValueEnum };
+
+use crate::viewrect::ViewRect;
+
+#[derive(Debug, clap::Args)]
+pub struct LedArgs {
+    /// Panel rows. Typically 8, 16, 32 or 64
+    #[arg(long = "led-rows", default_value_t = 32)]
+    pub rows: u32,
+
+    /// Panel columns. Typically 32 or 64
+    #[arg(long = "led-cols", default_value_t = 32)]
+    pub cols: u32,
+
+    /// Number of daisy-chained panels
+    #[arg(long = "led-chain", default_value_t = 1)]
+    pub chain_length: u32,
+
+    /// Number of parallel chains
+    #[arg(long = "led-parallel", default_value_t = 1)]
+    pub parallel: u32,
+
+    /// Slowdown GPIO. Needed for faster Pis and/or slower panels
+    #[arg(long = "led-slowdown-gpio", default_value_t = 1)]
+    pub gpio_slowdown: u32,
+
+    /// GPIO mapping (regular, adafruit-hat, adafruit-hat-pwm, compute-module)
+    #[arg(long = "led-gpio-mapping", default_value = "regular")]
+    pub gpio_mapping: String,
+
+    /// PWM bits
+    #[arg(long = "led-pwm-bits", default_value_t = 11)]
+    pub pwm_bits: u8,
+
+    /// PWM nanoseconds for LSB
+    #[arg(long = "led-pwm-lsb-nanoseconds", default_value_t = 130)]
+    pub pwm_lsb_nanoseconds: u32,
+
+    /// Time dithering of lower bits
+    #[arg(long = "led-pwm-dither-bits", default_value_t = 0)]
+    pub pwm_dither_bits: u32,
+
+    /// Don't use hardware pin-pulse generation
+    #[arg(long = "led-no-hardware-pulse")]
+    pub no_hardware_pulse: bool,
+
+    /// Show refresh rate
+    #[arg(long = "led-show-refresh")]
+    pub show_refresh: bool,
+}
 
 #[derive(Debug, Parser)]
 #[command(
     name = "sub",
     about = "Subscribe to published video frames on NATS",
-    after_help = "LED-matrix flags (--led-*) are accepted and ignored."
 )]
 pub struct Args {
     /// NATS server URL
@@ -56,56 +102,9 @@ pub struct Args {
     /// Overwrite log file (instead of append)
     #[arg(long = "output-overwrite", visible_alias = "oo")]
     pub log_overwrite: bool,
-}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ViewRect {
-    pub x1: i16,
-    pub y1: i16,
-    pub x2: i16,
-    pub y2: i16,
-}
-
-impl ViewRect {
-    fn validate(&self) -> Result<(), String> {
-        if self.x1 >= self.x2 {
-            Err(format!("'x1' ({}) equals or exceeds 'x2' ({})", self.x1, self.x2))
-        } else if self.y1 >= self.y2 {
-            Err(format!("'y1' ({}) equals or exceeds 'y2' ({})", self.y1, self.y2))
-        } else {
-            Ok(())
-        }
-    }
-}
-
-impl FromStr for ViewRect {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (start, end) = s
-            .split_once('-')
-            .ok_or_else(|| format!("'{s}' is not a valid rectangle"))?;
-        let (x1, y1) = start
-            .split_once(',')
-            .ok_or_else(|| format!("'{s}' is not a valid rectangle"))?;
-        let (x2, y2) = end
-            .split_once(',')
-            .ok_or_else(|| format!("'{s}' is not a valid rectangle"))?;
-        let rect = Self {
-            x1: x1.parse().map_err(|_| format!("'{x1}' is not a valid coordinate"))?,
-            y1: y1.parse().map_err(|_| format!("'{y1}' is not a valid coordinate"))?,
-            x2: x2.parse().map_err(|_| format!("'{x2}' is not a valid coordinate"))?,
-            y2: y2.parse().map_err(|_| format!("'{y2}' is not a valid coordinate"))?,
-        };
-        rect.validate()?;
-        Ok(rect)
-    }
-}
-
-impl fmt::Display for ViewRect {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({},{})-({},{})", self.x1, self.y1, self.x2, self.y2)
-    }
+    #[command(flatten)]
+    pub led: LedArgs,
 }
 
 #[derive(Debug, Clone, Copy, Default, ValueEnum)]
@@ -139,13 +138,6 @@ impl LogLevel {
 
 impl Args {
     pub fn parse() -> Self {
-        let filtered: Vec<std::ffi::OsString> = std::env::args_os()
-            .filter(|arg| {
-                arg.to_str()
-                    .map(|s| !s.starts_with("--led-"))
-                    .unwrap_or(true)
-            })
-            .collect();
-        <Self as Parser>::parse_from(filtered)
+        <Self as Parser>::parse_from(std::env::args_os())
     }
 }

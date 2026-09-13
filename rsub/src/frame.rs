@@ -14,8 +14,13 @@
 
 use std::fmt;
 
+pub struct Frame<'a> {
+    pub header: FrameHeader,
+    pub content: &'a [u8],
+}
+
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct FrameHeader {
     pub pitch: u16,
     pub width: u16,
@@ -42,13 +47,6 @@ impl FrameHeader {
 
     pub fn decompressed_size(&self) -> Option<usize> {
         (self.pitch as usize).checked_mul(self.height as usize)
-    }
-
-    pub fn same_geometry(&self, other: &Self) -> bool {
-        self.width == other.width &&
-            self.height == other.height &&
-            self.pixel_format == other.pixel_format &&
-            self.attrs == other.attrs
     }
 }
 
@@ -92,7 +90,6 @@ impl fmt::Display for PixelFormat {
 pub struct FrameAttr(pub u8);
 
 impl FrameAttr {
-    pub const NONE: Self = Self(0x00);
     pub const ROT180: Self = Self(0x01);
 }
 
