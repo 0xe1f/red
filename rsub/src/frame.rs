@@ -14,9 +14,63 @@
 
 use std::fmt;
 
+use anyhow::{ anyhow, ensure, Context, Result };
+
+pub struct FrameDecoder {
+    buf: Vec<u8>,
+}
+
+impl FrameDecoder {
+    pub fn new() -> Self {
+        return Self { buf: Vec::new() };
+    }
+
+    pub fn decode(
+        &mut self,
+        payload: &[u8],
+    ) -> Result<Frame<'_>> {
+        // Parse frame header into struct
+        let header = FrameHeader::parse(payload)
+            .context("Message too short")?;
+        let decomp_size = header.decompressed_size()
+            .ok_or_else(|| anyhow!("Invalid frame geometry: {header}"))?;
+
+        // Sanity checks
+        ensure!(
+            decomp_size != 0,
+            "Empty frame: {header}",
+        );
+        if self.buf.len() < decomp_size {
+            self.buf.resize(decomp_size, 0);
+        }
+
+        // Decompress
+        let compressed = &payload[FrameHeader::SIZE..];
+        let written = lz4_flex::decompress_into(compressed, &mut self.buf[..decomp_size])
+            .context("LZ4 decompression failed")?;
+        ensure!(
+            written == decomp_size,
+            "LZ4 size mismatch: expected ({decomp_size}); got ({written})",
+        );
+
+        let frame = Frame {
+            header: header,
+            content: &self.buf[..decomp_size],
+        };
+
+        Ok(frame)
+    }
+}
+
 pub struct Frame<'a> {
     pub header: FrameHeader,
     pub content: &'a [u8],
+}
+
+impl<'a> fmt::Display for Frame<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{}] (size: {})", self.header, self.content.len())
+    }
 }
 
 #[repr(C)]

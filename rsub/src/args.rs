@@ -147,6 +147,10 @@ pub struct Args {
     #[arg(long = "output-overwrite", visible_alias = "oo")]
     pub log_overwrite: bool,
 
+    /// Show server frames-per-second
+    #[arg(long = "show-fps", visible_alias = "fps")]
+    pub show_fps: bool,
+
     #[command(flatten)]
     pub led: LedArgs,
 }

@@ -18,7 +18,7 @@ mod screen;
 mod viewrect;
 
 use crate::args::{ Args };
-use crate::frame::{ Frame, FrameHeader };
+use crate::frame::{ FrameDecoder };
 use crate::screen::{ Screen };
 
 use std::fs::OpenOptions;
@@ -35,7 +35,7 @@ use tracing_subscriber::fmt;
 
 const SUBJECT: &str = "red.frames";
 const RECONNECT_WAIT: Duration = Duration::from_millis(250);
-const FPS_INTERVAL: Duration = Duration::from_secs(3);
+const FPS_INTERVAL: Duration = Duration::from_secs(1);
 const SCREEN_CLEAR_INTERVAL: Duration = Duration::from_secs(1);
 const MAX_RECONNECTS: usize = 50;
 
@@ -67,43 +67,6 @@ fn init_logging(args: &Args) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn extract_frame<'a>(
-    payload: &[u8],
-    decomp_buf: &'a mut Vec<u8>,
-    last_header: &mut Option<FrameHeader>,
-) -> Result<Frame<'a>> {
-    // Parse frame header into struct
-    let header = FrameHeader::parse(payload).context("Message too short")?;
-    let Some(decomp_size) = header.decompressed_size() else {
-        bail!("Invalid frame geometry: {header}");
-    };
-    // FIXME: reevaluate last_header presence
-    if last_header.as_ref().is_none_or(|prev| *prev != header) {
-        debug!(%header, "Received frame with geometry");
-        *last_header = Some(header);
-    }
-
-    // Sanity checks
-    if decomp_size == 0 {
-        bail!("Empty frame: {header}");
-    }
-    if decomp_buf.len() < decomp_size {
-        decomp_buf.resize(decomp_size, 0);
-    }
-
-    // Decompress
-    let compressed = &payload[FrameHeader::SIZE..];
-    lz4_flex::decompress_into(compressed, &mut decomp_buf[..decomp_size])
-        .context("LZ4 decompression failed")?;
-
-    let frame = Frame {
-        header: header,
-        content: &decomp_buf[..decomp_size],
-    };
-
-    Ok(frame)
 }
 
 #[tokio::main]
@@ -146,12 +109,11 @@ async fn main() -> Result<()> {
         .with_context(|| format!("subscribing to '{SUBJECT}'"))?;
     info!("Subscribed to '{SUBJECT}'");
 
-    let mut decomp_buf = Vec::new();
-    let mut last_header: Option<FrameHeader> = None;
     let mut frames_total = 0u64;
     let mut frames_window = 0u64;
     let mut window_started = Instant::now();
     let mut last_frame_time: Option<Instant> = None;
+    let mut decoder = FrameDecoder::new();
 
     let ctrl_c = signal::ctrl_c();
     pin!(ctrl_c);
@@ -167,7 +129,7 @@ async fn main() -> Result<()> {
                     warn!("NATS subscription closed");
                     break;
                 };
-                match extract_frame(&msg.payload, &mut decomp_buf, &mut last_header) {
+                match decoder.decode(&msg.payload) {
                     Ok(frame) => screen.render(&frame),
                     Err(err) => {
                         error!("{err:#}");
@@ -175,15 +137,18 @@ async fn main() -> Result<()> {
                     },
                 };
                 frames_total += 1;
-                frames_window += 1;
                 let now = Instant::now();
                 last_frame_time = Some(now);
-                let elapsed = window_started.elapsed();
-                if elapsed >= FPS_INTERVAL {
-                    let fps = frames_window as f64 / elapsed.as_secs_f64();
-                    info!("fps: {fps:.2} ({frames_window} frames, {frames_total} total)");
-                    frames_window = 0;
-                    window_started = now;
+
+                if args.show_fps {
+                    frames_window += 1;
+                    let elapsed = window_started.elapsed();
+                    if elapsed >= FPS_INTERVAL {
+                        let fps = frames_window as f64 / elapsed.as_secs_f64();
+                        info!("fps: {fps:.2} ({frames_window} frames, {frames_total} total)");
+                        frames_window = 0;
+                        window_started = now;
+                    }
                 }
             }
             _ = time::sleep(SCREEN_CLEAR_INTERVAL), if last_frame_time.is_some() => {
