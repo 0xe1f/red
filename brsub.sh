@@ -21,6 +21,12 @@ cd "$(dirname "$0")"
 
 set -e
 
+# Check args
+FORCE_REINSTALL=
+if [ "$1" == "--force-reinstall" ] || [ "$1" == "-f" ]; then
+    FORCE_REINSTALL=1
+fi
+
 # Text formatting constants
 BOLD_WHITE="$(tput bold)$(tput setaf 7)"
 CLR_OK="$(tput setaf 2)"
@@ -94,7 +100,10 @@ complete_setup() {
         (
             SYSTEMD_PATH=\"\${HOME}/.config/systemd/user\" &&
             SVC_PATH=\"\${SYSTEMD_PATH}/red_${svc_file}\" &&
-            test -f \"\${SVC_PATH}\" 2>/dev/null ||
+            {
+                ! [ \"${FORCE_REINSTALL}\" ] &&
+                test -f \"\${SVC_PATH}\" 2>/dev/null;
+            } ||
             (
                 echo \"Setting up systemd service...\" >&2 &&
                 mkdir -p \"\${SYSTEMD_PATH}\" &&
