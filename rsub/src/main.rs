@@ -31,7 +31,7 @@ use async_nats::{ ConnectOptions };
 use futures::StreamExt;
 use tokio::{ pin, select, signal, time };
 use tracing::{ debug, info, warn, error };
-use tracing_subscriber::fmt;
+use tracing_subscriber::{ fmt, EnvFilter };
 
 const SUBJECT: &str = "red.frames";
 const RECONNECT_WAIT: Duration = Duration::from_millis(250);
@@ -40,8 +40,11 @@ const SCREEN_CLEAR_INTERVAL: Duration = Duration::from_secs(1);
 const MAX_RECONNECTS: usize = 50;
 
 fn init_logging(args: &Args) -> Result<()> {
+    let log_level = args.log_level.tracing_level();
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(format!("warn,rsub={log_level}")));
     let builder = fmt()
-        .with_max_level(args.log_level.tracing_level())
+        .with_env_filter(filter)
         .with_target(true);
 
     if let Some(path) = &args.log_path {
@@ -69,15 +72,13 @@ fn init_logging(args: &Args) -> Result<()> {
     Ok(())
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let args = Args::parse();
-    init_logging(&args)?;
+fn main() -> Result<()> {
+    run(Args::parse())
+}
 
-    if args.background {
-        // FIXME: daemonize (fork + setsid, close stdio) like the C subscriber's --background.
-        warn!("--background is not implemented; staying in the foreground");
-    }
+#[tokio::main]
+async fn run(args: Args) -> Result<()> {
+    init_logging(&args)?;
 
     // Initialize matrix
     let mut screen = Screen::new(&args)?;
@@ -107,7 +108,7 @@ async fn main() -> Result<()> {
         .subscribe(SUBJECT)
         .await
         .with_context(|| format!("subscribing to '{SUBJECT}'"))?;
-    info!("Subscribed to '{SUBJECT}'");
+    debug!("Subscribed to '{SUBJECT}'");
 
     let mut frames_total = 0u64;
     let mut frames_window = 0u64;
@@ -153,7 +154,7 @@ async fn main() -> Result<()> {
             }
             _ = time::sleep(SCREEN_CLEAR_INTERVAL), if last_frame_time.is_some() => {
                 // No frames for a while; clear screen
-                info!("No frames received for {SCREEN_CLEAR_INTERVAL:?}, clearing canvas...");
+                debug!("No frames received for {SCREEN_CLEAR_INTERVAL:?}, clearing canvas...");
                 screen.clear();
                 last_frame_time = None;
             }

@@ -111,7 +111,7 @@ pub struct LedArgs {
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "sub",
+    name = "rsub",
     about = "Subscribe to published video frames on NATS",
 )]
 pub struct Args {
@@ -130,10 +130,6 @@ pub struct Args {
     /// Content rectangle on the entire LED screen (x1,y1-x2,y2)
     #[arg(long = "content-rect", visible_alias = "cr", value_name = "x1,y1-x2,y2")]
     pub content_rect: ViewRect,
-
-    /// Run in background as daemon
-    #[arg(long = "background", visible_alias = "bg")]
-    pub background: bool,
 
     /// Log level
     #[arg(short = 'l', long = "log-level", value_enum, default_value_t = LogLevel::Info)]

@@ -1,0 +1,12 @@
+[Unit]
+Description=RED Frame Subscriber Service
+
+[Service]
+ExecStart=/usr/bin/sudo {SERVICE_PATH} --server-url {NATS_URL} {ARGS}
+Restart=on-failure
+Type=simple
+KillSignal=SIGINT
+TimeoutStopSec=5
+
+[Install]
+WantedBy=default.target

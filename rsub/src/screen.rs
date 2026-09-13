@@ -40,7 +40,6 @@ pub struct Screen {
     content_rect: ViewRect,
     blit_src: ViewRect,
     blit_dest: ViewRect,
-    vw_origin: i16,
     cached_header: Option<FrameHeader>,
     row_render_fn: Option<RowRenderFn>,
 }
@@ -71,7 +70,6 @@ impl Screen {
             content_rect: args.content_rect,
             blit_src: args.source_rect,
             blit_dest: args.dest_rect,
-            vw_origin: 0,
             cached_header: None,
             row_render_fn: None,
         };
@@ -124,7 +122,7 @@ impl Screen {
         Ok((Some(mx_options), Some(rt_options)))
     }
 
-    fn inspect_geometry(&mut self, header: &FrameHeader) {
+    fn rebuild_blit_geometry(&mut self, header: &FrameHeader) {
         if self.cached_header.is_some_and(|cached| cached == *header) {
             return;
         }
@@ -182,12 +180,6 @@ impl Screen {
             self.blit_src.y2 -= self.blit_dest.y1 + row_count - self.height;
         }
 
-        if (header.attrs & FrameAttr::ROT180) == FrameAttr::ROT180 {
-            self.vw_origin = self.blit_dest.x2;
-        } else {
-            self.vw_origin = 0;
-        }
-
         // Select format-specific row renderer (no branching in the hot loop)
         self.row_render_fn = match header.pixel_format {
             PixelFormat::RGB565 => Some(row_render_rgb565),
@@ -204,22 +196,20 @@ impl Screen {
     }
 
     pub fn render(&mut self, frame: &Frame) {
-        let header = &frame.header;
-        // FIXME: shite name
-        self.inspect_geometry(header);
+        self.rebuild_blit_geometry(&frame.header);
 
+        // If no row renderer is present, return
         let Some(row_render_fn) = self.row_render_fn else {
             return;
         };
 
-        let rot180 = header.attrs & FrameAttr::ROT180 == FrameAttr::ROT180;
+        let rot180 = frame.header.attrs & FrameAttr::ROT180 == FrameAttr::ROT180;
         let row_count = (self.blit_src.y2 - self.blit_src.y1) as usize;
         let col_count = (self.blit_src.x2 - self.blit_src.x1) as usize;
 
         // For rot180: vertical flip is handled by rry; horizontal flip uses x_dir=-1
-        // starting from vw_origin - blit_dest.sx so pixel i lands at vw_origin - blit_dest.sx - i
         let dst_x = if rot180 {
-            self.vw_origin - self.blit_dest.x1
+            self.blit_dest.x2 - self.blit_dest.x1
         } else {
             self.blit_dest.x1
         } as i32;
@@ -236,7 +226,7 @@ impl Screen {
         for yo in 0..row_count {
             let ry = self.blit_src.y1 as usize + yo;
             let rry = if rot180 {
-                header.height as usize - 1 - ry
+                frame.header.height as usize - 1 - ry
             } else {
                 ry
             };

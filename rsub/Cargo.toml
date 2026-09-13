@@ -2,6 +2,9 @@
 name = "rsub"
 version = "0.1.0"
 edition = "2024"
+license = "Apache-2.0"
+authors = ["Akop Karapetyan"]
+description = "Subscribe to published video frames on NATS and display them on an LED matrix"
 
 [target.'cfg(all(target_os = "linux", target_arch = "aarch64"))'.dependencies]
 rpi-led-matrix = { version = "0.4.0", default-features = false }
@@ -17,4 +20,4 @@ futures = "0.3.34"
 lz4_flex = "0.14.0"
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "signal", "time"] }
 tracing = "0.1.44"
-tracing-subscriber = "0.3.23"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
