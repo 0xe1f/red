@@ -15,8 +15,6 @@
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 
 #include "sub_args.h"
@@ -50,7 +48,6 @@ typedef void (*RowRenderFn)(struct LedCanvas *canvas, const uint8_t *row,
 static bool init_rgb(int argc, char **argv);
 static void render(const Frame *frame);
 static inline void log_fps();
-static void run_as_daemon();
 static void sigint_callback(int s);
 static void xm_callback(const Frame *frame);
 static void inspect_geometry(const FrameHeader *hdr);
@@ -124,28 +121,6 @@ static inline void log_fps()
         log_v(LOG_TAG, "fps: %.02f\r", fps);
         frames = 0;
         pmu = mu;
-    }
-}
-
-static void run_as_daemon()
-{
-    pid_t pid = fork();
-    if (pid < 0) {
-        log_e(LOG_TAG, "Error forking process\n");
-        exit(1);
-    } else if (pid > 0) {
-        // Parent
-        log_i(LOG_TAG, "Running in background, PID: %d\n", pid);
-        exit(0);
-    } else {
-        // Child
-        if (setsid() < 0) {
-            log_e(LOG_TAG, "Error creating new session\n");
-            exit(1);
-        }
-        fclose(stdin);
-        fclose(stdout);
-        fclose(stderr);
     }
 }
 
@@ -340,9 +315,6 @@ int main(int argc, char **argv)
     }
 
     log_set_level(args.log_level);
-    if (args.background) {
-        run_as_daemon();
-    }
 
     if (args.log_path) {
         FILE *f = fopen(args.log_path, args.log_overwrite ? "w" : "a");

@@ -25,24 +25,20 @@ bool args_parse(int argc, const char **argv, ArgsOptions *opts)
     opts->log_path = NULL;
     opts->log_level = LOG_INFO;
     opts->log_overwrite = false;
-    opts->background = false;
     opts->show_fps = false;
 
     int i;
     const char **arg;
     for (i = 1, arg = argv + 1; i < argc; i++, arg++) {
         if (strcmp(*arg, "--help") == 0) {
-            fprintf(stdout, "Usage: %s <server-url> [--src-rect=x1,y1-x2,y2] [--dest-rect=x1,y1-x2,y2] [--content-rect=x1,y1-x2,y2] [--background] [--fps]\n", argv[0]);
+            fprintf(stdout, "Usage: %s <server-url> [--src-rect=x1,y1-x2,y2] [--dest-rect=x1,y1-x2,y2] [--content-rect=x1,y1-x2,y2] [--fps]\n", argv[0]);
             fprintf(stdout, "  --src-rect          Source rectangle in server bitmap\n");
             fprintf(stdout, "  --dest-rect         Destination rectangle on LED matrix\n");
             fprintf(stdout, "  --content-rect      Content rectangle on LED matrix\n");
-            fprintf(stdout, "  --background        Run in background as a daemon\n");
             fprintf(stdout, "  --fps               Show server FPS\n");
             return false;
         } else if (strcmp(*arg, "--show-fps") == 0 || strcmp(*arg, "-fps") == 0) {
             opts->show_fps = true;
-        } else if (strcmp(*arg, "--background") == 0 || strcmp(*arg, "-bg") == 0) {
-            opts->background = true;
         } else if (strcmp(*arg, "--log-level") == 0) {
             if (++i >= argc) {
                 log_e(LOG_TAG, "Missing argument for %s\n", *arg);

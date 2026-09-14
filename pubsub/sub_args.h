@@ -23,7 +23,6 @@ typedef struct {
     const char *server_url;
     const char *log_path;
     bool log_overwrite;
-    bool background;
     bool show_fps;
     LogLevel log_level;
     ViewRect content;
