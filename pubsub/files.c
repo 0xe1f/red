@@ -48,6 +48,91 @@ static bool load_zip(const char *path);
 static bool load_7z(const char *path);
 static bool load_direct(const char *path);
 static bool extension_one_of(const char *ext, const char *ext_delim);
+static void copy_str(char *dst, size_t dst_size, const char *src);
+static void copy_str_n(char *dst, size_t dst_size, const char *src, size_t n);
+static void append_str(char *dst, size_t dst_size, const char *src);
+static void join_dir(char *dst, size_t dst_size, const char *base, const char *name);
+static void dirname_copy(char *dst, size_t dst_size, const char *path);
+static void split_name_ext(const char *path, char *name, size_t name_size,
+                           char *ext, size_t ext_size);
+
+static void copy_str(char *dst, size_t dst_size, const char *src)
+{
+    if (dst_size == 0) {
+        return;
+    }
+    if (!src) {
+        dst[0] = '\0';
+        return;
+    }
+    size_t n = strlen(src);
+    if (n >= dst_size) {
+        n = dst_size - 1;
+    }
+    memcpy(dst, src, n);
+    dst[n] = '\0';
+}
+
+static void copy_str_n(char *dst, size_t dst_size, const char *src, size_t n)
+{
+    if (dst_size == 0) {
+        return;
+    }
+    if (!src) {
+        dst[0] = '\0';
+        return;
+    }
+    size_t len = 0;
+    while (len < n && src[len]) {
+        len++;
+    }
+    if (len >= dst_size) {
+        len = dst_size - 1;
+    }
+    memcpy(dst, src, len);
+    dst[len] = '\0';
+}
+
+static void append_str(char *dst, size_t dst_size, const char *src)
+{
+    size_t used = strlen(dst);
+    if (used < dst_size) {
+        copy_str(dst + used, dst_size - used, src);
+    }
+}
+
+static void join_dir(char *dst, size_t dst_size, const char *base, const char *name)
+{
+    size_t len = strlen(base);
+    copy_str(dst, dst_size, base);
+    if (len > 0 && base[len - 1] != '/') {
+        append_str(dst, dst_size, "/");
+    }
+    append_str(dst, dst_size, name);
+}
+
+static void dirname_copy(char *dst, size_t dst_size, const char *path)
+{
+    const char *slash = strrchr(path, '/');
+    if (slash) {
+        copy_str_n(dst, dst_size, path, (size_t)(slash - path));
+    } else {
+        copy_str(dst, dst_size, ".");
+    }
+}
+
+static void split_name_ext(const char *path, char *name, size_t name_size,
+                           char *ext, size_t ext_size)
+{
+    const char *slash = strrchr(path, '/');
+    copy_str(name, name_size, slash ? slash + 1 : path);
+    ext[0] = '\0';
+    char *dot = strrchr(name, '.');
+    if (dot) {
+        copy_str(ext, ext_size, dot + 1);
+        *dot = '\0';
+    }
+}
 
 static bool extension_one_of(const char *ext, const char *ext_delim)
 {
@@ -112,17 +197,10 @@ static bool load_zip(const char *path)
     static char archived_ext[512];
     static char dir[1024];
     void *data = NULL;
-    *archived_path = '\0';
-    *archived_filename = '\0';
-    *archived_ext = '\0';
-    *dir = '\0';
-
-    const char *slash = strrchr(path, '/');
-    if (slash) {
-        strncat(dir, path, slash - path);
-    } else {
-        strncat(dir, ".", sizeof(dir) - 1);
-    }
+    archived_path[0] = '\0';
+    archived_filename[0] = '\0';
+    archived_ext[0] = '\0';
+    dirname_copy(dir, sizeof(dir), path);
 
     unz_file_info info;
     bool need_fullpath = false;
@@ -141,25 +219,13 @@ static bool load_zip(const char *path)
                     if ((ret = unzReadCurrentFile(fd, data, size)) == (int) size) {
                         log_i(LOG_TAG, "Loaded '%s'\n", archived_path);
 
-                        const char *archived_slash = strrchr(archived_path, '/');
-                        if (archived_slash) {
-                            strncat(archived_filename, archived_slash + 1, sizeof(archived_filename) - 1);
-                        } else {
-                            strncat(archived_filename, archived_path, sizeof(archived_filename) - 1);
-                        }
-
-                        char *archived_dot = strrchr(archived_filename, '.');
-                        if (archived_dot) {
-                            *archived_dot = '\0';
-                            strncat(archived_ext, archived_dot + 1, sizeof(archived_ext) - 1);
-                        } else {
-                            strncat(archived_ext, "", sizeof(archived_ext) - 1);
-                        }
+                        split_name_ext(archived_path, archived_filename, sizeof(archived_filename),
+                                       archived_ext, sizeof(archived_ext));
 
                         if (need_fullpath) {
                             // Core needs a real file path - extract to a temp file
-                            snprintf(extracted_tempfile, sizeof(extracted_tempfile),
-                                     "%s/rom_XXXXXX", save_path);
+                            copy_str(extracted_tempfile, sizeof(extracted_tempfile), save_path);
+                            append_str(extracted_tempfile, sizeof(extracted_tempfile), "/rom_XXXXXX");
                             int tmp_fd = mkstemp(extracted_tempfile);
                             FILE *tf = tmp_fd != -1 ? fdopen(tmp_fd, "wb") : NULL;
                             if (!tf) {
@@ -251,29 +317,29 @@ static bool load_7z(const char *path)
     static char archived_filename[512];
     static char archived_ext[512];
     static char dir[1024];
-
-    const char *slash = strrchr(path, '/');
-    if (slash) {
-        strncat(dir, path, slash - path);
-    } else {
-        strncat(dir, ".", sizeof(dir) - 1);
-    }
+    archived_path[0] = '\0';
+    archived_filename[0] = '\0';
+    archived_ext[0] = '\0';
+    dirname_copy(dir, sizeof(dir), path);
 
     unsigned short name_utf16[2048];
     bool need_fullpath = false;
 
     for (int i = 0, n = z7->db.NumFiles; i < n; i++) {
         size_t len = SzArEx_GetFileNameUtf16(&z7->db, i, NULL);
-        if (len > sizeof(name_utf16)) {
+        size_t utf16_cap = sizeof(name_utf16) / sizeof(name_utf16[0]);
+        if (len > utf16_cap) {
             log_e(LOG_TAG, "File name at index %d too long (%zu chars)\n", i, len);
             continue;
         }
 
         SzArEx_GetFileNameUtf16(&z7->db, i, name_utf16);
-        for (size_t j = 0, size = sizeof(archived_path) - 1; j < len && j < size; j++) {
-            archived_path[j] = name_utf16[j] & 0xff;
+        size_t out = 0;
+        size_t max = sizeof(archived_path) - 1;
+        for (size_t j = 0; j < len && out < max; j++) {
+            archived_path[out++] = (char)(name_utf16[j] & 0xff);
         }
-        archived_path[len] = '\0';
+        archived_path[out] = '\0';
 
         if (is_path_supported(archived_path, &need_fullpath)) {
             unsigned long size = SzArEx_GetFileSize(&z7->db, i);
@@ -301,25 +367,13 @@ static bool load_7z(const char *path)
                 continue;
             }
 
-            const char *archived_slash = strrchr(archived_path, '/');
-            if (archived_slash) {
-                strncat(archived_filename, archived_slash + 1, sizeof(archived_filename) - 1);
-            } else {
-                strncat(archived_filename, archived_path, sizeof(archived_filename) - 1);
-            }
-
-            char *archived_dot = strrchr(archived_filename, '.');
-            if (archived_dot) {
-                *archived_dot = '\0';
-                strncat(archived_ext, archived_dot + 1, sizeof(archived_ext) - 1);
-            } else {
-                strncat(archived_ext, "", sizeof(archived_ext) - 1);
-            }
+            split_name_ext(archived_path, archived_filename, sizeof(archived_filename),
+                           archived_ext, sizeof(archived_ext));
 
             if (need_fullpath) {
                 // Core needs a real file path - extract to a temp file
-                snprintf(extracted_tempfile, sizeof(extracted_tempfile),
-                         "%s/rom_XXXXXX", save_path);
+                copy_str(extracted_tempfile, sizeof(extracted_tempfile), save_path);
+                append_str(extracted_tempfile, sizeof(extracted_tempfile), "/rom_XXXXXX");
                 int tmp_fd = mkstemp(extracted_tempfile);
                 FILE *tf = tmp_fd != -1 ? fdopen(tmp_fd, "wb") : NULL;
                 if (!tf) {
@@ -391,22 +445,8 @@ static bool load_direct(const char *path)
     static char filename[512];
     static char ext[512];
 
-    const char *slash = strrchr(path, '/');
-    if (slash) {
-        strncat(dir, path, slash - path);
-        strncat(filename, slash + 1, sizeof(filename) - 1);
-    } else {
-        strncat(dir, ".", sizeof(dir) - 1);
-        strncat(filename, path, sizeof(filename) - 1);
-    }
-
-    char *dot = strrchr(filename, '.');
-    if (dot) {
-        *dot = '\0';
-        strncat(ext, dot + 1, sizeof(ext) - 1);
-    } else {
-        strncat(ext, "", sizeof(ext) - 1);
-    }
+    dirname_copy(dir, sizeof(dir), path);
+    split_name_ext(path, filename, sizeof(filename), ext, sizeof(ext));
 
     void *data = NULL;
     size_t size = 0;
@@ -464,13 +504,8 @@ static bool load_direct(const char *path)
 static const char* get_filename(const char *path, bool include_ext)
 {
     static char filename[1024];
-    *filename = '\0';
     const char *slash = strrchr(path, '/');
-    if (slash) {
-        strncat(filename, slash + 1, sizeof(filename) - 1);
-    } else {
-        strncat(filename, path, sizeof(filename) - 1);
-    }
+    copy_str(filename, sizeof(filename), slash ? slash + 1 : path);
     if (!include_ext) {
         char *dot = strrchr(filename, '.');
         if (dot) {
@@ -478,6 +513,14 @@ static const char* get_filename(const char *path, bool include_ext)
         }
     }
     return filename;
+}
+
+static void sram_path_for(char *dst, size_t dst_size, const char *rom_path)
+{
+    copy_str(dst, dst_size, save_path);
+    append_str(dst, dst_size, "/");
+    append_str(dst, dst_size, get_filename(rom_path, false));
+    append_str(dst, dst_size, ".srm");
 }
 
 bool files_load(const char *path)
@@ -496,15 +539,9 @@ bool files_load(const char *path)
 
 void files_mkdirs(const char *base_path)
 {
-    size_t len = strlen(base_path);
-    bool needs_slash = len > 0 && base_path[len - 1] != '/';
-
-    snprintf(system_path, sizeof(system_path), "%s%s%s",
-        base_path, needs_slash ? "/" : "", system_path_name);
-    snprintf(save_path, sizeof(save_path), "%s%s%s",
-        base_path, needs_slash ? "/" : "", save_path_name);
-    snprintf(recording_path, sizeof(recording_path), "%s%s%s",
-        base_path, needs_slash ? "/" : "", recording_path_name);
+    join_dir(system_path, sizeof(system_path), base_path, system_path_name);
+    join_dir(save_path, sizeof(save_path), base_path, save_path_name);
+    join_dir(recording_path, sizeof(recording_path), base_path, recording_path_name);
 
     struct stat st = {0};
     if (stat(system_path, &st) == -1) {
@@ -545,7 +582,7 @@ const char* files_save_path()
 bool files_save_sram(const char *rom_path, const void *sram_data, size_t sram_size)
 {
     char path[1024];
-    snprintf(path, sizeof(path), "%s/%s.srm", save_path, get_filename(rom_path, false));
+    sram_path_for(path, sizeof(path), rom_path);
     FILE *f = fopen(path, "wb");
     if (!f) {
         log_e(LOG_TAG, "Failed to save SRAM to '%s'\n", path);
@@ -561,7 +598,7 @@ bool files_save_sram(const char *rom_path, const void *sram_data, size_t sram_si
 bool files_restore_sram(const char *rom_path, void *sram_data, size_t sram_size)
 {
     char path[1024];
-    snprintf(path, sizeof(path), "%s/%s.srm", save_path, get_filename(rom_path, false));
+    sram_path_for(path, sizeof(path), rom_path);
     if (access(path, F_OK) == -1) {
         log_d(LOG_TAG, "No SRAM file for '%s'\n", path);
         return true;
@@ -600,10 +637,12 @@ bool files_restore_sram(const char *rom_path, void *sram_data, size_t sram_size)
 const char* files_rom_recording_path(const char *rom_path, uint32_t slot)
 {
     static char path[1024];
-    snprintf(path, sizeof(path), "%s/%s_%u.rec",
-        recording_path,
-        get_filename(rom_path, false),
-        slot < 0 ? 0 : (slot > 9 ? 9 : slot));
+    char tail[] = "_0.rec";
+    tail[1] = (char)('0' + (slot > 9 ? 9 : slot));
+    copy_str(path, sizeof(path), recording_path);
+    append_str(path, sizeof(path), "/");
+    append_str(path, sizeof(path), get_filename(rom_path, false));
+    append_str(path, sizeof(path), tail);
 
     return path;
 }
