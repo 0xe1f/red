@@ -83,6 +83,9 @@ ssh "${GAME_SVR_HOST}" "mkdir -p \"${CORES_PATH}\""
 rsync -trph \
     "${TEMP_FILE}" \
     "${GAME_SVR_HOST}:${CORES_PATH}/${TARGET}"
+rsync -trph \
+    "${LOCAL_APP_PATH}/recinfo" \
+    "${GAME_SVR_HOST}:${CORES_PATH}/recinfo"
 
 echo -e "${BOLD_WHITE}>> ${CLR_OK}All done... ${CLR_RST}"
 

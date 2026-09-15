@@ -32,6 +32,7 @@ typedef struct {
     const char *tmp_path;
     uint64_t input_frame_offset;
     uint64_t input_frame_count;
+    double fps;
     int file_fd;
     gzFile gz;
 } Replay;

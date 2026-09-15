@@ -25,10 +25,13 @@
 #include "log.h"
 #include "libretro.h"
 #include "core.h"
+#include "input.h"
 
 #define LOG_TAG "replay"
 
 extern CoreFn core;
+extern struct retro_system_info system_info;
+extern struct retro_system_av_info av_info;
 
 #define MAGIC   "REC"
 #define VERSION 1
@@ -37,12 +40,16 @@ struct __attribute__((__packed__)) RecordingHeader {
     char magic[4];
     uint32_t version;
     uint64_t start_state_uncompressed_size;
+    uint16_t input_frame_size;
+    char core_name[40];
+    char core_version[40];
 };
 
 struct __attribute__((__packed__)) RecordingFooter {
     uint64_t input_frame_offset;
     uint64_t input_frame_count;
     uint64_t trailing_state_offset;
+    uint32_t duration_ms;
 };
 
 static bool write_footer(Replay *replay);
@@ -57,6 +64,9 @@ static bool write_all(int fd, const void *buf, size_t size);
 static gzFile attach_gz(int fd, const char *mode);
 static bool open_inputs(Replay *replay, const char *mode);
 static char *sibling_temp_path(const char *path);
+static void copy_core_field(char *dst, size_t dst_len, const char *src);
+static uint32_t duration_ms_from(uint64_t frames, double fps);
+static bool header_matches_runtime(const struct RecordingHeader *header, bool require_input_size);
 
 bool replay_start_recording(Replay *replay, const char *path)
 {
@@ -95,12 +105,21 @@ bool replay_start_recording(Replay *replay, const char *path)
         return false;
     }
 
-    // Write the recording header to the file
+    size_t frame_size = input_recorded_size();
+    if (frame_size == 0 || frame_size > UINT16_MAX) {
+        log_e(LOG_TAG, "Invalid input frame size\n");
+        cleanup(replay);
+        return false;
+    }
+
     struct RecordingHeader header = {
         .magic = MAGIC,
         .version = VERSION,
         .start_state_uncompressed_size = size,
+        .input_frame_size = (uint16_t)frame_size,
     };
+    copy_core_field(header.core_name, sizeof(header.core_name), system_info.library_name);
+    copy_core_field(header.core_version, sizeof(header.core_version), system_info.library_version);
     if (!write_all(replay->file_fd, &header, sizeof(header))) {
         log_e(LOG_TAG, "Failed to write header\n");
         cleanup(replay);
@@ -122,6 +141,7 @@ bool replay_start_recording(Replay *replay, const char *path)
 
     replay->input_frame_offset = (uint64_t)offset;
     replay->input_frame_count = 0;
+    replay->fps = av_info.timing.fps;
     replay->mode = MODE_RECORD;
     return true;
 }
@@ -168,7 +188,7 @@ bool replay_continue_recording(Replay *replay, const char *path)
 
     // Read and verify the header and footer of the existing recording
     struct RecordingHeader header;
-    if (!verify_header(src, &header)) {
+    if (!verify_header(src, &header) || !header_matches_runtime(&header, true)) {
         log_e(LOG_TAG, "Existing recording header is invalid\n");
         close(src);
         cleanup(replay);
@@ -208,6 +228,7 @@ bool replay_continue_recording(Replay *replay, const char *path)
     log_d(LOG_TAG, "Resuming recording at '%s'\n", replay->tmp_path);
     replay->input_frame_offset = footer.input_frame_offset;
     replay->input_frame_count = footer.input_frame_count;
+    replay->fps = av_info.timing.fps;
     replay->mode = MODE_RECORD;
     return true;
 }
@@ -234,9 +255,8 @@ bool replay_start_playback(Replay *replay, const char *path)
 
     log_d(LOG_TAG, "Starting replay from '%s'\n", path);
 
-    // Validate header
     struct RecordingHeader header;
-    if (!verify_header(replay->file_fd, &header)) {
+    if (!verify_header(replay->file_fd, &header) || !header_matches_runtime(&header, true)) {
         cleanup(replay);
         return false;
     }
@@ -256,6 +276,8 @@ bool replay_start_playback(Replay *replay, const char *path)
     }
 
     replay->input_frame_count = footer.input_frame_count;
+    log_v(LOG_TAG, "Replay core '%s' '%s', %u ms, %u-byte inputs\n",
+        header.core_name, header.core_version, footer.duration_ms, header.input_frame_size);
 
     // Read the state, then seek to inputs (gzread read-ahead invalidates offset)
     if (restore_state(replay->file_fd, size)
@@ -370,6 +392,7 @@ static bool write_footer(Replay *replay)
         .input_frame_offset = replay->input_frame_offset,
         .input_frame_count = replay->input_frame_count,
         .trailing_state_offset = (uint64_t)offset,
+        .duration_ms = duration_ms_from(replay->input_frame_count, replay->fps),
     };
     if (!write_all(replay->file_fd, &footer, sizeof(footer))) {
         log_e(LOG_TAG, "Failed to write footer\n");
@@ -402,6 +425,7 @@ static void cleanup(Replay *replay)
 
     replay->input_frame_offset = 0;
     replay->input_frame_count = 0;
+    replay->fps = 0.0;
     replay->mode = MODE_NONE;
 }
 
@@ -418,6 +442,9 @@ static bool verify_header(int fd, struct RecordingHeader *header)
         log_e(LOG_TAG, "Invalid recording header\n");
         return false;
     }
+
+    header->core_name[sizeof(header->core_name) - 1] = '\0';
+    header->core_version[sizeof(header->core_version) - 1] = '\0';
 
     return true;
 }
@@ -573,4 +600,48 @@ static char *sibling_temp_path(const char *path)
     }
     snprintf(tmp, len, "%s.XXXXXX", path);
     return tmp;
+}
+
+static void copy_core_field(char *dst, size_t dst_len, const char *src)
+{
+    memset(dst, 0, dst_len);
+    if (src) {
+        strncpy(dst, src, dst_len - 1);
+    }
+}
+
+static uint32_t duration_ms_from(uint64_t frames, double fps)
+{
+    if (fps <= 0.0) {
+        return 0;
+    }
+    double ms = (double)frames * 1000.0 / fps;
+    if (ms >= (double)UINT32_MAX) {
+        return UINT32_MAX;
+    }
+    return (uint32_t)(ms + 0.5);
+}
+
+static bool header_matches_runtime(const struct RecordingHeader *header, bool require_input_size)
+{
+    size_t frame_size = input_recorded_size();
+    if (require_input_size && (size_t)header->input_frame_size != frame_size) {
+        log_e(LOG_TAG, "Input frame size mismatch (%u != %zu)\n",
+            header->input_frame_size, frame_size);
+        return false;
+    }
+
+    if (system_info.library_name
+        && strncmp(header->core_name, system_info.library_name, sizeof(header->core_name)) != 0) {
+        log_e(LOG_TAG, "Core name mismatch (file '%s', runtime '%s')\n",
+            header->core_name, system_info.library_name);
+        return false;
+    }
+    if (system_info.library_version
+        && strncmp(header->core_version, system_info.library_version, sizeof(header->core_version)) != 0) {
+        log_w(LOG_TAG, "Core version mismatch (file '%s', runtime '%s')\n",
+            header->core_version, system_info.library_version);
+    }
+
+    return true;
 }

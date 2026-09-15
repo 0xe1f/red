@@ -385,6 +385,11 @@ static int deferred_event_count = 0;
 static unsigned long deferred_event_start_us = 0L;
 static int deferred_event_index = 0;
 
+size_t input_recorded_size()
+{
+    return sizeof(joypad_states);
+}
+
 void input_init()
 {
     SDL_InitSubSystem(SDL_INIT_JOYSTICK);

@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+# Copyright (c) 2026 Akop Karapetyan
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Dump header and duration from a pub recording (.rec)."""
+
+import struct
+import sys
+
+MAGIC = b"REC"
+VERSION = 1
+HEADER_FMT = "<4sIQH40s40s"
+FOOTER_FMT = "<QQQI"
+HEADER_SIZE = struct.calcsize(HEADER_FMT)
+FOOTER_SIZE = struct.calcsize(FOOTER_FMT)
+
+
+def field_str(raw):
+    n = raw.find(b"\0")
+    if n < 0:
+        n = len(raw)
+    return raw[:n].decode("utf-8", "replace")
+
+
+def fmt_duration(ms):
+    hours, rem = divmod(ms, 3_600_000)
+    minutes, rem = divmod(rem, 60_000)
+    seconds, millis = divmod(rem, 1000)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}.{millis:03d}"
+
+
+def main(argv):
+    if len(argv) != 2:
+        print(f"Usage: {argv[0]} <file.rec>", file=sys.stderr)
+        return 1
+
+    path = argv[1]
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except OSError as e:
+        print(f"{path}: {e}", file=sys.stderr)
+        return 1
+
+    if len(data) < HEADER_SIZE + FOOTER_SIZE:
+        print(f"{path}: file too small to be a recording", file=sys.stderr)
+        return 1
+
+    magic, version, _, frame_size, core_name, core_version = struct.unpack_from(
+        HEADER_FMT, data, 0
+    )
+    if magic[:3] != MAGIC or version != VERSION:
+        print(f"{path}: not a version {VERSION} recording", file=sys.stderr)
+        return 1
+
+    in_off, frame_count, trail_off, duration_ms = struct.unpack(
+        FOOTER_FMT, data[-FOOTER_SIZE:]
+    )
+    if (
+        frame_size == 0
+        or in_off < HEADER_SIZE
+        or trail_off <= in_off
+        or trail_off > len(data) - FOOTER_SIZE
+    ):
+        print(f"{path}: not a version {VERSION} recording", file=sys.stderr)
+        return 1
+
+    print(f"version: {version}")
+    print(f"input_uncompressed_size: {frame_count * frame_size:,} bytes")
+    print(f"core_name: {field_str(core_name)}")
+    print(f"core_version: {field_str(core_version)}")
+    print(f"duration: {fmt_duration(duration_ms)}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

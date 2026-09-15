@@ -16,11 +16,13 @@
 #define __INPUT_H__
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 void input_init();
 void input_poll();
 void input_clean_up();
+size_t input_recorded_size();
 int16_t callback_input_state(unsigned port, unsigned device, unsigned index, unsigned id);
 bool input_defer_events(const char *spec);
 
