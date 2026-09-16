@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "xm_pub.h"
+#include "server_xm.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -22,7 +22,7 @@
 #include "log.h"
 #include "subjects.h"
 
-#define LOG_TAG "xm_pub"
+#define LOG_TAG "server_xm"
 
 static natsConnection *conn = NULL;
 static natsSubscription *sub = NULL;

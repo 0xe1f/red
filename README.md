@@ -16,7 +16,7 @@ data. Subscribers can apply additional scaling as needed. Frames can also be
 pre-scaled (for aspect-ratio correction) and are compressed before delivery.
 
 The system runs on two Raspberry Pi 4 units: one runs the emulation
-[core](cores)/publisher, and the other runs the [web server](launcher). Both
+[core](cores)/server, and the other runs the [web server](launcher). Both
 units drive the display, with one unit handling each half of the screen. The
 unit can rotate between portrait and landscape modes, with portrait used mostly
 for older arcade games (e.g. Pac-Man).

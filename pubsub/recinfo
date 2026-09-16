@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Dump header and duration from a pub recording (.rec)."""
+"""Dump header and duration from a server recording (.rec)."""
 
 import struct
 import sys

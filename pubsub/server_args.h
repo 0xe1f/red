@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __PUB_ARGS_H__
-#define __PUB_ARGS_H__
+#ifndef __SERVER_ARGS_H__
+#define __SERVER_ARGS_H__
 
 #include "kv_store.h"
 #include "video.h"
@@ -46,4 +46,4 @@ typedef struct {
 bool args_parse(int argc, const char **argv, ArgsOptions *opts, KvStore *kv_store);
 void args_free(ArgsOptions *opts);
 
-#endif // __PUB_ARGS_H__
+#endif // __SERVER_ARGS_H__

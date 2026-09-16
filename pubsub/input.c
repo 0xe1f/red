@@ -21,7 +21,7 @@
 #include <unistd.h>
 #include <SDL.h>
 #include "libretro.h"
-#include "pub_args.h"
+#include "server_args.h"
 #include "replay.h"
 #include "log.h"
 #include "timing.h"

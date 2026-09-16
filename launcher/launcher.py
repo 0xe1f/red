@@ -67,7 +67,7 @@ def deserialize(message, type):
     rv.ParseFromString(message)
     return rv
 
-async def request_pub_async(request):
+async def request_server_async(request):
     subject = f"red.requests"
     logging.info(f"Requesting '{subject}'")
 
@@ -87,8 +87,8 @@ async def request_pub_async(request):
 
     return resp
 
-def request_pub(request):
-    return asyncio.run(request_pub_async(request))
+def request_server(request):
+    return asyncio.run(request_server_async(request))
 
 async def request_topic_async(topic, request, response_type):
     subject = f"red.query.{topic}"
@@ -337,7 +337,7 @@ def record():
     slot = max(0, min(slot, 9)) if isinstance(slot, int) else 0
 
     try:
-        response = request_pub(
+        response = request_server(
             requests.RequestEnvelope(
                 replay_record=replay.ReplayRecordRequest(
                     slot = slot
@@ -363,7 +363,7 @@ def playback():
     slot = max(0, min(slot, 9)) if isinstance(slot, int) else 0
 
     try:
-        response = request_pub(
+        response = request_server(
             requests.RequestEnvelope(
                 replay_playback=replay.ReplayPlaybackRequest(
                     slot = slot
@@ -386,7 +386,7 @@ def playback():
 @flask_login.login_required
 def stop_replay():
     try:
-        response = request_pub(
+        response = request_server(
             requests.RequestEnvelope(
                 replay_stop=replay.ReplayStopRequest()
             )
@@ -410,7 +410,7 @@ def resume_record():
     slot = max(0, min(slot, 9)) if isinstance(slot, int) else 0
 
     try:
-        response = request_pub(
+        response = request_server(
             requests.RequestEnvelope(
                 replay_resume_record=replay.ReplayResumeRecordRequest(
                     slot = slot
@@ -448,7 +448,7 @@ def snapshot():
     except asyncio.TimeoutError:
         return {
             'status': 'ERR',
-            'message': 'No frame available (publisher not running?)',
+            'message': 'No frame available (server not running?)',
         }, http.HTTPStatus.SERVICE_UNAVAILABLE
     except Exception as e:
         logging.error(f"Snapshot failed: {e}")

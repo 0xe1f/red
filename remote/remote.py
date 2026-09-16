@@ -33,7 +33,7 @@ import subprocess
 import yaml
 
 SUBJECT = "red.query.*"
-LAUNCH_PROCESS_NAME = "pub"
+LAUNCH_PROCESS_NAME = "server"
 APP_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
 TITLE_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
 CORE_PATTERN = "*.so"

@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include "libretro.h"
 #include "log.h"
-#include "pub_args.h"
+#include "server_args.h"
 
 #define LOG_TAG "args"
 

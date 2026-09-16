@@ -3,14 +3,14 @@ Pubsub
 This is the primary emulation driver and related video renderer. It's
 implemented as two distinct, but interdependent components -
 
-* pub is the primary emulation driver - a custom
+* server is the primary emulation driver - a custom
   [libretro](https://www.libretro.com/) host that publishes video frames to
-  NATS. Audio and input are rendered and consumed by pub and are not published.
-  Pub is executed as a standard process and killed when no longer needed.
+  NATS. Audio and input are rendered and consumed by server and are not published.
+  Server is executed as a standard process and killed when no longer needed.
 * ledd is a long-running service that subscribes to the published video frames
   and displays them on an LED matrix of some fixed size and configuration
 
-Frames are always published in a specific fixed size by the publisher;
+Frames are always published in a specific fixed size by the server;
 subscribers get to decide how much of each frame they will utilize. All scaling,
 filtering and compression is done pre-publish.
 

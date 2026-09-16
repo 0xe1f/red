@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __XM_PUB_H__
-#define __XM_PUB_H__
+#ifndef __SERVER_XM_H__
+#define __SERVER_XM_H__
 
 #include <stddef.h>
 #include "vid_frame.h"
@@ -29,4 +29,4 @@ void xm_publish_aud_frame(const AudFrameHeader *header, const void *content, siz
 void xm_poll_requests(const RequestHandler handler);
 void xm_cleanup();
 
-#endif // __XM_PUB_H__
+#endif // __SERVER_XM_H__

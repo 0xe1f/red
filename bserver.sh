@@ -14,7 +14,7 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 
-# Stages, builds and deploys publisher to game server host
+# Stages, builds and deploys server to game server host
 
 # Change to the script's directory
 cd "$(dirname "$0")"
@@ -57,7 +57,7 @@ fi
 
 LOCAL_APP_PATH=pubsub
 BUILD_PATH="red_builds/${LOCAL_APP_PATH}"
-TARGET=pub
+TARGET=server
 
 # Stage build
 echo -e "${BOLD_WHITE}>> ${CLR_OK}Staging build... ${CLR_RST}"
