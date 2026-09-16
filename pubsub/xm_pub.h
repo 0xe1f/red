@@ -16,14 +16,14 @@
 #define __XM_PUB_H__
 
 #include <stddef.h>
-#include "frame.h"
+#include "vid_frame.h"
 #include "requests.pb-c.h"
 #include "responses.pb-c.h"
 
 typedef void (*RequestHandler)(const RequestEnvelope *request, ResponseEnvelope *response);
 
 void xm_init(const char *server_url);
-void xm_publish_frame(const FrameHeader *geometry, const unsigned char *content, size_t size);
+void xm_publish_vid_frame(const VidFrameHeader *geometry, const unsigned char *content, size_t size);
 void xm_poll_requests(const RequestHandler handler);
 void xm_cleanup();
 

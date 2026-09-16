@@ -68,7 +68,7 @@ def deserialize(message, type):
     return rv
 
 async def request_pub_async(request):
-    subject = f"red.pub.request"
+    subject = f"red.requests"
     logging.info(f"Requesting '{subject}'")
 
     nc = await nats.connect(konfig.game_server['nats_url'])

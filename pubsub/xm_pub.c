@@ -19,8 +19,9 @@
 #include <nats/nats.h>
 #include <lz4.h>
 #include "pb_decode.h"
-#include "frame.h"
+#include "vid_frame.h"
 #include "log.h"
+#include "subjects.h"
 
 #define LOG_TAG "xm_pub"
 
@@ -28,9 +29,6 @@ static natsConnection *conn = NULL;
 static natsSubscription *sub = NULL;
 static uint8_t *msg_buf      = NULL;
 static size_t   msg_buf_size = 0;
-
-static const char *pub_subject = "red.frames";
-static const char *sub_subject = "red.pub.request";
 
 void xm_init(const char *server_url)
 {
@@ -78,12 +76,12 @@ void xm_init(const char *server_url)
     }
 
     log_i(LOG_TAG, "Connected to NATS server at %s\n", server_url);
-    log_i(LOG_TAG, "Will publish frames to '%s'\n", pub_subject);
+    log_i(LOG_TAG, "Will publish video frames to '%s'\n", SUBJECT_VIDEO_FRAMES);
 
-    s = natsConnection_SubscribeSync(&sub, conn, sub_subject);
+    s = natsConnection_SubscribeSync(&sub, conn, SUBJECT_REQUESTS);
     if (s != NATS_OK) {
         log_e(LOG_TAG, "Error subscribing to requests '%s': %s\n",
-            sub_subject, natsStatus_GetText(s));
+            SUBJECT_REQUESTS, natsStatus_GetText(s));
         natsConnection_Destroy(conn);
         conn = NULL;
         return;
@@ -130,7 +128,7 @@ void xm_poll_requests(const RequestHandler handler)
     }
 }
 
-void xm_publish_frame(const FrameHeader *geometry, const unsigned char *content, size_t size)
+void xm_publish_vid_frame(const VidFrameHeader *geometry, const unsigned char *content, size_t size)
 {
     if (!conn) {
         log_e(LOG_TAG, "NATS connection not initialized\n");
@@ -139,7 +137,7 @@ void xm_publish_frame(const FrameHeader *geometry, const unsigned char *content,
 
     // Ensure message buffer is large enough for header + worst-case compressed content
     int max_compressed = LZ4_compressBound(size);
-    size_t needed = sizeof(FrameHeader) + max_compressed;
+    size_t needed = sizeof(VidFrameHeader) + max_compressed;
     if (needed > msg_buf_size) {
         free(msg_buf);
         msg_buf = malloc(needed);
@@ -152,10 +150,10 @@ void xm_publish_frame(const FrameHeader *geometry, const unsigned char *content,
     }
 
     // Write header, then compress pixel data directly into the remainder
-    memcpy(msg_buf, geometry, sizeof(FrameHeader));
+    memcpy(msg_buf, geometry, sizeof(VidFrameHeader));
     int compressed_size = LZ4_compress_fast(
         (const char *)content,
-        (char *)msg_buf + sizeof(FrameHeader),
+        (char *)msg_buf + sizeof(VidFrameHeader),
         size, max_compressed, 4
     );
     if (compressed_size <= 0) {
@@ -165,10 +163,10 @@ void xm_publish_frame(const FrameHeader *geometry, const unsigned char *content,
 
     // Publish to NATS
     natsStatus s = natsConnection_Publish(conn,
-        pub_subject, msg_buf, sizeof(FrameHeader) + compressed_size);
+        SUBJECT_VIDEO_FRAMES, msg_buf, sizeof(VidFrameHeader) + compressed_size);
     if (s != NATS_OK) {
-        log_e(LOG_TAG, "Error publishing to '%s': %s\n",
-            pub_subject, natsStatus_GetText(s));
+        log_e(LOG_TAG, "Error publishing video frames to '%s': %s\n",
+            SUBJECT_VIDEO_FRAMES, natsStatus_GetText(s));
     }
 }
 

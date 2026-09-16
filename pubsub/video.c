@@ -15,7 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "frame.h"
+#include "vid_frame.h"
 #include "libretro.h"
 #include "log.h"
 #include "video.h"

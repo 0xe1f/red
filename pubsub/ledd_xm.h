@@ -15,7 +15,7 @@
 #ifndef __LEDD_XM_H__
 #define __LEDD_XM_H__
 
-#include "frame.h"
+#include "vid_frame.h"
 
 void xm_init(const char *server_url);
 void xm_set_callback(xm_callback_t callback);

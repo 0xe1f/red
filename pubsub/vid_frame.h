@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __FRAME_H__
-#define __FRAME_H__
+#ifndef __VID_FRAME_H__
+#define __VID_FRAME_H__
 
 #include <stddef.h>
 #include <stdint.h>
@@ -37,14 +37,14 @@ typedef struct __attribute__((packed)) {
     uint16_t height;
     uint8_t  pixel_format; // PixelFormat
     uint8_t  attrs;
-} FrameHeader;
+} VidFrameHeader;
 
 typedef struct {
-    FrameHeader  header;
+    VidFrameHeader  header;
     uint8_t     *content;
     size_t       content_size;
-} Frame;
+} VidFrame;
 
-typedef void (*xm_callback_t)(const Frame *);
+typedef void (*xm_callback_t)(const VidFrame *);
 
-#endif // __FRAME_H__
+#endif // __VID_FRAME_H__

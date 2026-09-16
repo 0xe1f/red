@@ -12,30 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __MATRIX_H__
-#define __MATRIX_H__
+#ifndef __SUBJECTS_H__
+#define __SUBJECTS_H__
 
-#include <stdbool.h>
-#include "vid_frame.h"
+#define SUBJECT_VIDEO_FRAMES "red.video.frames"
+#define SUBJECT_REQUESTS     "red.requests"
 
-typedef struct {
-    short sx;
-    short sy;
-    short dx;
-    short dy;
-} ViewRect;
-
-typedef struct {
-    unsigned char r;
-    unsigned char g;
-    unsigned char b;
-} Pixel;
-
-bool viewrect_validate(const ViewRect *rect);
-bool viewrect_parse(const char *arg, ViewRect *rect);
-bool viewrect_is_zero(const ViewRect *rect);
-
-void pixel_unpack(Pixel *dest, PixelFormat pixel_format, const unsigned char *src, int offset);
-const char* pixel_format_str(PixelFormat pixel_format);
-
-#endif // __MATRIX_H__
+#endif // __SUBJECTS_H__

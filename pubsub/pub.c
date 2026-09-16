@@ -57,7 +57,7 @@ static struct retro_controller_info *ports;
 static struct retro_core_options_v2_intl core_options_v2_intl;
 static const struct retro_subsystem_info *subsystem_info;
 static Audio audio;
-static FrameHeader geometry = {0};
+static VidFrameHeader geometry = {0};
 static bool is_running = true;
 static KvStore kv_store = {0};
 static retro_core_options_update_display_callback_t core_options_update_display_callback = NULL;
@@ -165,7 +165,7 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
         buffer_overlay_rect(&video_buffer, &overlay_buffer, &rect_osd);
     }
 
-    xm_publish_frame(&geometry, out, out_size);
+    xm_publish_vid_frame(&geometry, out, out_size);
 }
 
 static void callback_audio_sample(int16_t left, int16_t right)

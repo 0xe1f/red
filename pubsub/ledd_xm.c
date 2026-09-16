@@ -15,15 +15,14 @@
 #include <stdlib.h>
 #include <nats/nats.h>
 #include <lz4.h>
-#include "frame.h"
+#include "vid_frame.h"
 #include "log.h"
 #include "ledd_xm.h"
+#include "subjects.h"
 
-#define LOG_TAG "xm_ledd"
+#define LOG_TAG "ledd_xm"
 
 static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *msg, void *closure);
-
-static const char *subject = "red.frames";
 
 static natsConnection  *conn           = NULL;
 static natsSubscription *sub_handle    = NULL;
@@ -78,15 +77,15 @@ void xm_init(const char *server_url)
     }
 
     // Subscribe to frame subject
-    s = natsConnection_Subscribe(&sub_handle, conn, subject, message_handler, NULL);
+    s = natsConnection_Subscribe(&sub_handle, conn, SUBJECT_VIDEO_FRAMES, message_handler, NULL);
     if (s != NATS_OK) {
-        log_e(LOG_TAG, "Error subscribing to subject '%s': %s\n",
-            subject, natsStatus_GetText(s));
+        log_e(LOG_TAG, "Error subscribing to video frames subject '%s': %s\n",
+            SUBJECT_VIDEO_FRAMES, natsStatus_GetText(s));
         return;
     }
 
     log_i(LOG_TAG, "Connected to NATS server at %s\n", server_url);
-    log_i(LOG_TAG, "Subscribed to '%s'\n", subject);
+    log_i(LOG_TAG, "Subscribed to '%s'\n", SUBJECT_VIDEO_FRAMES);
 }
 
 void xm_set_callback(xm_callback_t callback)
@@ -114,14 +113,14 @@ static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *
     const uint8_t *data = (const uint8_t *)natsMsg_GetData(msg);
     int len = natsMsg_GetDataLength(msg);
 
-    if (len < (int)sizeof(FrameHeader)) {
+    if (len < (int)sizeof(VidFrameHeader)) {
         log_e(LOG_TAG, "Message too short: %d bytes\n", len);
         natsMsg_Destroy(msg);
         return;
     }
 
     // Read header directly from message buffer (zero-copy)
-    const FrameHeader *hdr = (const FrameHeader *)data;
+    const VidFrameHeader *hdr = (const VidFrameHeader *)data;
     size_t decomp_size = (size_t)hdr->pitch * hdr->height;
 
     // Grow decompression buffer only when needed (rare: resolution change)
@@ -138,8 +137,8 @@ static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *
     }
 
     // Decompress content
-    const char *compressed = (const char *)(data + sizeof(FrameHeader));
-    int compressed_len = len - (int)sizeof(FrameHeader);
+    const char *compressed = (const char *)(data + sizeof(VidFrameHeader));
+    int compressed_len = len - (int)sizeof(VidFrameHeader);
     int result = LZ4_decompress_safe(compressed, (char *)decomp_buf, compressed_len, decomp_size);
     if (result < 0) {
         log_e(LOG_TAG, "LZ4 decompression failed: %d\n", result);
@@ -148,7 +147,7 @@ static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *
     }
 
     if (frame_callback) {
-        Frame frame = {
+        VidFrame frame = {
             .header       = *hdr,
             .content      = decomp_buf,
             .content_size = (size_t)result,

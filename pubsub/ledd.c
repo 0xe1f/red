@@ -38,7 +38,7 @@ static struct RGBLedMatrix *matrix = NULL;
 static struct LedCanvas *canvas = NULL;
 static ViewRect blit_src;
 static ViewRect blit_dest;
-static FrameHeader geometry;
+static VidFrameHeader geometry;
 static double last_frame_time = 0;
 
 // x_dir is +1 for normal left-to-right, -1 for horizontally mirrored (rot180)
@@ -46,11 +46,11 @@ typedef void (*RowRenderFn)(struct LedCanvas *canvas, const uint8_t *row,
                             int src_x, int dst_x, int dst_y, int count, int x_dir);
 
 static bool init_rgb(int argc, char **argv);
-static void render(const Frame *frame);
+static void render(const VidFrame *frame);
 static inline void log_fps();
 static void sigint_callback(int s);
-static void xm_callback(const Frame *frame);
-static void inspect_geometry(const FrameHeader *hdr);
+static void xm_callback(const VidFrame *frame);
+static void inspect_geometry(const VidFrameHeader *hdr);
 static void matrix_clear();
 static void clean_up();
 
@@ -84,13 +84,13 @@ static bool init_rgb(int argc, char **argv)
     return true;
 }
 
-static void render(const Frame *frame)
+static void render(const VidFrame *frame)
 {
     if (!row_render_fn) {
         return;
     }
 
-    const FrameHeader *hdr = &frame->header;
+    const VidFrameHeader *hdr = &frame->header;
     bool rot180 = hdr->attrs & ATTR_ROT180;
     int row_count = blit_src.dy - blit_src.sy;
     int col_count = blit_src.dx - blit_src.sx;
@@ -130,7 +130,7 @@ static void sigint_callback(int s)
     exit_main_loop = true;
 }
 
-static void xm_callback(const Frame *frame)
+static void xm_callback(const VidFrame *frame)
 {
     last_frame_time = micros();
     if (args.show_fps) {
@@ -140,7 +140,7 @@ static void xm_callback(const Frame *frame)
     render(frame);
 }
 
-static void inspect_geometry(const FrameHeader *hdr)
+static void inspect_geometry(const VidFrameHeader *hdr)
 {
     if (hdr->width == geometry.width &&
         hdr->height == geometry.height &&
