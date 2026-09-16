@@ -63,8 +63,8 @@ fi
 
 LOCAL_APP_PATH=pubsub
 BUILD_PATH="red_builds/${LOCAL_APP_PATH}"
-TARGET=sub
-SUB_SVC_FILE=sub.service
+TARGET=ledd
+LEDD_SVC_FILE=ledd.service
 
 echo -e "${BOLD_WHITE}>> ${CLR_OK}Staging build... ${CLR_RST}"
 ssh "${BUILD_SVR}" "mkdir -p \"${BUILD_PATH}\""
@@ -134,10 +134,10 @@ for CLIENT in `seq 0 $CLIENT_COUNT`; do
     ssh "${CL_HOST}" "mkdir -p ${CL_PATH}"
     rsync -trph \
         "${TEMP_DIR}/${TARGET}" \
-        "${LOCAL_APP_PATH}/${SUB_SVC_FILE}" \
+        "${LOCAL_APP_PATH}/${LEDD_SVC_FILE}" \
         "${CL_HOST}:${CL_PATH}"
 
-    complete_setup "${CL_HOST}" "${CL_PATH}" "${SUB_SVC_FILE}" "${TARGET}" "${CL_ARGS}"
+    complete_setup "${CL_HOST}" "${CL_PATH}" "${LEDD_SVC_FILE}" "${TARGET}" "${CL_ARGS}"
 done
 
 echo -e "${BOLD_WHITE}>> ${CLR_OK}All done... ${CLR_RST}"

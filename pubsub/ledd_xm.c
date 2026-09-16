@@ -17,9 +17,9 @@
 #include <lz4.h>
 #include "frame.h"
 #include "log.h"
-#include "xm_sub.h"
+#include "ledd_xm.h"
 
-#define LOG_TAG "xm_sub"
+#define LOG_TAG "xm_ledd"
 
 static void message_handler(natsConnection *nc, natsSubscription *sub, natsMsg *msg, void *closure);
 

@@ -35,9 +35,9 @@ DEFINE=
 CFLAGS=-Wall -O2 -MMD -MP
 CXXFLAGS=$(CFLAGS)
 LD_FLAGS=$(LIB) -lnats -llz4 -lprotobuf-c
-LD_SUB_FLAGS=$(LD_FLAGS) -L$(RGB_LIBDIR) -lrgbmatrix
+LD_LEDD_FLAGS=$(LD_FLAGS) -L$(RGB_LIBDIR) -lrgbmatrix
 LD_PUB_FLAGS=$(LD_FLAGS) `sdl2-config --libs` -lz
-SUB_EXE=sub
+LEDD_EXE=ledd
 PUB_EXE=pub
 PROTO_FILES = $(wildcard $(PROTO_ROOT)/*.proto)
 
@@ -52,16 +52,16 @@ PB_OBJECTS = $(patsubst $(PROTO_ROOT)/%.proto, $(GEN_ROOT)/%.pb-c.o, $(PROTO_FIL
 NANOPB_OBJECTS=$(NANOPB_ROOT)/pb_encode.o $(NANOPB_ROOT)/pb_decode.o \
 	$(NANOPB_ROOT)/pb_common.o
 
-all: $(SUB_EXE) $(PUB_EXE)
+all: $(LEDD_EXE) $(PUB_EXE)
 
 $(RGB_LIBDIR)/librgbmatrix.a:
 	@echo Building RGB matrix libraries...
 	@cd $(RGB_LIBDIR); $(MAKE)
 
-$(SUB_EXE): \
-	xm_sub.o log.o matrix.o timing.o sub_args.o \
-	$(SUB_EXE).o $(RGB_LIBDIR)/librgbmatrix.a
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LD_SUB_FLAGS)
+$(LEDD_EXE): \
+	ledd_xm.o log.o matrix.o timing.o ledd_args.o \
+	$(LEDD_EXE).o $(RGB_LIBDIR)/librgbmatrix.a
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LD_LEDD_FLAGS)
 
 $(PUB_EXE): \
 	$(PB_OBJECTS) \
@@ -87,7 +87,7 @@ $(GEN_ROOT):
 	$(CXX) $(INCLUDE) $(DEFINE) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	@rm -rf *.o *.d $(SUB_EXE) $(PUB_EXE) `find $(TP_ROOT)/ -name '*.o'` `find $(TP_ROOT)/ -name '*.d'` $(GEN_ROOT)
+	@rm -rf *.o *.d $(LEDD_EXE) $(PUB_EXE) `find $(TP_ROOT)/ -name '*.o'` `find $(TP_ROOT)/ -name '*.d'` $(GEN_ROOT)
 	@cd $(RGB_LIBDIR); $(MAKE) clean
 
 -include $(wildcard *.d) $(wildcard $(GEN_ROOT)/*.d)

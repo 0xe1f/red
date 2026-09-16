@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __SUB_ARGS_H__
-#define __SUB_ARGS_H__
+#ifndef __ARGS_LEDD_H__
+#define __ARGS_LEDD_H__
 
 #include <stdbool.h>
 #include "log.h"
@@ -33,4 +33,4 @@ typedef struct {
 bool args_parse(int argc, const char **argv, ArgsOptions *opts);
 void args_free(ArgsOptions *opts);
 
-#endif // __SUB_ARGS_H__
+#endif // __ARGS_LEDD_H__

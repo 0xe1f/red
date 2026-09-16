@@ -20,7 +20,7 @@ sensor:
   device: /dev/ttyACM0
 subscribers:
   - hostname: red-pub.local
-    path: red/sub
+    path: red/ledd
     args: >-
       --led-rows=64 \
       --led-cols=64 \
@@ -33,7 +33,7 @@ subscribers:
       --dest-rect 0,0-320,128 \
       --content-rect 0,0-320,256
   - hostname: red-sub.local
-    path: red/sub
+    path: red/ledd
     args: >-
       --led-rows=64 \
       --led-cols=64 \

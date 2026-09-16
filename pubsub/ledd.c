@@ -17,10 +17,10 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "sub_args.h"
+#include "ledd_args.h"
 #include "log.h"
 #include "timing.h"
-#include "xm_sub.h"
+#include "ledd_xm.h"
 #include "led-matrix-c.h"
 
 #define LOG_TAG "client"

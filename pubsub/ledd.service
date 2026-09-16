@@ -1,5 +1,5 @@
 [Unit]
-Description=RED Frame Subscriber Service
+Description=LED Display Daemon
 
 [Service]
 ExecStart=/usr/bin/sudo {SERVICE_PATH} --server-url {NATS_URL} {ARGS}

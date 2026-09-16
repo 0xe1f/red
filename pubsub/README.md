@@ -7,7 +7,7 @@ implemented as two distinct, but interdependent components -
   [libretro](https://www.libretro.com/) host that publishes video frames to
   NATS. Audio and input are rendered and consumed by pub and are not published.
   Pub is executed as a standard process and killed when no longer needed.
-* sub is a long-running service that subscribes to the published video frames
+* ledd is a long-running service that subscribes to the published video frames
   and displays them on an LED matrix of some fixed size and configuration
 
 Frames are always published in a specific fixed size by the publisher;

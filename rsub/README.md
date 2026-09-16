@@ -1,7 +1,7 @@
 rsub
 ===
 A long-running LED-matrix subscriber for frames published by
-[pubsub](../pubsub)'s `pub`. This is the Rust version for C `sub`.
+[pubsub](../pubsub)'s `pub`. This is the Rust version for C `ledd`.
 
 It connects to NATS, subscribes to `red.frames`, LZ4-decompresses each
 payload, and blits a source rectangle onto this panel. Frames are always
