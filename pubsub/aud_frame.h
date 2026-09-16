@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Akop Karapetyan
+// Copyright (c) 2026 Akop Karapetyan
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __SUBJECTS_H__
-#define __SUBJECTS_H__
+#ifndef __AUD_FRAME_H__
+#define __AUD_FRAME_H__
 
-#define SUBJECT_VIDEO_FRAMES "red.video.frames"
-#define SUBJECT_AUDIO_FRAMES "red.audio.frames"
-#define SUBJECT_REQUESTS     "red.requests"
+#include <stddef.h>
+#include <stdint.h>
 
-#endif // __SUBJECTS_H__
+typedef struct __attribute__((packed)) {
+    uint16_t sample_rate;
+    uint8_t channel_count;
+    uint16_t buffer_size;
+} AudFrameHeader;
+
+typedef struct {
+    AudFrameHeader  header;
+    uint8_t     *content;
+    size_t       content_size;
+} AudFrame;
+
+#endif // __AUD_FRAME_H__

@@ -58,6 +58,7 @@ static struct retro_core_options_v2_intl core_options_v2_intl;
 static const struct retro_subsystem_info *subsystem_info;
 static Audio audio;
 static VidFrameHeader geometry = {0};
+static AudFrameHeader audio_header = {0};
 static bool is_running = true;
 static KvStore kv_store = {0};
 static retro_core_options_update_display_callback_t core_options_update_display_callback = NULL;
@@ -172,11 +173,13 @@ static void callback_audio_sample(int16_t left, int16_t right)
 {
     int16_t data[2] = { left, right };
     audio_write(&audio, data, 2, true);
+    // xm_publish_aud_frame(&audio_header, data, sizeof(data));
 }
 
 static size_t callback_audio_sample_batch(const int16_t *data, size_t frames)
 {
     audio_write(&audio, data, frames * 2, true);
+    // xm_publish_aud_frame(&audio_header, data, sizeof(int16_t) * frames * 2);
     return frames;
 }
 
@@ -558,6 +561,10 @@ static void signal_handler(int s)
 
 static void reset_audio()
 {
+    audio_header.sample_rate = av_info.timing.sample_rate;
+    audio_header.channel_count = 2;
+    audio_header.buffer_size = 2048;
+
     audio_stop(&audio);
     audio_start(&audio, av_info.timing.sample_rate, 2);
 }

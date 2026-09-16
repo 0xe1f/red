@@ -19,7 +19,6 @@
 #include <nats/nats.h>
 #include <lz4.h>
 #include "pb_decode.h"
-#include "vid_frame.h"
 #include "log.h"
 #include "subjects.h"
 
@@ -27,8 +26,10 @@
 
 static natsConnection *conn = NULL;
 static natsSubscription *sub = NULL;
-static uint8_t *msg_buf      = NULL;
-static size_t   msg_buf_size = 0;
+static uint8_t *video_msg_buf      = NULL;
+static size_t   video_msg_buf_size = 0;
+static uint8_t *audio_msg_buf      = NULL;
+static size_t   audio_msg_buf_size = 0;
 
 void xm_init(const char *server_url)
 {
@@ -128,7 +129,7 @@ void xm_poll_requests(const RequestHandler handler)
     }
 }
 
-void xm_publish_vid_frame(const VidFrameHeader *geometry, const unsigned char *content, size_t size)
+void xm_publish_vid_frame(const VidFrameHeader *geometry, const void *content, size_t size)
 {
     if (!conn) {
         log_e(LOG_TAG, "NATS connection not initialized\n");
@@ -138,22 +139,22 @@ void xm_publish_vid_frame(const VidFrameHeader *geometry, const unsigned char *c
     // Ensure message buffer is large enough for header + worst-case compressed content
     int max_compressed = LZ4_compressBound(size);
     size_t needed = sizeof(VidFrameHeader) + max_compressed;
-    if (needed > msg_buf_size) {
-        free(msg_buf);
-        msg_buf = malloc(needed);
-        if (!msg_buf) {
+    if (needed > video_msg_buf_size) {
+        free(video_msg_buf);
+        video_msg_buf = malloc(needed);
+        if (!video_msg_buf) {
             log_e(LOG_TAG, "Failed to allocate message buffer\n");
-            msg_buf_size = 0;
+            video_msg_buf_size = 0;
             return;
         }
-        msg_buf_size = needed;
+        video_msg_buf_size = needed;
     }
 
     // Write header, then compress pixel data directly into the remainder
-    memcpy(msg_buf, geometry, sizeof(VidFrameHeader));
+    memcpy(video_msg_buf, geometry, sizeof(VidFrameHeader));
     int compressed_size = LZ4_compress_fast(
         (const char *)content,
-        (char *)msg_buf + sizeof(VidFrameHeader),
+        (char *)video_msg_buf + sizeof(VidFrameHeader),
         size, max_compressed, 4
     );
     if (compressed_size <= 0) {
@@ -163,10 +164,52 @@ void xm_publish_vid_frame(const VidFrameHeader *geometry, const unsigned char *c
 
     // Publish to NATS
     natsStatus s = natsConnection_Publish(conn,
-        SUBJECT_VIDEO_FRAMES, msg_buf, sizeof(VidFrameHeader) + compressed_size);
+        SUBJECT_VIDEO_FRAMES, video_msg_buf, sizeof(VidFrameHeader) + compressed_size);
     if (s != NATS_OK) {
         log_e(LOG_TAG, "Error publishing video frames to '%s': %s\n",
             SUBJECT_VIDEO_FRAMES, natsStatus_GetText(s));
+    }
+}
+
+void xm_publish_aud_frame(const AudFrameHeader *header, const void *content, size_t size)
+{
+    if (!conn) {
+        log_e(LOG_TAG, "NATS connection not initialized\n");
+        return;
+    }
+
+    // Ensure message buffer is large enough for header + worst-case compressed content
+    int max_compressed = LZ4_compressBound(size);
+    size_t needed = sizeof(header) + max_compressed;
+    if (needed > audio_msg_buf_size) {
+        free(audio_msg_buf);
+        audio_msg_buf = malloc(needed);
+        if (!audio_msg_buf) {
+            log_e(LOG_TAG, "Failed to allocate message buffer\n");
+            audio_msg_buf_size = 0;
+            return;
+        }
+        audio_msg_buf_size = needed;
+    }
+
+    // Write header, then compress pixel data directly into the remainder
+    memcpy(audio_msg_buf, header, sizeof(AudFrameHeader));
+    int compressed_size = LZ4_compress_fast(
+        (const char *)content,
+        (char *)audio_msg_buf + sizeof(AudFrameHeader),
+        size, max_compressed, 4
+    );
+    if (compressed_size <= 0) {
+        log_e(LOG_TAG, "LZ4 compression failed\n");
+        return;
+    }
+
+    // Publish to NATS
+    natsStatus s = natsConnection_Publish(conn,
+        SUBJECT_AUDIO_FRAMES, audio_msg_buf, sizeof(AudFrameHeader) + compressed_size);
+    if (s != NATS_OK) {
+        log_e(LOG_TAG, "Error publishing audio frames to '%s': %s\n",
+            SUBJECT_AUDIO_FRAMES, natsStatus_GetText(s));
     }
 }
 
@@ -180,7 +223,10 @@ void xm_cleanup()
         natsConnection_Destroy(conn);
         conn = NULL;
     }
-    free(msg_buf);
-    msg_buf = NULL;
-    msg_buf_size = 0;
+    free(video_msg_buf);
+    video_msg_buf = NULL;
+    video_msg_buf_size = 0;
+    free(audio_msg_buf);
+    audio_msg_buf = NULL;
+    audio_msg_buf_size = 0;
 }
