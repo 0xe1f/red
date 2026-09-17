@@ -36,6 +36,10 @@ extern struct retro_system_av_info av_info;
 #define MAGIC   "REC"
 #define VERSION 1
 
+static uint8_t frame_type_count = 0;
+static uint8_t *frame_type_sizes = NULL;
+static void **frame_content = NULL;
+
 struct __attribute__((__packed__)) RecordingHeader {
     char magic[4];
     uint32_t version;
@@ -50,6 +54,11 @@ struct __attribute__((__packed__)) RecordingFooter {
     uint64_t input_frame_count;
     uint64_t trailing_state_offset;
     uint32_t duration_ms;
+};
+
+struct __attribute__((__packed__)) FrameHeader {
+    uint8_t frame_type;
+    uint32_t offset;
 };
 
 static bool write_footer(Replay *replay);
@@ -323,6 +332,71 @@ void replay_end(Replay *replay)
     }
 }
 
+bool replay_set_frame_type_count(uint8_t count)
+{
+    if (count == frame_type_count) {
+        return true;
+    }
+
+    // Free mem
+    for (int i = 0; i < frame_type_count; i++) {
+        free(frame_content[i]);
+    }
+    free(frame_content);
+    frame_content = NULL;
+    free(frame_type_sizes);
+    frame_type_sizes = NULL;
+    frame_type_count = 0;
+
+    if (count == 0) {
+        return true;
+    }
+
+    if (!(frame_type_sizes = calloc(count,  sizeof(uint8_t)))) {
+        log_e(LOG_TAG, "Failed to allocate memory for frame sizes\n");
+        return false;
+    }
+
+    if (!(frame_content = calloc(count,  sizeof(void *)))) {
+        log_e(LOG_TAG, "Failed to allocate memory for frame content\n");
+        free(frame_type_sizes);
+        frame_type_sizes = NULL;
+        return false;
+    }
+
+    frame_type_count = count;
+
+    return true;
+}
+
+bool replay_set_frame_type_size(uint8_t frame_ix, uint8_t size)
+{
+    if (frame_ix >= frame_type_count) {
+        log_e(LOG_TAG, "Frame index too large: %d >= %d\n",
+            frame_ix, frame_type_count);
+        return false;
+    }
+
+    if (frame_content[frame_ix]) {
+        free(frame_content[frame_ix]);
+        frame_content[frame_ix] = NULL;
+    }
+
+    frame_type_sizes[frame_ix] = size;
+    if (size == 0) {
+        return true;
+    }
+
+    if (!(frame_content[frame_ix] = calloc(size, 1))) {
+        log_e(LOG_TAG, "Failed to allocate %db for frame content[%d]\n",
+            size, frame_ix);
+        frame_type_sizes[frame_ix] = 0;
+        return false;
+    }
+
+    return true;
+}
+
 bool replay_read_input(Replay *replay, void *input_state, size_t size)
 {
     if (replay->mode == MODE_PLAYBACK) {
@@ -360,6 +434,22 @@ bool replay_write_input(Replay *replay, const void *input_state, size_t size)
     }
 
     return true;
+}
+
+void replay_clean_up()
+{
+    if (frame_content) {
+        for (int i = 0; i < frame_type_count; i++) {
+            free(frame_content[i]);
+            frame_content[i] = NULL;
+        }
+    }
+    free(frame_content);
+    frame_content = NULL;
+
+    free(frame_type_sizes);
+    frame_type_sizes = NULL;
+    frame_type_count = 0;
 }
 
 static bool write_footer(Replay *replay)

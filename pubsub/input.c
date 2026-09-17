@@ -40,6 +40,11 @@
 #define MOUSE_BUTTON_MIDDLE   (1 << 1)
 #define MOUSE_BUTTON_RIGHT    (1 << 2)
 
+#define REPLAY_FRAME_JOYPAD   0
+#define REPLAY_FRAME_KEYBOARD 1
+#define REPLAY_FRAME_MOUSE    2
+#define REPLAY_FRAME_COUNT    3 // joypad, keyboard, mouse
+
 typedef struct {
     int code;
     const char *name;
@@ -385,6 +390,7 @@ static int deferred_event_count = 0;
 static unsigned long deferred_event_start_us = 0L;
 static int deferred_event_index = 0;
 
+// FIXME: remove
 size_t input_recorded_size()
 {
     return sizeof(joypad_states);
@@ -397,6 +403,11 @@ void input_init()
 
     input_reset_inputs();
     input_reset_events();
+
+    replay_set_frame_type_count(REPLAY_FRAME_COUNT);
+    replay_set_frame_type_size(REPLAY_FRAME_JOYPAD, sizeof(joypad_states));
+    replay_set_frame_type_size(REPLAY_FRAME_KEYBOARD, sizeof(keyboard_state));
+    replay_set_frame_type_size(REPLAY_FRAME_MOUSE, sizeof(mouse_state));
 }
 
 void input_clean_up()
@@ -405,6 +416,7 @@ void input_clean_up()
     deinit_keyboard();
     deinit_mouse();
     SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
+    replay_clean_up();
 }
 
 void input_poll()

@@ -26,6 +26,7 @@ typedef enum {
     MODE_PLAYBACK  = 2,
 } ReplayMode;
 
+// FIXME: this needs to be hidden behind .c
 typedef struct {
     ReplayMode mode;
     const char *file_path;
@@ -37,6 +38,9 @@ typedef struct {
     gzFile gz;
 } Replay;
 
+bool replay_set_frame_type_count(uint8_t count);
+bool replay_set_frame_type_size(uint8_t frame_ix, uint8_t size);
+
 bool replay_start_recording(Replay *replay, const char *path);
 bool replay_continue_recording(Replay *replay, const char *path);
 bool replay_start_playback(Replay *replay, const char *path);
@@ -45,5 +49,7 @@ void replay_abort(Replay *replay);
 
 bool replay_read_input(Replay *replay, void *input_state, size_t size);
 bool replay_write_input(Replay *replay, const void *input_state, size_t size);
+
+void replay_clean_up();
 
 #endif // __REPLAY_H__
