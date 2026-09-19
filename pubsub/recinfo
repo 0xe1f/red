@@ -19,8 +19,8 @@ import struct
 import sys
 
 MAGIC = b"REC"
-VERSION = 1
-HEADER_FMT = "<4sIQH40s40s"
+VERSION = 2
+HEADER_FMT = "<4sIQ40s40sB"
 FOOTER_FMT = "<QQQI"
 HEADER_SIZE = struct.calcsize(HEADER_FMT)
 FOOTER_SIZE = struct.calcsize(FOOTER_FMT)
@@ -57,19 +57,25 @@ def main(argv):
         print(f"{path}: file too small to be a recording", file=sys.stderr)
         return 1
 
-    magic, version, _, frame_size, core_name, core_version = struct.unpack_from(
+    magic, version, _, core_name, core_version, type_count = struct.unpack_from(
         HEADER_FMT, data, 0
     )
-    if magic[:3] != MAGIC or version != VERSION:
+    sizes_end = HEADER_SIZE + type_count
+    if (
+        magic[:3] != MAGIC
+        or version != VERSION
+        or type_count == 0
+        or len(data) < sizes_end + FOOTER_SIZE
+    ):
         print(f"{path}: not a version {VERSION} recording", file=sys.stderr)
         return 1
 
+    sizes = list(data[HEADER_SIZE:sizes_end])
     in_off, frame_count, trail_off, duration_ms = struct.unpack(
         FOOTER_FMT, data[-FOOTER_SIZE:]
     )
     if (
-        frame_size == 0
-        or in_off < HEADER_SIZE
+        in_off < sizes_end
         or trail_off <= in_off
         or trail_off > len(data) - FOOTER_SIZE
     ):
@@ -77,7 +83,9 @@ def main(argv):
         return 1
 
     print(f"version: {version}")
-    print(f"input_uncompressed_size: {frame_count * frame_size:,} bytes")
+    print(f"frame_type_count: {type_count}")
+    print(f"frame_type_sizes: {sizes}")
+    print(f"input_frame_count: {frame_count}")
     print(f"core_name: {field_str(core_name)}")
     print(f"core_version: {field_str(core_version)}")
     print(f"duration: {fmt_duration(duration_ms)}")

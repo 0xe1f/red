@@ -50,7 +50,7 @@ PixelFormat pixel_format = PF_UNKNOWN; // default is 1555
 struct retro_input_descriptor *input_descriptors = NULL;
 ArgsOptions args;
 retro_keyboard_event_t keyboard_event_callback = NULL;
-Replay replay = { .file_fd = -1 };
+Replay *replay = NULL;
 
 static unsigned int api_version = 0;
 static struct retro_controller_info *ports;
@@ -529,9 +529,8 @@ static bool callback_environment_set(unsigned cmd, void *data)
 
 static void clean_up()
 {
-    if (replay.mode) {
-        replay_abort(&replay);
-    }
+    replay_destroy(replay);
+    replay = NULL;
     xm_cleanup();
     filter_free();
     core_close(&core);
@@ -611,10 +610,8 @@ static void handle_request(const RequestEnvelope *request, ResponseEnvelope *res
     switch (request->payload_case) {
         case REQUEST_ENVELOPE__PAYLOAD_REPLAY_RECORD: {
             log_i(LOG_TAG, "Received replay record request\n");
-            if (replay.mode != MODE_NONE) {
-                replay_abort(&replay);
-            }
-            replay_start_recording(&replay,
+            replay_destroy(replay);
+            replay = replay_start_recording(
                 files_rom_recording_path(args.rom_path, request->replay_record->slot));
             static ReplayRecordResponse r = REPLAY_RECORD_RESPONSE__INIT;
             response->payload_case = RESPONSE_ENVELOPE__PAYLOAD_REPLAY_RECORD;
@@ -623,10 +620,8 @@ static void handle_request(const RequestEnvelope *request, ResponseEnvelope *res
         }
         case REQUEST_ENVELOPE__PAYLOAD_REPLAY_PLAYBACK: {
             log_i(LOG_TAG, "Received replay playback request\n");
-            if (replay.mode != MODE_NONE) {
-                replay_abort(&replay);
-            }
-            replay_start_playback(&replay,
+            replay_destroy(replay);
+            replay = replay_start_playback(
                 files_rom_recording_path(args.rom_path, request->replay_playback->slot));
             static ReplayPlaybackResponse r = REPLAY_PLAYBACK_RESPONSE__INIT;
             response->payload_case = RESPONSE_ENVELOPE__PAYLOAD_REPLAY_PLAYBACK;
@@ -635,9 +630,7 @@ static void handle_request(const RequestEnvelope *request, ResponseEnvelope *res
         }
         case REQUEST_ENVELOPE__PAYLOAD_REPLAY_STOP: {
             log_i(LOG_TAG, "Received replay stop request\n");
-            if (replay.mode != MODE_NONE) {
-                replay_end(&replay);
-            }
+            replay_stop(replay);
             static ReplayStopResponse r = REPLAY_STOP_RESPONSE__INIT;
             response->payload_case = RESPONSE_ENVELOPE__PAYLOAD_REPLAY_STOP;
             response->replay_stop = &r;
@@ -645,10 +638,8 @@ static void handle_request(const RequestEnvelope *request, ResponseEnvelope *res
         }
         case REQUEST_ENVELOPE__PAYLOAD_REPLAY_RESUME_RECORD: {
             log_i(LOG_TAG, "Received replay resume record request\n");
-            if (replay.mode != MODE_NONE) {
-                replay_abort(&replay);
-            }
-            replay_continue_recording(&replay,
+            replay_destroy(replay);
+            replay = replay_continue_recording(
                 files_rom_recording_path(args.rom_path, request->replay_resume_record->slot));
             static ReplayResumeRecordResponse r = REPLAY_RESUME_RECORD_RESPONSE__INIT;
             response->payload_case = RESPONSE_ENVELOPE__PAYLOAD_REPLAY_RESUME_RECORD;

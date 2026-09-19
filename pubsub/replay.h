@@ -18,7 +18,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <zlib.h>
 
 typedef enum {
     MODE_NONE = 0,
@@ -26,29 +25,21 @@ typedef enum {
     MODE_PLAYBACK  = 2,
 } ReplayMode;
 
-// FIXME: this needs to be hidden behind .c
-typedef struct {
-    ReplayMode mode;
-    const char *file_path;
-    const char *tmp_path;
-    uint64_t input_frame_offset;
-    uint64_t input_frame_count;
-    double fps;
-    int file_fd;
-    gzFile gz;
-} Replay;
+typedef struct Replay Replay;
 
 bool replay_set_frame_type_count(uint8_t count);
-bool replay_set_frame_type_size(uint8_t frame_ix, uint8_t size);
+bool replay_set_frame_type_shape(uint8_t frame_ix, const void *default_state, uint8_t size);
 
-bool replay_start_recording(Replay *replay, const char *path);
-bool replay_continue_recording(Replay *replay, const char *path);
-bool replay_start_playback(Replay *replay, const char *path);
-void replay_end(Replay *replay);
-void replay_abort(Replay *replay);
+Replay* replay_start_recording(const char *path);
+Replay* replay_continue_recording(const char *path);
+Replay* replay_start_playback(const char *path);
 
-bool replay_read_input(Replay *replay, void *input_state, size_t size);
-bool replay_write_input(Replay *replay, const void *input_state, size_t size);
+void replay_stop(Replay *replay);
+void replay_destroy(Replay *replay);
+ReplayMode replay_mode(const Replay *replay);
+
+bool replay_read_frame(Replay *replay, uint8_t frame_ix, void *content, size_t size);
+bool replay_write_frame(Replay *replay, uint8_t frame_ix, const void *content, size_t size);
 
 void replay_clean_up();
 

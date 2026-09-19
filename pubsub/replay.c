@@ -22,10 +22,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <zlib.h>
 #include "log.h"
 #include "libretro.h"
 #include "core.h"
-#include "input.h"
 
 #define LOG_TAG "replay"
 
@@ -34,20 +34,43 @@ extern struct retro_system_info system_info;
 extern struct retro_system_av_info av_info;
 
 #define MAGIC   "REC"
-#define VERSION 1
+#define VERSION 2
+
+struct Replay {
+    ReplayMode mode;
+    const char *file_path;
+    const char *tmp_path;
+    uint64_t input_frame_offset;
+    uint64_t input_frame_count;
+    double fps;
+    int file_fd;
+    gzFile gz;
+    uint8_t file_frame_type_count;
+    uint8_t *file_frame_type_sizes;
+    uint8_t frame_type_count;
+    void **frame_content;
+    bool *frame_primed;
+    uint64_t *type_frames;
+    bool peek_valid;
+    uint8_t peek_type;
+    uint32_t peek_frame_index;
+    uint8_t *peek_payload;
+};
 
 static uint8_t frame_type_count = 0;
 static uint8_t *frame_type_sizes = NULL;
-static void **frame_content = NULL;
+static void **frame_type_defaults = NULL;
 
 struct __attribute__((__packed__)) RecordingHeader {
     char magic[4];
     uint32_t version;
     uint64_t start_state_uncompressed_size;
-    uint16_t input_frame_size;
     char core_name[40];
     char core_version[40];
+    uint8_t frame_type_count;
 };
+// RecordingHeader followed by frame_type_count bytes:
+// payload size of each type.
 
 struct __attribute__((__packed__)) RecordingFooter {
     uint64_t input_frame_offset;
@@ -58,14 +81,18 @@ struct __attribute__((__packed__)) RecordingFooter {
 
 struct __attribute__((__packed__)) FrameHeader {
     uint8_t frame_type;
-    uint32_t offset;
+    uint32_t frame_index;
 };
+// FrameHeader followed by the payload for frame_type
+// (length from the header size table).
 
+static Replay *replay_create();
 static bool write_footer(Replay *replay);
 static void cleanup(Replay *replay);
-static bool verify_header(int fd, struct RecordingHeader *header);
+static void cleanup_and_free(Replay *replay);
+static bool read_header(int fd, struct RecordingHeader *header, uint8_t **sizes_out);
 static bool verify_footer(int fd, struct RecordingFooter *footer);
-static bool copy_file(int src, int dest, uint64_t length);
+static bool copy_file(int src, int dest, off_t src_off, off_t dest_off, uint64_t length);
 static bool restore_state(int fd, size_t size);
 static bool write_state(int fd, size_t size);
 static bool read_all(int fd, void *buf, size_t size);
@@ -75,247 +102,292 @@ static bool open_inputs(Replay *replay, const char *mode);
 static char *sibling_temp_path(const char *path);
 static void copy_core_field(char *dst, size_t dst_len, const char *src);
 static uint32_t duration_ms_from(uint64_t frames, double fps);
-static bool header_matches_runtime(const struct RecordingHeader *header, bool require_input_size);
+static bool header_matches_runtime(const struct RecordingHeader *header,
+    const uint8_t *file_sizes, bool for_resume);
+static bool frame_types_ready();
+static void free_frame_type_tables();
+static bool write_recording_header(int fd, uint64_t start_state_size);
+static bool alloc_session_frames(Replay *replay);
+static bool emit_event(Replay *replay, uint8_t frame_ix, uint32_t frame_index,
+    const void *content, size_t size);
+static bool gz_skip(gzFile gz, size_t size);
+static bool refill_peek(Replay *replay);
+static bool apply_events_through(Replay *replay, uint64_t frame_index);
 
-bool replay_start_recording(Replay *replay, const char *path)
+Replay* replay_start_recording(const char *path)
 {
     if (!path) {
         log_e(LOG_TAG, "No path specified\n");
-        return false;
+        return NULL;
+    }
+    if (!frame_types_ready()) {
+        log_e(LOG_TAG, "Frame types not set\n");
+        return NULL;
     }
 
-    if (replay->mode == MODE_RECORD) {
-        log_e(LOG_TAG, "Already recording\n");
-        return false;
-    } else if (replay->mode == MODE_PLAYBACK) {
-        log_e(LOG_TAG, "Can't record while playing back\n");
-        return false;
+    Replay *replay = replay_create();
+    if (!replay) {
+        return NULL;
     }
 
     if (!(replay->file_path = strdup(path))) {
         log_e(LOG_TAG, "Failed to allocate memory for file path\n");
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
     }
 
     if ((replay->file_fd = open(replay->file_path, O_RDWR | O_CREAT | O_TRUNC, 0666)) < 0) {
         log_e(LOG_TAG, "Failed to open recording at '%s'\n", replay->file_path);
-        free((void *)replay->file_path);
-        replay->file_path = NULL;
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
     }
 
     log_d(LOG_TAG, "Starting recording at '%s'\n", replay->file_path);
 
-    // Get the size of the serialized state
     size_t size = core.retro_serialize_size();
     if (size == 0) {
         log_e(LOG_TAG, "Serialization size is zero\n");
-        cleanup(replay);
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
     }
 
-    size_t frame_size = input_recorded_size();
-    if (frame_size == 0 || frame_size > UINT16_MAX) {
-        log_e(LOG_TAG, "Invalid input frame size\n");
-        cleanup(replay);
-        return false;
+    if (!alloc_session_frames(replay)) {
+        log_e(LOG_TAG, "Failed to allocate frame buffers\n");
+        cleanup_and_free(replay);
+        return NULL;
     }
 
-    struct RecordingHeader header = {
-        .magic = MAGIC,
-        .version = VERSION,
-        .start_state_uncompressed_size = size,
-        .input_frame_size = (uint16_t)frame_size,
-    };
-    copy_core_field(header.core_name, sizeof(header.core_name), system_info.library_name);
-    copy_core_field(header.core_version, sizeof(header.core_version), system_info.library_version);
-    if (!write_all(replay->file_fd, &header, sizeof(header))) {
+    if (!write_recording_header(replay->file_fd, size)) {
         log_e(LOG_TAG, "Failed to write header\n");
-        cleanup(replay);
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
     }
 
     if (!write_state(replay->file_fd, size)) {
         log_e(LOG_TAG, "Failed to serialize or write state\n");
-        cleanup(replay);
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
     }
 
     off_t offset = lseek(replay->file_fd, 0, SEEK_CUR);
     if (offset < 0 || !open_inputs(replay, "wb")) {
         log_e(LOG_TAG, "Failed to begin input stream\n");
-        cleanup(replay);
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
     }
 
+    replay->file_frame_type_count = frame_type_count;
     replay->input_frame_offset = (uint64_t)offset;
     replay->input_frame_count = 0;
     replay->fps = av_info.timing.fps;
+    for (int i = 0; i < replay->frame_type_count; i++) {
+        replay->frame_primed[i] = true;
+    }
     replay->mode = MODE_RECORD;
-    return true;
+    return replay;
 }
 
-bool replay_continue_recording(Replay *replay, const char *path)
+Replay* replay_continue_recording(const char *path)
 {
     if (!path) {
         log_e(LOG_TAG, "No path specified\n");
-        return false;
+        return NULL;
+    }
+    if (!frame_types_ready()) {
+        log_e(LOG_TAG, "Frame types not set\n");
+        return NULL;
     }
 
-    if (replay->mode == MODE_RECORD) {
-        log_e(LOG_TAG, "Already recording\n");
-        return false;
-    } else if (replay->mode == MODE_PLAYBACK) {
-        log_e(LOG_TAG, "Can't record while playing back\n");
-        return false;
+    Replay *replay = replay_create();
+    if (!replay) {
+        return NULL;
     }
 
-    // Create paths
     if (!(replay->file_path = strdup(path))) {
         log_e(LOG_TAG, "Failed to allocate memory for file path\n");
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
     }
     if (!(replay->tmp_path = sibling_temp_path(replay->file_path))) {
         log_e(LOG_TAG, "Failed to allocate memory for temporary file path\n");
-        cleanup(replay);
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
     }
     if ((replay->file_fd = mkstemp((char *)replay->tmp_path)) < 0) {
         log_e(LOG_TAG, "Failed to create temporary file\n");
-        cleanup(replay);
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
     }
 
-    // Copy the existing file for reading
     int src = open(replay->file_path, O_RDONLY);
     if (src < 0) {
         log_e(LOG_TAG, "Failed to open existing recording at '%s'\n",
             replay->file_path);
-        cleanup(replay);
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
     }
 
-    // Read and verify the header and footer of the existing recording
     struct RecordingHeader header;
-    if (!verify_header(src, &header) || !header_matches_runtime(&header, true)) {
+    uint8_t *file_sizes = NULL;
+    if (!read_header(src, &header, &file_sizes)
+        || !header_matches_runtime(&header, file_sizes, true)) {
         log_e(LOG_TAG, "Existing recording header is invalid\n");
+        free(file_sizes);
         close(src);
-        cleanup(replay);
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
     }
+
     struct RecordingFooter footer;
     if (!verify_footer(src, &footer)) {
         log_e(LOG_TAG, "Existing recording footer is invalid\n");
+        free(file_sizes);
         close(src);
-        cleanup(replay);
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
     }
 
-    // Read the trailing state
     if (lseek(src, (off_t)footer.trailing_state_offset, SEEK_SET) < 0
         || !restore_state(src, core.retro_serialize_size())) {
+        free(file_sizes);
         close(src);
-        cleanup(replay);
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
     }
 
-    // Copy header, start state, and inputs (omit trailing state and footer)
-    if (!copy_file(src, replay->file_fd, footer.trailing_state_offset)) {
+    uint64_t old_header_len = sizeof(header) + header.frame_type_count;
+    uint64_t new_header_len = sizeof(header) + frame_type_count;
+    if (footer.trailing_state_offset < old_header_len
+        || footer.input_frame_offset < old_header_len) {
+        log_e(LOG_TAG, "Existing recording offsets are invalid\n");
+        free(file_sizes);
         close(src);
-        cleanup(replay);
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
+    }
+
+    if (!write_recording_header(replay->file_fd, header.start_state_uncompressed_size)) {
+        log_e(LOG_TAG, "Failed to write header\n");
+        free(file_sizes);
+        close(src);
+        cleanup_and_free(replay);
+        return NULL;
+    }
+
+    uint64_t copy_len = footer.trailing_state_offset - old_header_len;
+    if (!copy_file(src, replay->file_fd, (off_t)old_header_len,
+            (off_t)new_header_len, copy_len)) {
+        free(file_sizes);
+        close(src);
+        cleanup_and_free(replay);
+        return NULL;
     }
     close(src);
+    free(file_sizes);
+    file_sizes = NULL;
 
-    if (lseek(replay->file_fd, (off_t)footer.trailing_state_offset, SEEK_SET) < 0
+    uint64_t delta = new_header_len - old_header_len;
+    if (lseek(replay->file_fd, (off_t)(footer.trailing_state_offset + delta), SEEK_SET) < 0
         || !open_inputs(replay, "wb")) {
         log_e(LOG_TAG, "Failed to resume input stream\n");
-        cleanup(replay);
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
+    }
+
+    if (!alloc_session_frames(replay)) {
+        log_e(LOG_TAG, "Failed to allocate frame buffers\n");
+        cleanup_and_free(replay);
+        return NULL;
+    }
+
+    replay->file_frame_type_count = frame_type_count;
+    replay->input_frame_offset = footer.input_frame_offset + delta;
+    replay->input_frame_count = footer.input_frame_count;
+    replay->fps = av_info.timing.fps;
+
+    for (int i = 0; i < replay->frame_type_count; i++) {
+        replay->type_frames[i] = footer.input_frame_count;
+        replay->frame_primed[i] = false;
     }
 
     log_d(LOG_TAG, "Resuming recording at '%s'\n", replay->tmp_path);
-    replay->input_frame_offset = footer.input_frame_offset;
-    replay->input_frame_count = footer.input_frame_count;
-    replay->fps = av_info.timing.fps;
     replay->mode = MODE_RECORD;
-    return true;
+    return replay;
 }
 
-bool replay_start_playback(Replay *replay, const char *path)
+Replay* replay_start_playback(const char *path)
 {
     if (!path) {
         log_e(LOG_TAG, "No path specified\n");
-        return false;
+        return NULL;
+    }
+    if (!frame_types_ready()) {
+        log_e(LOG_TAG, "Frame types not set\n");
+        return NULL;
     }
 
-    if (replay->mode == MODE_RECORD) {
-        log_e(LOG_TAG, "Can't start playback while recording\n");
-        return false;
-    } else if (replay->mode == MODE_PLAYBACK) {
-        log_e(LOG_TAG, "Already in playback mode\n");
-        return false;
+    Replay *replay = replay_create();
+    if (!replay) {
+        return NULL;
     }
 
     if ((replay->file_fd = open(path, O_RDONLY)) < 0) {
         log_e(LOG_TAG, "Failed to open recording at '%s'\n", path);
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
     }
 
     log_d(LOG_TAG, "Starting replay from '%s'\n", path);
 
     struct RecordingHeader header;
-    if (!verify_header(replay->file_fd, &header) || !header_matches_runtime(&header, true)) {
-        cleanup(replay);
-        return false;
+    if (!read_header(replay->file_fd, &header, &replay->file_frame_type_sizes)
+        || !header_matches_runtime(&header, replay->file_frame_type_sizes, false)) {
+        cleanup_and_free(replay);
+        return NULL;
     }
+    replay->file_frame_type_count = header.frame_type_count;
 
-    // Validate footer
     struct RecordingFooter footer;
     if (!verify_footer(replay->file_fd, &footer)) {
-        cleanup(replay);
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
     }
 
     size_t size = core.retro_serialize_size();
     if (size == 0 || size != header.start_state_uncompressed_size) {
         log_e(LOG_TAG, "Serialization size mismatch\n");
-        cleanup(replay);
-        return false;
+        cleanup_and_free(replay);
+        return NULL;
     }
 
     replay->input_frame_count = footer.input_frame_count;
-    log_v(LOG_TAG, "Replay core '%s' '%s', %u ms, %u-byte inputs\n",
-        header.core_name, header.core_version, footer.duration_ms, header.input_frame_size);
+    log_v(LOG_TAG, "Replay core '%s' '%s', %u ms\n",
+        header.core_name, header.core_version, footer.duration_ms);
 
-    // Read the state, then seek to inputs (gzread read-ahead invalidates offset)
+    if (!alloc_session_frames(replay)) {
+        log_e(LOG_TAG, "Failed to allocate frame buffers\n");
+        cleanup_and_free(replay);
+        return NULL;
+    }
+
     if (restore_state(replay->file_fd, size)
         && lseek(replay->file_fd, (off_t)footer.input_frame_offset, SEEK_SET) >= 0
         && open_inputs(replay, "rb")) {
         replay->mode = MODE_PLAYBACK;
-        return true;
+        return replay;
     }
 
-    // If we reached here, either serialization or writing failed
     log_e(LOG_TAG, "Failed to unserialize or read state\n");
-    cleanup(replay);
-
-    return false;
+    cleanup_and_free(replay);
+    return NULL;
 }
 
-void replay_abort(Replay *replay)
+void replay_stop(Replay *replay)
 {
-    ReplayMode mode = replay->mode;
-    cleanup(replay);
-    if (mode == MODE_RECORD) {
-        log_d(LOG_TAG, "Aborted recording\n");
-    } else {
-        log_d(LOG_TAG, "Aborted playback\n");
+    if (!replay) {
+        return;
     }
-}
 
-void replay_end(Replay *replay)
-{
     ReplayMode mode = replay->mode;
     if (mode == MODE_RECORD) {
         write_footer(replay);
@@ -327,9 +399,19 @@ void replay_end(Replay *replay)
     cleanup(replay);
     if (mode == MODE_RECORD) {
         log_d(LOG_TAG, "Stopped recording\n");
-    } else {
+    } else if (mode == MODE_PLAYBACK) {
         log_d(LOG_TAG, "Stopped playback\n");
     }
+}
+
+void replay_destroy(Replay *replay)
+{
+    cleanup_and_free(replay);
+}
+
+ReplayMode replay_mode(const Replay *replay)
+{
+    return replay ? replay->mode : MODE_NONE;
 }
 
 bool replay_set_frame_type_count(uint8_t count)
@@ -338,38 +420,24 @@ bool replay_set_frame_type_count(uint8_t count)
         return true;
     }
 
-    // Free mem
-    for (int i = 0; i < frame_type_count; i++) {
-        free(frame_content[i]);
-    }
-    free(frame_content);
-    frame_content = NULL;
-    free(frame_type_sizes);
-    frame_type_sizes = NULL;
-    frame_type_count = 0;
-
+    free_frame_type_tables();
     if (count == 0) {
         return true;
     }
 
-    if (!(frame_type_sizes = calloc(count,  sizeof(uint8_t)))) {
-        log_e(LOG_TAG, "Failed to allocate memory for frame sizes\n");
-        return false;
-    }
-
-    if (!(frame_content = calloc(count,  sizeof(void *)))) {
-        log_e(LOG_TAG, "Failed to allocate memory for frame content\n");
-        free(frame_type_sizes);
-        frame_type_sizes = NULL;
+    frame_type_sizes = calloc(count, sizeof(uint8_t));
+    frame_type_defaults = calloc(count, sizeof(void *));
+    if (!frame_type_sizes || !frame_type_defaults) {
+        log_e(LOG_TAG, "Failed to allocate memory for frame types\n");
+        free_frame_type_tables();
         return false;
     }
 
     frame_type_count = count;
-
     return true;
 }
 
-bool replay_set_frame_type_size(uint8_t frame_ix, uint8_t size)
+bool replay_set_frame_type_shape(uint8_t frame_ix, const void *default_state, uint8_t size)
 {
     if (frame_ix >= frame_type_count) {
         log_e(LOG_TAG, "Frame index too large: %d >= %d\n",
@@ -377,83 +445,123 @@ bool replay_set_frame_type_size(uint8_t frame_ix, uint8_t size)
         return false;
     }
 
-    if (frame_content[frame_ix]) {
-        free(frame_content[frame_ix]);
-        frame_content[frame_ix] = NULL;
-    }
+    free(frame_type_defaults[frame_ix]);
+    frame_type_defaults[frame_ix] = NULL;
+    frame_type_sizes[frame_ix] = 0;
 
-    frame_type_sizes[frame_ix] = size;
     if (size == 0) {
         return true;
     }
-
-    if (!(frame_content[frame_ix] = calloc(size, 1))) {
-        log_e(LOG_TAG, "Failed to allocate %db for frame content[%d]\n",
-            size, frame_ix);
-        frame_type_sizes[frame_ix] = 0;
+    if (!default_state) {
+        log_e(LOG_TAG, "Default state required for frame type %d\n", frame_ix);
         return false;
     }
 
+    if (!(frame_type_defaults[frame_ix] = malloc(size))) {
+        log_e(LOG_TAG, "Failed to allocate default state for frame type %d\n", frame_ix);
+        return false;
+    }
+    memcpy(frame_type_defaults[frame_ix], default_state, size);
+    frame_type_sizes[frame_ix] = size;
     return true;
 }
 
-bool replay_read_input(Replay *replay, void *input_state, size_t size)
+bool replay_read_frame(Replay *replay, uint8_t frame_ix, void *content, size_t size)
 {
-    if (replay->mode == MODE_PLAYBACK) {
-        if (replay->input_frame_count == 0) {
-            log_i(LOG_TAG, "Reached stop offset in replay file\n");
-            replay_end(replay);
-            return false;
-        }
-        if (gzread(replay->gz, input_state, size) != (int)size) {
-            log_w(LOG_TAG, "Replay file ended abruptly\n");
-            replay_abort(replay);
-            return false;
-        }
-        replay->input_frame_count--;
-    } else {
+    if (!replay || replay->mode != MODE_PLAYBACK) {
         log_e(LOG_TAG, "Replay is not in playback mode\n");
         return false;
     }
-
-    return true;
-}
-
-bool replay_write_input(Replay *replay, const void *input_state, size_t size)
-{
-    if (replay->mode == MODE_RECORD) {
-        if (gzwrite(replay->gz, input_state, size) != (int)size) {
-            log_e(LOG_TAG, "Failed to write input state to replay file\n");
-            replay_abort(replay);
-            return false;
-        }
-        replay->input_frame_count++;
-    } else {
-        log_e(LOG_TAG, "Replay is not in record mode\n");
+    if (frame_ix >= replay->frame_type_count || size != frame_type_sizes[frame_ix]
+        || !content || !replay->frame_content[frame_ix]) {
+        log_e(LOG_TAG, "Invalid frame type %u or size %zu\n", frame_ix, size);
         return false;
     }
 
+    uint64_t n = replay->type_frames[frame_ix];
+    if (n >= replay->input_frame_count) {
+        log_i(LOG_TAG, "Reached stop offset in replay file\n");
+        replay_stop(replay);
+        return false;
+    }
+
+    if (!apply_events_through(replay, n)) {
+        log_w(LOG_TAG, "Replay file ended abruptly\n");
+        cleanup(replay);
+        return false;
+    }
+
+    memcpy(content, replay->frame_content[frame_ix], size);
+    replay->type_frames[frame_ix]++;
+    return true;
+}
+
+bool replay_write_frame(Replay *replay, uint8_t frame_ix, const void *content, size_t size)
+{
+    if (!replay || replay->mode != MODE_RECORD) {
+        log_e(LOG_TAG, "Replay is not in record mode\n");
+        return false;
+    }
+    if (frame_ix >= replay->frame_type_count || size != frame_type_sizes[frame_ix]
+        || !content || !replay->frame_content[frame_ix]) {
+        log_e(LOG_TAG, "Invalid frame type %u or size %zu\n", frame_ix, size);
+        return false;
+    }
+
+    uint64_t n = replay->type_frames[frame_ix];
+    if (n > UINT32_MAX) {
+        log_e(LOG_TAG, "Frame index exceeds recording limit\n");
+        cleanup(replay);
+        return false;
+    }
+
+    if (!replay->frame_primed[frame_ix]
+        || memcmp(replay->frame_content[frame_ix], content, size) != 0) {
+        if (!emit_event(replay, frame_ix, (uint32_t)n, content, size)) {
+            log_e(LOG_TAG, "Failed to write input state to replay file\n");
+            cleanup(replay);
+            return false;
+        }
+        memcpy(replay->frame_content[frame_ix], content, size);
+        replay->frame_primed[frame_ix] = true;
+    }
+
+    replay->type_frames[frame_ix]++;
     return true;
 }
 
 void replay_clean_up()
 {
-    if (frame_content) {
-        for (int i = 0; i < frame_type_count; i++) {
-            free(frame_content[i]);
-            frame_content[i] = NULL;
-        }
-    }
-    free(frame_content);
-    frame_content = NULL;
+    free_frame_type_tables();
+}
 
-    free(frame_type_sizes);
-    frame_type_sizes = NULL;
-    frame_type_count = 0;
+static Replay *replay_create()
+{
+    Replay *replay = calloc(1, sizeof(Replay));
+    if (!replay) {
+        return NULL;
+    }
+    replay->file_fd = -1;
+    return replay;
 }
 
 static bool write_footer(Replay *replay)
 {
+    if (replay->frame_type_count > 0) {
+        uint64_t frames = replay->type_frames[0];
+        for (int i = 1; i < replay->frame_type_count; i++) {
+            if (replay->type_frames[i] != frames) {
+                log_w(LOG_TAG, "Frame type %d count (%llu) != type 0 (%llu)\n",
+                    i, (unsigned long long)replay->type_frames[i],
+                    (unsigned long long)frames);
+                if (replay->type_frames[i] > frames) {
+                    frames = replay->type_frames[i];
+                }
+            }
+        }
+        replay->input_frame_count = frames;
+    }
+
     if (replay->gz) {
         gzclose(replay->gz);
         replay->gz = NULL;
@@ -465,7 +573,6 @@ static bool write_footer(Replay *replay)
         return false;
     }
 
-    // Get the size of the serialized state
     size_t size = core.retro_serialize_size();
     if (size == 0) {
         log_e(LOG_TAG, "Serialization size is zero\n");
@@ -477,7 +584,6 @@ static bool write_footer(Replay *replay)
         return false;
     }
 
-    // Write the footer
     struct RecordingFooter footer = {
         .input_frame_offset = replay->input_frame_offset,
         .input_frame_count = replay->input_frame_count,
@@ -494,6 +600,10 @@ static bool write_footer(Replay *replay)
 
 static void cleanup(Replay *replay)
 {
+    if (!replay) {
+        return;
+    }
+
     if (replay->gz) {
         gzclose(replay->gz);
         replay->gz = NULL;
@@ -508,6 +618,25 @@ static void cleanup(Replay *replay)
         unlink(replay->tmp_path);
     }
 
+    if (replay->frame_content) {
+        for (int i = 0; i < replay->frame_type_count; i++) {
+            free(replay->frame_content[i]);
+        }
+        free(replay->frame_content);
+        replay->frame_content = NULL;
+    }
+    free(replay->frame_primed);
+    replay->frame_primed = NULL;
+    free(replay->type_frames);
+    replay->type_frames = NULL;
+    free(replay->peek_payload);
+    replay->peek_payload = NULL;
+    replay->peek_valid = false;
+    free(replay->file_frame_type_sizes);
+    replay->file_frame_type_sizes = NULL;
+    replay->file_frame_type_count = 0;
+    replay->frame_type_count = 0;
+
     free((void *)replay->file_path);
     free((void *)replay->tmp_path);
     replay->file_path = NULL;
@@ -519,39 +648,60 @@ static void cleanup(Replay *replay)
     replay->mode = MODE_NONE;
 }
 
-static bool verify_header(int fd, struct RecordingHeader *header)
+static void cleanup_and_free(Replay *replay)
 {
-    // Read the recording header from the file
+    cleanup(replay);
+    free(replay);
+}
+
+static bool read_header(int fd, struct RecordingHeader *header, uint8_t **sizes_out)
+{
+    if (sizes_out) {
+        *sizes_out = NULL;
+    }
     if (!read_all(fd, header, sizeof(*header))) {
         log_e(LOG_TAG, "Failed to read header\n");
         return false;
     }
 
-    // Verify basics
     if (strncmp(header->magic, MAGIC, 3) != 0 || header->version != VERSION) {
         log_e(LOG_TAG, "Invalid recording header\n");
+        return false;
+    }
+    if (header->frame_type_count == 0) {
+        log_e(LOG_TAG, "Recording has no frame types\n");
         return false;
     }
 
     header->core_name[sizeof(header->core_name) - 1] = '\0';
     header->core_version[sizeof(header->core_version) - 1] = '\0';
 
+    uint8_t *sizes = malloc(header->frame_type_count);
+    if (!sizes) {
+        log_e(LOG_TAG, "Failed to allocate frame type sizes\n");
+        return false;
+    }
+    if (!read_all(fd, sizes, header->frame_type_count)) {
+        log_e(LOG_TAG, "Failed to read frame type sizes\n");
+        free(sizes);
+        return false;
+    }
+    if (sizes_out) {
+        *sizes_out = sizes;
+    } else {
+        free(sizes);
+    }
     return true;
 }
 
 static bool verify_footer(int fd, struct RecordingFooter *footer)
 {
-    // Unlike verify_header, on success, this function resets the read position
-    // to the location it was when the function was called.
-
-    // Record offset post-header
     off_t eoh = lseek(fd, 0, SEEK_CUR);
     if (eoh < 0) {
         log_e(LOG_TAG, "Failed to record header offset\n");
         return false;
     }
 
-    // Read the footer
     if (lseek(fd, -(off_t)sizeof(struct RecordingFooter), SEEK_END) < 0) {
         log_e(LOG_TAG, "Failed to seek to footer\n");
         return false;
@@ -561,7 +711,6 @@ static bool verify_footer(int fd, struct RecordingFooter *footer)
         return false;
     }
 
-    // Reposition to end of header
     if (lseek(fd, eoh, SEEK_SET) < 0) {
         log_e(LOG_TAG, "Failed to seek to end of header\n");
         return false;
@@ -570,13 +719,13 @@ static bool verify_footer(int fd, struct RecordingFooter *footer)
     return true;
 }
 
-static bool copy_file(int src, int dest, uint64_t length)
+static bool copy_file(int src, int dest, off_t src_off, off_t dest_off, uint64_t length)
 {
-    log_d(LOG_TAG, "Copying %llu bytes of input\n",
+    log_d(LOG_TAG, "Copying %llu bytes of recording\n",
         (unsigned long long)length);
 
-    off_t off_in = 0;
-    off_t off_out = 0;
+    off_t off_in = src_off;
+    off_t off_out = dest_off;
     uint64_t remaining = length;
     while (remaining > 0) {
         size_t chunk = remaining > SIZE_MAX ? SIZE_MAX : (size_t)remaining;
@@ -712,13 +861,27 @@ static uint32_t duration_ms_from(uint64_t frames, double fps)
     return (uint32_t)(ms + 0.5);
 }
 
-static bool header_matches_runtime(const struct RecordingHeader *header, bool require_input_size)
+static bool header_matches_runtime(const struct RecordingHeader *header,
+    const uint8_t *file_sizes, bool for_resume)
 {
-    size_t frame_size = input_recorded_size();
-    if (require_input_size && (size_t)header->input_frame_size != frame_size) {
-        log_e(LOG_TAG, "Input frame size mismatch (%u != %zu)\n",
-            header->input_frame_size, frame_size);
+    if (!file_sizes || frame_type_count == 0) {
+        log_e(LOG_TAG, "Frame types not set\n");
         return false;
+    }
+    if (for_resume && header->frame_type_count > frame_type_count) {
+        log_e(LOG_TAG, "Recording has more frame types (%u) than runtime (%u)\n",
+            header->frame_type_count, frame_type_count);
+        return false;
+    }
+
+    uint8_t n = header->frame_type_count < frame_type_count
+        ? header->frame_type_count : frame_type_count;
+    for (uint8_t i = 0; i < n; i++) {
+        if (file_sizes[i] != frame_type_sizes[i]) {
+            log_e(LOG_TAG, "Frame type %u size mismatch (%u != %u)\n",
+                i, file_sizes[i], frame_type_sizes[i]);
+            return false;
+        }
     }
 
     if (system_info.library_name
@@ -734,4 +897,151 @@ static bool header_matches_runtime(const struct RecordingHeader *header, bool re
     }
 
     return true;
+}
+
+static bool frame_types_ready()
+{
+    if (frame_type_count == 0 || !frame_type_sizes || !frame_type_defaults) {
+        return false;
+    }
+    for (int i = 0; i < frame_type_count; i++) {
+        if (frame_type_sizes[i] == 0 || !frame_type_defaults[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void free_frame_type_tables()
+{
+    if (frame_type_defaults) {
+        for (int i = 0; i < frame_type_count; i++) {
+            free(frame_type_defaults[i]);
+        }
+        free(frame_type_defaults);
+        frame_type_defaults = NULL;
+    }
+    free(frame_type_sizes);
+    frame_type_sizes = NULL;
+    frame_type_count = 0;
+}
+
+static bool write_recording_header(int fd, uint64_t start_state_size)
+{
+    struct RecordingHeader header = {
+        .magic = MAGIC,
+        .version = VERSION,
+        .start_state_uncompressed_size = start_state_size,
+        .frame_type_count = frame_type_count,
+    };
+    copy_core_field(header.core_name, sizeof(header.core_name), system_info.library_name);
+    copy_core_field(header.core_version, sizeof(header.core_version), system_info.library_version);
+    return write_all(fd, &header, sizeof(header))
+        && write_all(fd, frame_type_sizes, frame_type_count);
+}
+
+static bool alloc_session_frames(Replay *replay)
+{
+    replay->frame_type_count = frame_type_count;
+    replay->frame_content = calloc(replay->frame_type_count, sizeof(void *));
+    replay->frame_primed = calloc(replay->frame_type_count, sizeof(bool));
+    replay->type_frames = calloc(replay->frame_type_count, sizeof(uint64_t));
+    if (!replay->frame_content || !replay->frame_primed || !replay->type_frames) {
+        return false;
+    }
+
+    uint8_t peek_size = 0;
+    for (int i = 0; i < replay->frame_type_count; i++) {
+        uint8_t size = frame_type_sizes[i];
+        if (size > peek_size) {
+            peek_size = size;
+        }
+        if (!size) {
+            continue;
+        }
+        if (!(replay->frame_content[i] = malloc(size))) {
+            return false;
+        }
+        memcpy(replay->frame_content[i], frame_type_defaults[i], size);
+    }
+    if (peek_size && !(replay->peek_payload = malloc(peek_size))) {
+        return false;
+    }
+    return true;
+}
+
+static bool emit_event(Replay *replay, uint8_t frame_ix, uint32_t frame_index,
+    const void *content, size_t size)
+{
+    struct FrameHeader header = {
+        .frame_type = frame_ix,
+        .frame_index = frame_index,
+    };
+    return gzwrite(replay->gz, &header, sizeof(header)) == (int)sizeof(header)
+        && gzwrite(replay->gz, content, size) == (int)size;
+}
+
+static bool gz_skip(gzFile gz, size_t size)
+{
+    uint8_t buf[256];
+    while (size > 0) {
+        size_t n = size < sizeof(buf) ? size : sizeof(buf);
+        if (gzread(gz, buf, n) != (int)n) {
+            return false;
+        }
+        size -= n;
+    }
+    return true;
+}
+
+static bool refill_peek(Replay *replay)
+{
+    replay->peek_valid = false;
+    while (replay->gz) {
+        struct FrameHeader header;
+        int n = gzread(replay->gz, &header, sizeof(header));
+        if (n == 0) {
+            return true;
+        }
+        if (n != (int)sizeof(header)) {
+            return false;
+        }
+        if (header.frame_type >= replay->file_frame_type_count) {
+            return false;
+        }
+
+        uint8_t payload_size = replay->file_frame_type_sizes[header.frame_type];
+        if (header.frame_type >= replay->frame_type_count) {
+            if (!gz_skip(replay->gz, payload_size)) {
+                return false;
+            }
+            continue;
+        }
+        if (payload_size != frame_type_sizes[header.frame_type] || !replay->peek_payload) {
+            return false;
+        }
+        if (gzread(replay->gz, replay->peek_payload, payload_size) != (int)payload_size) {
+            return false;
+        }
+        replay->peek_type = header.frame_type;
+        replay->peek_frame_index = header.frame_index;
+        replay->peek_valid = true;
+        return true;
+    }
+    return true;
+}
+
+static bool apply_events_through(Replay *replay, uint64_t frame_index)
+{
+    while (true) {
+        if (!replay->peek_valid && !refill_peek(replay)) {
+            return false;
+        }
+        if (!replay->peek_valid || (uint64_t)replay->peek_frame_index > frame_index) {
+            return true;
+        }
+        uint8_t type = replay->peek_type;
+        memcpy(replay->frame_content[type], replay->peek_payload, frame_type_sizes[type]);
+        replay->peek_valid = false;
+    }
 }

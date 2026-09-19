@@ -321,7 +321,7 @@ const int keycode_map_count = sizeof(keycode_retro_map) / sizeof(keycode_retro_m
 
 extern ArgsOptions args;
 extern retro_keyboard_event_t keyboard_event_callback;
-extern Replay replay;
+extern Replay *replay;
 
 struct JoypadState {
 #if (LAST_BUTTON_ID < 16)
@@ -390,12 +390,6 @@ static int deferred_event_count = 0;
 static unsigned long deferred_event_start_us = 0L;
 static int deferred_event_index = 0;
 
-// FIXME: remove
-size_t input_recorded_size()
-{
-    return sizeof(joypad_states);
-}
-
 void input_init()
 {
     SDL_InitSubSystem(SDL_INIT_JOYSTICK);
@@ -405,9 +399,9 @@ void input_init()
     input_reset_events();
 
     replay_set_frame_type_count(REPLAY_FRAME_COUNT);
-    replay_set_frame_type_size(REPLAY_FRAME_JOYPAD, sizeof(joypad_states));
-    replay_set_frame_type_size(REPLAY_FRAME_KEYBOARD, sizeof(keyboard_state));
-    replay_set_frame_type_size(REPLAY_FRAME_MOUSE, sizeof(mouse_state));
+    replay_set_frame_type_shape(REPLAY_FRAME_JOYPAD, joypad_states, sizeof(joypad_states));
+    replay_set_frame_type_shape(REPLAY_FRAME_KEYBOARD, &keyboard_state, sizeof(keyboard_state));
+    replay_set_frame_type_shape(REPLAY_FRAME_MOUSE, &mouse_state, sizeof(mouse_state));
 }
 
 void input_clean_up()
@@ -665,9 +659,8 @@ static void deinit_joypads()
 
 static void poll_joypads()
 {
-    // FIXME - assumes incoming joypad state is roughly the same as ours - unsafe
-    if (replay.mode == MODE_PLAYBACK
-        && replay_read_input(&replay, joypad_states, sizeof(joypad_states))) {
+    if (replay_mode(replay) == MODE_PLAYBACK
+        && replay_read_frame(replay, REPLAY_FRAME_JOYPAD, joypad_states, sizeof(joypad_states))) {
         return;
     }
 
@@ -707,8 +700,8 @@ static void poll_joypads()
     }
     last_joy_count = joy_count;
 
-    if (replay.mode == MODE_RECORD) {
-        replay_write_input(&replay, joypad_states, sizeof(joypad_states));
+    if (replay_mode(replay) == MODE_RECORD) {
+        replay_write_frame(replay, REPLAY_FRAME_JOYPAD, joypad_states, sizeof(joypad_states));
     }
 }
 
@@ -777,12 +770,20 @@ static void deinit_mouse()
 
 static void poll_mouse()
 {
+    if (replay_mode(replay) == MODE_PLAYBACK
+        && replay_read_frame(replay, REPLAY_FRAME_MOUSE, &mouse_state, sizeof(mouse_state))) {
+        return;
+    }
+
     if (!mouse_initialized) {
         init_mouse();
         mouse_initialized = true;
     }
 
     if (mouse_device_fd < 0) {
+        if (replay_mode(replay) == MODE_RECORD) {
+            replay_write_frame(replay, REPLAY_FRAME_MOUSE, &mouse_state, sizeof(mouse_state));
+        }
         return;
     }
 
@@ -826,6 +827,10 @@ static void poll_mouse()
                     event.type, event.code, event.value);
                 break;
         }
+    }
+
+    if (replay_mode(replay) == MODE_RECORD) {
+        replay_write_frame(replay, REPLAY_FRAME_MOUSE, &mouse_state, sizeof(mouse_state));
     }
 }
 
@@ -881,6 +886,11 @@ static void deinit_keyboard()
 
 static void poll_keyboard()
 {
+    if (replay_mode(replay) == MODE_PLAYBACK
+        && replay_read_frame(replay, REPLAY_FRAME_KEYBOARD, &keyboard_state, sizeof(keyboard_state))) {
+        return;
+    }
+
     const retro_keyboard_event_t callback = keyboard_event_callback;
     if (callback && deferred_event_index < deferred_event_count) {
         InputEvent *event = &deferred_events[deferred_event_index];
@@ -898,6 +908,12 @@ static void poll_keyboard()
     }
 
     if (keyboard_device_fd < 0) {
+        // Idle default still counts as this poll's keyboard frame; skipping
+        // the write leaves no run in the file and playback dies on read_frame.
+        if (replay_mode(replay) == MODE_RECORD) {
+            replay_write_frame(replay, REPLAY_FRAME_KEYBOARD, &keyboard_state,
+                sizeof(keyboard_state));
+        }
         return;
     }
 
@@ -925,6 +941,11 @@ static void poll_keyboard()
                     event.type, event.code, event.value);
                 break;
         }
+    }
+
+    if (replay_mode(replay) == MODE_RECORD) {
+        replay_write_frame(replay, REPLAY_FRAME_KEYBOARD, &keyboard_state,
+            sizeof(keyboard_state));
     }
 }
 
