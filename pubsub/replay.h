@@ -34,7 +34,7 @@ Replay* replay_start_recording(const char *path);
 Replay* replay_continue_recording(const char *path);
 Replay* replay_start_playback(const char *path);
 
-void replay_stop(Replay *replay);
+bool replay_stop(Replay *replay);
 void replay_destroy(Replay *replay);
 ReplayMode replay_mode(const Replay *replay);
 

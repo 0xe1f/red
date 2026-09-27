@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Akop Karapetyan
+// Copyright (c) 2024-2026 Akop Karapetyan
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@
 #include "video.h"
 #include "input.h"
 #include "log.h"
+#include "osm.h"
 #include "server_xm.h"
 #include "timing.h"
 #include "filter.h"
@@ -66,7 +67,7 @@ static bool supports_no_game = false;
 static bool variables_updated = false;
 struct retro_disk_control_ext_callback *disk_ext_interface;
 static FILE *log_file = NULL;
-static struct retro_message_ext active_message = {0};
+static struct OnScreenMessage active_message = {0};
 static unsigned long message_last_updated_ms = 0UL;
 static VideoBuffer video_buffer = {0};
 static VideoBuffer overlay_buffer = {0};
@@ -76,7 +77,17 @@ static void set_core_options(const struct retro_core_option_definition *option_d
 static void set_variables(const struct retro_variable *vars, bool single);
 static void callback_set_led_state(int led, int state);
 static void handle_request(const RequestEnvelope *request, ResponseEnvelope *response);
-static void display_osd_message(enum retro_log_level level, enum retro_message_type type, const char *msg, unsigned int progress);
+static void set_on_screen_message(
+    uint8_t position,
+    uint32_t color_argb,
+    uint32_t duration_ms,
+    const char *text
+);
+static void draw_on_screen_message(
+    uint8_t position,
+    uint32_t color_argb,
+    const char *text
+);
 
 static void callback_log(enum retro_log_level level, const char *fmt, ...)
 {
@@ -148,20 +159,19 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
         filter_apply(&args.filter, &video_buffer);
     }
 
-    if (active_message.msg) {
+    if (*active_message.text) {
         unsigned long now_ms = micros() / 1000UL;
-        if (now_ms - message_last_updated_ms > active_message.duration) {
+        if (now_ms - message_last_updated_ms > active_message.duration_ms) {
             message_last_updated_ms = 0UL;
-            active_message.msg = NULL;
+            strcpy(active_message.text, "");
             buffer_clear_rect(&overlay_buffer, &rect_osd);
             rect_zero(&rect_osd);
         } else {
-            if (active_message.target == RETRO_MESSAGE_TARGET_LOG || active_message.target == RETRO_MESSAGE_TARGET_ALL) {
-                callback_log(active_message.level, "%s\n", active_message.msg);
-            }
-            if (active_message.target == RETRO_MESSAGE_TARGET_OSD || active_message.target == RETRO_MESSAGE_TARGET_ALL) {
-                display_osd_message(active_message.level, active_message.type, active_message.msg, active_message.progress);
-            }
+            draw_on_screen_message(
+                active_message.position,
+                active_message.color_argb,
+                active_message.text
+            );
         }
         buffer_overlay_rect(&video_buffer, &overlay_buffer, &rect_osd);
     }
@@ -429,11 +439,49 @@ static bool callback_environment_set(unsigned cmd, void *data)
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_MEMORY_MAPS\n");
         // const struct retro_memory_map *maps = (struct retro_memory_map *)data;
         break;
-    case RETRO_ENVIRONMENT_SET_MESSAGE_EXT:
+    case RETRO_ENVIRONMENT_SET_MESSAGE_EXT: {
         log_v(LOG_TAG, "RETRO_ENVIRONMENT_SET_MESSAGE_EXT\n");
-        active_message = *(const struct retro_message_ext *) data;
-        message_last_updated_ms = micros() / 1000UL;
+        const struct retro_message_ext *message = (const struct retro_message_ext *) data;
+        if (message->target == RETRO_MESSAGE_TARGET_LOG || message->target == RETRO_MESSAGE_TARGET_ALL) {
+            callback_log(message->level, "%s\n", message->msg);
+        }
+        if (message->target == RETRO_MESSAGE_TARGET_OSD || message->target == RETRO_MESSAGE_TARGET_ALL) {
+            uint32_t color_argb = 0;
+            switch (message->level) {
+            case RETRO_LOG_DEBUG:
+                color_argb = OSM_COLOR_DEBUG;
+                break;
+            case RETRO_LOG_WARN:
+                color_argb = OSM_COLOR_WARN;
+                break;
+            case RETRO_LOG_ERROR:
+                color_argb = OSM_COLOR_ERROR;
+                break;
+            case RETRO_LOG_INFO:
+            default:
+                color_argb = OSM_COLOR_INFO;
+                break;
+            }
+
+            uint8_t position = OSM_POSITION_BOTTOM_LEFT;
+            switch (message->type) {
+            case RETRO_MESSAGE_TYPE_NOTIFICATION_ALT:
+                position = OSM_POSITION_BOTTOM_RIGHT;
+                break;
+            default:
+                position = OSM_POSITION_BOTTOM_LEFT;
+                break;
+            }
+
+            set_on_screen_message(
+                position,
+                color_argb,
+                message->duration,
+                message->msg
+            );
+        }
         break;
+    }
     case RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY:
         log_d(LOG_TAG, "RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY\n");
         // FIXME
@@ -613,6 +661,21 @@ static void handle_request(const RequestEnvelope *request, ResponseEnvelope *res
             replay_destroy(replay);
             replay = replay_start_recording(
                 files_rom_recording_path(args.rom_path, request->replay_record->slot));
+            if (replay) {
+                set_on_screen_message(
+                    OSM_POSITION_BOTTOM_RIGHT,
+                    OSM_COLOR_RECORD,
+                    OSM_DURATION_LONG_MS,
+                    "Recording..."
+                );
+            } else {
+                set_on_screen_message(
+                    OSM_POSITION_BOTTOM_LEFT,
+                    OSM_COLOR_ERROR,
+                    OSM_DURATION_LONG_MS,
+                    "Recording failed"
+                );
+            }
             static ReplayRecordResponse r = REPLAY_RECORD_RESPONSE__INIT;
             response->payload_case = RESPONSE_ENVELOPE__PAYLOAD_REPLAY_RECORD;
             response->replay_record = &r;
@@ -623,6 +686,21 @@ static void handle_request(const RequestEnvelope *request, ResponseEnvelope *res
             replay_destroy(replay);
             replay = replay_start_playback(
                 files_rom_recording_path(args.rom_path, request->replay_playback->slot));
+            if (replay) {
+                set_on_screen_message(
+                    OSM_POSITION_BOTTOM_RIGHT,
+                    OSM_COLOR_PLAY,
+                    OSM_DURATION_LONG_MS,
+                    "Playing..."
+                );
+            } else {
+                set_on_screen_message(
+                    OSM_POSITION_BOTTOM_LEFT,
+                    OSM_COLOR_ERROR,
+                    OSM_DURATION_LONG_MS,
+                    "Playback failed"
+                );
+            }
             static ReplayPlaybackResponse r = REPLAY_PLAYBACK_RESPONSE__INIT;
             response->payload_case = RESPONSE_ENVELOPE__PAYLOAD_REPLAY_PLAYBACK;
             response->replay_playback = &r;
@@ -630,7 +708,14 @@ static void handle_request(const RequestEnvelope *request, ResponseEnvelope *res
         }
         case REQUEST_ENVELOPE__PAYLOAD_REPLAY_STOP: {
             log_i(LOG_TAG, "Received replay stop request\n");
-            replay_stop(replay);
+            if (replay_stop(replay)) {
+                set_on_screen_message(
+                    OSM_POSITION_BOTTOM_RIGHT,
+                    OSM_COLOR_STOP,
+                    OSM_DURATION_LONG_MS,
+                    "Stopped"
+                );
+            }
             static ReplayStopResponse r = REPLAY_STOP_RESPONSE__INIT;
             response->payload_case = RESPONSE_ENVELOPE__PAYLOAD_REPLAY_STOP;
             response->replay_stop = &r;
@@ -641,6 +726,21 @@ static void handle_request(const RequestEnvelope *request, ResponseEnvelope *res
             replay_destroy(replay);
             replay = replay_continue_recording(
                 files_rom_recording_path(args.rom_path, request->replay_resume_record->slot));
+            if (replay) {
+                set_on_screen_message(
+                    OSM_POSITION_BOTTOM_RIGHT,
+                    OSM_COLOR_RECORD,
+                    OSM_DURATION_LONG_MS,
+                    "Resuming..."
+                );
+            } else {
+                set_on_screen_message(
+                    OSM_POSITION_BOTTOM_LEFT,
+                    OSM_COLOR_ERROR,
+                    OSM_DURATION_LONG_MS,
+                    "Recording continuation failed"
+                );
+            }
             static ReplayResumeRecordResponse r = REPLAY_RESUME_RECORD_RESPONSE__INIT;
             response->payload_case = RESPONSE_ENVELOPE__PAYLOAD_REPLAY_RESUME_RECORD;
             response->replay_resume_record = &r;
@@ -653,26 +753,52 @@ static void handle_request(const RequestEnvelope *request, ResponseEnvelope *res
     }
 }
 
-static void display_osd_message(
-    enum retro_log_level level,
-    enum retro_message_type type,
-    const char *msg,
-    unsigned int progress
-)
-{
+static void set_on_screen_message(
+    uint8_t position,
+    uint32_t color_argb,
+    uint32_t duration_ms,
+    const char *text
+) {
+    strncpy(active_message.text, text, sizeof(active_message.text) - 1);
+    active_message.position = position;
+    active_message.color_argb = color_argb;
+    active_message.duration_ms = duration_ms;
+    message_last_updated_ms = micros() / 1000UL;
+}
+
+static void draw_on_screen_message(
+    uint8_t position,
+    uint32_t color_argb,
+    const char *text
+) {
     buffer_clear(&overlay_buffer);
 
     unsigned short width, height;
-    buffer_measure_text(Font8x8, msg, &width, &height);
+    buffer_measure_text(
+        Font8x8,
+        text,
+        &width,
+        &height
+    );
 
     unsigned short x = 0;
-    unsigned short y = overlay_buffer.height - height;
-    if (type == RETRO_MESSAGE_TYPE_NOTIFICATION_ALT) {
+    unsigned short y = 0;
+    if (position == OSM_POSITION_BOTTOM_RIGHT) {
         x = overlay_buffer.width - width;
+        y = overlay_buffer.height - height;
+    } else {
+        y = overlay_buffer.height - height;
     }
     rect_set(&rect_osd, x, y, width, height);
 
-    buffer_print(&overlay_buffer, Font8x8, x, y, msg, 0xcc, 0xcc, 0xcc);
+    buffer_print(
+        &overlay_buffer,
+        Font8x8,
+        x,
+        y,
+        text,
+        color_argb
+    );
 }
 
 int main(int argc, const char **argv)

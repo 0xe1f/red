@@ -361,7 +361,7 @@ static void blit_scale(VideoBuffer *buffer,
 void buffer_print(VideoBuffer *buffer,
     const Font *font,
     unsigned short x, unsigned short y, const char *text,
-    unsigned char color_r, unsigned char color_g, unsigned char color_b
+    uint32_t color_argb
 )
 {
     if (!text || !buffer->data || !font || !font->data
@@ -428,9 +428,12 @@ void buffer_print(VideoBuffer *buffer,
                 unsigned char bits = glyph[i * bytes_per_row + (j / 8)];
                 if (bits & (1 << (7 - (j % 8)))) {
                     if (bpp == 2) {
+                        uint8_t color_r = RED_ARGB8888(color_argb);
+                        uint8_t color_g = GREEN_ARGB8888(color_argb);
+                        uint8_t color_b = BLUE_ARGB8888(color_argb);
                         *(unsigned short *) px = RGB_RGB565(color_r, color_g, color_b);
                     } else if (bpp == 4) {
-                        *(unsigned int *) px = RGB_ARGB8888(color_r, color_g, color_b);
+                        *(unsigned int *) px = color_argb;
                     }
                 }
                 px += bpp;

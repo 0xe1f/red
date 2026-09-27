@@ -71,7 +71,7 @@ void buffer_blit(VideoBuffer *buffer,
 void buffer_print(VideoBuffer *buffer,
     const Font *font,
     unsigned short x, unsigned short y, const char *text,
-    unsigned char color_r, unsigned char color_g, unsigned char color_b
+    uint32_t color_argb
 );
 void buffer_measure_text(const Font *font,
     const char *text,

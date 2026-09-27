@@ -382,26 +382,34 @@ Replay* replay_start_playback(const char *path)
     return NULL;
 }
 
-void replay_stop(Replay *replay)
+bool replay_stop(Replay *replay)
 {
     if (!replay) {
-        return;
+        return false;
     }
 
     ReplayMode mode = replay->mode;
     if (mode == MODE_RECORD) {
+        // End the recording by writing the footer & final state
         write_footer(replay);
+        // Replace the original recording (if writing copy)
         if (replay->tmp_path && rename(replay->tmp_path, replay->file_path) != 0) {
             log_e(LOG_TAG, "Failed to replace '%s' with '%s'\n",
                 replay->file_path, replay->tmp_path);
         }
-    }
-    cleanup(replay);
-    if (mode == MODE_RECORD) {
+        // Clean up resources
+        cleanup(replay);
         log_d(LOG_TAG, "Stopped recording\n");
     } else if (mode == MODE_PLAYBACK) {
+        // Stop replay - clean up all resources
+        cleanup(replay);
         log_d(LOG_TAG, "Stopped playback\n");
+    } else {
+        // Invalid mode
+        return false;
     }
+
+    return true;
 }
 
 void replay_destroy(Replay *replay)
