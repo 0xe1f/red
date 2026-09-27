@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,6 +35,8 @@
 #define GREEN_ARGB8888(x) ((x>>8)&0xff)
 #define BLUE_ARGB8888(x) ((x)&0xff)
 #define RGB_ARGB8888(r,g,b) (0xff<<24)|(((r)&0xff)<<16)|(((g)&0xff)<<8)|(((b)&0xff))
+
+#define FONT_BG_ARGB 0xff0f0f0f
 
 #define PIXEL_FORMAT_BPP(pf) \
     ((pf) == PF_RGBA8888 || (pf) == PF_ARGB8888 ? 4 : \
@@ -364,9 +367,15 @@ void buffer_print(VideoBuffer *buffer,
     uint32_t color_argb
 )
 {
-    if (!text || !buffer->data || !font || !font->data
-        || !buffer->width || !buffer->height || !buffer->bpp
-    ) {
+    if (!text) {
+        return;
+    }
+    if (!buffer->data || !buffer->width || !buffer->height || !buffer->bpp) {
+        log_e(LOG_TAG, "Missing buffer data");
+        return;
+    }
+    if (!font || !font->stroke) {
+        log_e(LOG_TAG, "Missing font data");
         return;
     }
 
@@ -395,7 +404,7 @@ void buffer_print(VideoBuffer *buffer,
             continue;
         }
 
-        unsigned char ch = (unsigned char) *c;
+        uint8_t ch = (uint8_t) *c;
         if (ch < font->first_code || ch > font->last_code) {
             continue;
         }
@@ -408,8 +417,11 @@ void buffer_print(VideoBuffer *buffer,
             continue;
         }
 
-        const unsigned char *glyph =
-            (const unsigned char *) font->data
+        const uint8_t *glyph_stroke =
+            (const uint8_t *) font->stroke
+            + (ch - font->first_code) * bytes_per_glyph;
+        const uint8_t *glyph_bg =
+            (const uint8_t *) font->background
             + (ch - font->first_code) * bytes_per_glyph;
 
         int j0 = cx < 0 ? -cx : 0;
@@ -417,23 +429,32 @@ void buffer_print(VideoBuffer *buffer,
         int j1 = cx + gw > buf_w ? buf_w - cx : gw;
         int i1 = cy + gh > buf_h ? buf_h - cy : gh;
 
-        unsigned char *row =
-            (unsigned char *) buffer->data
+        uint8_t *row =
+            (uint8_t *) buffer->data
             + (cy + i0) * buffer->pitch
             + (cx + j0) * bpp;
 
         for (int i = i0; i < i1; i++) {
-            unsigned char *px = row;
+            uint8_t *px = row;
             for (int j = j0; j < j1; j++) {
-                unsigned char bits = glyph[i * bytes_per_row + (j / 8)];
-                if (bits & (1 << (7 - (j % 8)))) {
+                uint32_t offset = i * bytes_per_row + (j >> 3);
+                if (glyph_stroke[offset] & (1 << (7 - (j % 8)))) {
                     if (bpp == 2) {
                         uint8_t color_r = RED_ARGB8888(color_argb);
                         uint8_t color_g = GREEN_ARGB8888(color_argb);
                         uint8_t color_b = BLUE_ARGB8888(color_argb);
-                        *(unsigned short *) px = RGB_RGB565(color_r, color_g, color_b);
+                        *(uint16_t *) px = RGB_RGB565(color_r, color_g, color_b);
                     } else if (bpp == 4) {
-                        *(unsigned int *) px = color_argb;
+                        *(uint32_t *) px = color_argb;
+                    }
+                } else if (glyph_bg[offset] & (1 << (7 - (j % 8)))) {
+                    if (bpp == 2) {
+                        uint8_t color_r = RED_ARGB8888(FONT_BG_ARGB);
+                        uint8_t color_g = GREEN_ARGB8888(FONT_BG_ARGB);
+                        uint8_t color_b = BLUE_ARGB8888(FONT_BG_ARGB);
+                        *(uint16_t *) px = RGB_RGB565(color_r, color_g, color_b);
+                    } else if (bpp == 4) {
+                        *(uint32_t *) px = FONT_BG_ARGB;
                     }
                 }
                 px += bpp;

@@ -40,7 +40,8 @@ typedef struct {
     unsigned short glyph_height;
     unsigned short first_code;
     unsigned short last_code;
-    const void *data;
+    const void *stroke;
+    const void *background;
 } Font;
 
 typedef struct {
