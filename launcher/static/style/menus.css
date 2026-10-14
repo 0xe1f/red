@@ -16,23 +16,33 @@
  */
 
 button.dropdown {
-    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20height%3D%2220px%22%20viewBox%3D%220%20-960%20960%20960%22%20width%3D%2220px%22%20fill%3D%22%231f1f1f%22%3E%3Cpath%20d%3D%22M480-384%20288-576h384L480-384Z%22%2F%3E%3C%2Fsvg%3E");
-    background-repeat: no-repeat;
-    background-position: right 10px center;
+    background-image: none;
     padding: 0.45em 30px 0.45em 12px;
+    position: relative;
+}
+
+button.dropdown::after {
+    content: "";
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    margin-top: -2px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid currentColor;
 }
 
 .dropdown {
-    border: solid 1px #d7dde8;
-    border-radius: 999px;
+    border: solid 1px var(--line, #eadfdc);
+    border-radius: 0;
     box-shadow: none;
     padding: 0.38em 28px 0.38em 0.75em;
-    background-color: #f8fafc;
+    background-color: var(--surface, #fff);
     cursor: pointer;
     font-weight: normal;
     font-size: 0.95rem;
-    height: auto;
-    color: #475467;
+    height: 36px;
+    color: var(--ink, #2a1816);
     max-width: min(30vw, 320px);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -41,13 +51,13 @@ button.dropdown {
 }
 
 .dropdown:hover {
-    color: #1f2937;
-    border-color: #c7ceda;
-    background-color: #f2f5fa;
+    color: var(--ink, #2a1816);
+    border-color: var(--line, #eadfdc);
+    background-color: var(--wash, #fdf1ee);
 }
 
 .dropdown:focus-visible {
-    outline: 2px solid rgba(249, 74, 55, 0.45);
+    outline: 2px solid var(--accent, #9f2b2b);
     outline-offset: 1px;
 }
 
@@ -56,24 +66,25 @@ ul.menu {
     display: none;
     margin: 0;
     padding: 0.3em 0;
-    background-color: #fff;
+    background-color: var(--surface, #fff);
+    color: var(--ink, #2a1816);
     list-style-type: none;
-    border: solid 1px #dde2ec;
-    border-radius: 10px;
-    box-shadow: 0 12px 30px rgba(2, 8, 20, 0.15);
+    border: solid 1px var(--line, #eadfdc);
+    border-radius: 0;
+    box-shadow: 0 12px 30px rgba(42, 24, 22, 0.16);
     min-width: 13em;
     z-index: 30;
 }
 
 .menu li {
-    color: #334155;
+    color: var(--ink, #2a1816);
     padding: 0.48em 0.95em;
 }
 
 .menu li:hover,
 .menu li.hovered {
     cursor: pointer;
-    background-color: #f2f5fa;
+    background-color: var(--wash, #fdf1ee);
 }
 
 .menu li.divider,
@@ -81,7 +92,7 @@ ul.menu {
     cursor: default;
     height: 1px;
     padding: 0;
-    background-color: #e5e7eb;
+    background-color: var(--line, #eadfdc);
 }
 
 .menu li.selected-menu-item span {

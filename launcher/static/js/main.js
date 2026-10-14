@@ -18,10 +18,12 @@
 $(function() {
     const cookies = Cookies.withAttributes({ expires: 31 });
     const orientations = [ 'portrait', 'landscape' ];
-    const compactLayoutQuery = window.matchMedia("(max-width: 800px)");
+    const familyIds = [ 'system', 'genre', 'tag', 'series' ];
     var syncTimeoutId = -1;
     var lastSync = 0;
     var lastSensorOrientation = null;
+    var openFamily = null;
+    var currentGame = null;
 
     const hashMap = function(destructureFilters = false) {
         return location.hash
@@ -80,37 +82,107 @@ $(function() {
             .join('&');
     };
     const updateSelection = function(game) {
+        currentGame = game || null;
         $('.game.selected').removeClass('selected');
-        $('#status').toggleClass('valid', !!game);
-        if (!game) {
-            $('#stop').hide();
-            $('#status .title')
-                .text('No Game Selected');
+        $('.replay button').removeClass('on');
+        $('body').toggleClass('running', !!currentGame);
+        if (!currentGame) {
+            $('#session-kicker').text('Idle');
+            $('#session-title')
+                .text('No game running')
+                .removeAttr('title');
+            $('#session-meta')
+                .text('Choose a title. The sensor can still set orientation.');
+            $('#session-bar-title')
+                .text('No game')
+                .attr('title', 'No game');
         } else {
-            $('#stop').show();
-            $('#status .title')
-                .text(game.title);
-            $(`.game[data-id="${game.id}"]`)
+            const meta = [ currentGame.system, currentGame.year, currentGame.company, currentGame.orientation ]
+                .filter(Boolean)
+                .join(' · ');
+            $('#session-kicker').text('Running');
+            $('#session-title')
+                .text(currentGame.title)
+                .attr('title', currentGame.title);
+            $('#session-meta').text(meta);
+            $('#session-bar-title')
+                .text(currentGame.title)
+                .attr('title', currentGame.title);
+            $(`.game[data-id="${currentGame.id}"]`)
                 .addClass('selected');
         }
     };
-    const syncSidebar = function() {
-        // Synchronize sidebar filter selection with data from URL hash
+    const showFamily = function(id) {
+        openFamily = id || null;
+        $('#filters > .filters').removeClass('is-open');
+        $('.fam').removeClass('on').attr('aria-pressed', 'false');
+        if (openFamily) {
+            $(`#${openFamily}`).addClass('is-open');
+            $(`.fam[data-family="${openFamily}"]`)
+                .addClass('on')
+                .attr('aria-pressed', 'true');
+            $('#filter-hint').hide();
+        } else {
+            $('#filter-hint').show();
+        }
+    };
+    const clearFamiliesExcept = function(keep) {
+        familyIds.forEach(function(id) {
+            if (id !== keep) {
+                $(`#${id} .filter`).removeClass('selected');
+            }
+        });
+    };
+    const updatePills = function() {
+        const $box = $('#active-filters').empty();
+        $('#orientation .filter.selected').each(function() {
+            const name = $(this).find('.title').text();
+            $box.append(
+                $('<button />', { type: 'button', class: 'pill', text: `${name} ×` })
+                    .attr('data-clear', 'orientation')
+            );
+        });
+        const family = familyIds.find(function(id) {
+            return $(`#${id} .filter.selected`).length > 0;
+        });
+        if (family) {
+            const names = $(`#${family} .filter.selected`)
+                .map(function() { return $(this).find('.title').text(); })
+                .get();
+            $box.append(
+                $('<button />', { type: 'button', class: 'pill', text: `${names.join(' + ')} ×` })
+                    .attr('data-clear', 'family')
+            );
+        }
+    };
+    const syncSidebar = function(fromHash) {
+        // Synchronize filter selection with data from URL hash.
+        // Orientation can stay on. System, genre, tag, and series replace one another.
         const map = hashMap();
-        $('.filter')
-            .removeClass('selected');
+        $('.filter').removeClass('selected');
         if (map.filters) {
             map.filters
                 .split(',')
                 .forEach((f) => {
-                    const $filter = $(`.filter[data-id~="${f}"`);
-                    $filter
-                        .addClass('selected');
-                    $filter
-                        .closest('.filters')
-                        .addClass('active');
-                })
+                    $(`.filter[data-id~="${f}"]`).addClass('selected');
+                });
         }
+        const active = familyIds.filter(function(id) {
+            return $(`#${id} .filter.selected`).length > 0;
+        });
+        if (active.length > 1) {
+            const keep = active[active.length - 1];
+            clearFamiliesExcept(keep);
+        }
+        const selected = familyIds.filter(function(id) {
+            return $(`#${id} .filter.selected`).length > 0;
+        });
+        if (selected.length) {
+            showFamily(selected[0]);
+        } else if (fromHash) {
+            showFamily(null);
+        }
+        updatePills();
     };
     const syncHash = function() {
         // Build and apply hash from currently selected filters
@@ -129,7 +201,8 @@ $(function() {
         }
     };
     const syncGameList = function() {
-        const searchTerm = $("#search:focus").val() || "";
+        const searchTerm = $("#search").val() || "";
+        updatePills();
         const filters = $('.filter.selected')
             .map(function() { return $(this).data('id'); })
             .toArray();
@@ -177,6 +250,12 @@ $(function() {
                         const filterOrientation = (map.filters || {}).o;
                         const sensorOrientation = response.orientation.toLowerCase();
 
+                        if (orientations.includes(sensorOrientation)) {
+                            $('#sensor').attr(
+                                'title',
+                                `Sensor reads ${sensorOrientation}. Sets orientation and leaves the other filter alone.`
+                            );
+                        }
                         if (
                             filterOrientation != sensorOrientation &&
                             sensorOrientation != lastSensorOrientation &&
@@ -206,70 +285,65 @@ $(function() {
         select(0);
         syncGameList();
     };
-    const isCompactLayout = function() {
-        return compactLayoutQuery.matches;
-    };
-    const setFiltersDrawerOpen = function(open) {
-        if (!isCompactLayout()) {
-            open = false;
-        }
-        $("body").toggleClass("filters-open", open);
-        $("#filters-toggle").attr("aria-expanded", open ? "true" : "false");
-    };
-    const closeFiltersDrawer = function() {
-        setFiltersDrawerOpen(false);
-    };
-    const setVolumePanelOpen = function(open) {
-        $("body").toggleClass("volume-open", open);
-        $("#volume-toggle").attr("aria-expanded", open ? "true" : "false");
-        if (open) {
-            positionVolumePanel();
-        }
-    };
-    const closeVolumePanel = function() {
-        setVolumePanelOpen(false);
-    };
-    const positionVolumePanel = function() {
-        const $panel = $("#volume-panel");
-        const $button = $("#volume-toggle");
-        if (!$button.length || !$button[0]) {
-            return;
-        }
-        const rect = $button[0].getBoundingClientRect();
-        const panelWidth = $panel.outerWidth() || 260;
-        const minLeft = 8;
-        const maxLeft = Math.max(minLeft, window.innerWidth - panelWidth - 8);
-        const desiredLeft = rect.right - panelWidth;
-        const left = Math.max(minLeft, Math.min(desiredLeft, maxLeft));
-        const top = rect.bottom + 8;
-        $panel.css({
-            top: `${Math.round(top)}px`,
-            left: `${Math.round(left)}px`,
-            right: "auto",
-        });
+    const applySensorOrientation = function() {
+        const ori = orientations.includes(lastSensorOrientation)
+            ? lastSensorOrientation
+            : 'landscape';
+        $('#orientation .filter').removeClass('selected');
+        $(`#orientation .filter.${CSS.escape(ori)}`).addClass('selected');
+        syncGameList();
     };
     const initFilters = function() {
-        // Set up filter click handlers
-        $('.filter')
-            .on("click", function(e) {
-                const $item = $(`#filters .filter[data-id="${$(this).data("id")}"]`);
-                const $filters = $item
-                    .closest('.filters');
-                const bewl = !$filters.hasClass('multi') || !e.shiftKey;
-                if (bewl && !$item.hasClass('selected')) {
-                    $filters
-                        .find('.filter')
-                        .removeClass('selected');
+        // Orientation toggles on its own. Any other family replaces the rest.
+        // Tags combine with each other on click.
+        $('.filter').on("click", function() {
+            const $item = $(this);
+            const id = $item.closest('.filters').attr('id');
+            if (id === 'orientation') {
+                const wasOn = $item.hasClass('selected');
+                $('#orientation .filter').removeClass('selected');
+                if (!wasOn) {
+                    $item.addClass('selected');
                 }
-                $item.toggleClass('selected');
-                $filters
-                    .toggleClass('active', $filters.find('.selected').length > 0);
-                syncGameList();
-                if (isCompactLayout()) {
-                    closeFiltersDrawer();
+            } else if (id === 'tag') {
+                if (openFamily !== 'tag') {
+                    clearFamiliesExcept('tag');
+                    $('#tag .filter').removeClass('selected');
+                    $item.addClass('selected');
+                    showFamily('tag');
+                } else {
+                    $item.toggleClass('selected');
+                    if (!$('#tag .filter.selected').length) {
+                        showFamily(null);
+                    }
                 }
-            });
-        syncSidebar();
+            } else {
+                const wasOn = openFamily === id && $item.hasClass('selected');
+                clearFamiliesExcept(id);
+                $(`#${id} .filter`).removeClass('selected');
+                if (wasOn) {
+                    showFamily(null);
+                } else {
+                    $item.addClass('selected');
+                    showFamily(id);
+                }
+            }
+            syncGameList();
+        });
+        $('.fam').on("click", function() {
+            const id = $(this).attr('data-family');
+            if (openFamily === id) {
+                clearFamiliesExcept(null);
+                showFamily(null);
+            } else {
+                clearFamiliesExcept(id);
+                $(`#${id} .filter`).removeClass('selected');
+                showFamily(id);
+            }
+            syncGameList();
+        });
+        $('#sensor').on("click", applySensorOrientation);
+        syncSidebar(true);
         syncGameList();
     };
     const initGames = function() {
@@ -343,7 +417,7 @@ $(function() {
         $('#volume-slider')
             .val(value)
             .trigger('change');
-        $('#volume-value')
+        $('#volume-value, #session-bar-vol')
             .text(`${value}%`);
         $('#volume-mute')
             .text(value > 0 ? 'Mute' : 'Unmute');
@@ -361,45 +435,75 @@ $(function() {
             }
         }
     };
+    const orientationIcon = function(name) {
+        const portrait = name === 'portrait';
+        const body = portrait
+            ? '<rect x="7" y="3" width="10" height="18" fill="none" stroke="currentColor" stroke-width="1.6"/>'
+            : '<rect x="3" y="7" width="18" height="11" fill="none" stroke="currentColor" stroke-width="1.6"/>';
+        return $(`<svg class="ori-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">${body}</svg>`);
+    };
     const fetchFilters = function() {
         $.ajax({
             url: "filters",
             contentType: "application/json; charset=utf-8",
             dataType: "json",
             success: function(response) {
-                const $filtersContainer = $("#filters");
-                $filtersContainer.empty();
+                const $filtersContainer = $("#filters").empty();
+                const $top = $("<div />", { "class": "fstrip-top" });
+                const $fams = $("<div />", { "class": "frow fams" });
                 $.each(response, function(_, entry) {
-                    $filtersContainer
-                        .append(
-                            $("<div />", { "id": entry.id, "class": `filters ${entry.type}` })
-                                .append(
-                                    $("<span />", { "class": "label", text: entry.label })
-                                )
-                                .append(
-                                    $("<div />", { "class": "scroller" })
-                                        .append(
-                                            $.map(
-                                                entry.options,
-                                                function(option) {
-                                                    return $("<span />", {
-                                                        "class": `${entry.id} filter ${option.name}`,
-                                                        "data-id": `${entry.prefix}:${option.name}`
-                                                    })
-                                                        .append(
-                                                            $("<span />", { "class": "title" })
-                                                                .text(option.name)
-                                                        )
-                                                        .append(
-                                                            $("<span />", { "class": "count" })
-                                                                .text(`(${option.count})`)
-                                                        );
-                                                }
-                                            )
-                                        )
-                                )
-                        );
+                    const $scroller = $("<div />", { "class": "scroller" });
+                    $.each(entry.options, function(_, option) {
+                        const $chip = $("<span />", {
+                            "class": `${entry.id} filter`,
+                            "data-id": `${entry.prefix}:${option.name}`,
+                            role: "button",
+                            tabindex: 0,
+                        }).addClass(option.name);
+                        if (entry.id === 'orientation') {
+                            $chip.append(orientationIcon(option.name));
+                        }
+                        $chip
+                            .append($("<span />", { "class": "title", text: option.name }))
+                            .append($("<span />", { "class": "count", text: `(${option.count})` }));
+                        $scroller.append($chip);
+                    });
+                    if (entry.id === 'tag') {
+                        $scroller.append($("<span />", { "class": "hint", text: "Tags combine" }));
+                    }
+                    const $group = $("<div />", {
+                        "id": entry.id,
+                        "class": `filters ${entry.type || ''}`,
+                    })
+                        .append($("<span />", { "class": "label", text: entry.label }))
+                        .append($scroller);
+                    if (entry.id === 'orientation') {
+                        $scroller.append($("<button />", {
+                            type: "button",
+                            id: "sensor",
+                            "class": "sensor",
+                            text: "Sensor",
+                            title: "Set orientation from the sensor. Leaves the other filter alone.",
+                        }));
+                        $top.append($group);
+                    } else {
+                        $fams.append($("<button />", {
+                            type: "button",
+                            "class": "fam",
+                            text: entry.label,
+                            "aria-pressed": "false",
+                        }).attr("data-family", entry.id));
+                        $filtersContainer.append($group);
+                    }
                 });
+                $top.append($fams);
+                $filtersContainer
+                    .prepend($top)
+                    .append($("<div />", {
+                        id: "filter-hint",
+                        "class": "hint",
+                        text: "Pick a family. Orientation can stay on.",
+                    }));
                 initFilters();
             }
         });
@@ -427,30 +531,35 @@ $(function() {
                 if (filters.find(filter => filter.startsWith("y:")) !== undefined) {
                     $gamesContainer.addClass("has-system");
                 }
+                const countLabel = response.length === 1 ? 'title' : 'titles';
+                $('#list-count').text(`${response.length} ${countLabel}`);
                 $.each(response, function(_, entry) {
-                    $gamesContainer
-                        .append(
-                            $("<div />", {
-                                "class": `game ${entry.orientation}`,
-                                "data-id": entry.id,
-                            })
-                                .append(
-                                    $("<span />", { "class": "title", text: entry.title })
-                                )
-                                .append(
-                                    $("<span />", { "class": "platform", text: entry.app_id })
-                                )
-                                .append(
-                                    $("<span />", { "class": "system", text: entry.system })
-                                )
-                                .append(
-                                    $("<span />", { "class": "year", text: entry.year })
-                                )
-                                .append(
-                                    $("<span />", { "class": "company", text: entry.company })
-                                )
-                        );
+                    const $line = $("<span />", { "class": "line" });
+                    if (!$gamesContainer.hasClass("oriented")) {
+                        $line.append(orientationIcon(entry.orientation).addClass("game-ori"));
+                    }
+                    $line
+                        .append($("<span />", {
+                            "class": "title",
+                            text: entry.title,
+                            title: entry.title,
+                        }))
+                        .append($("<span />", { "class": "system", text: entry.system }));
+                    $gamesContainer.append(
+                        $("<div />", {
+                            "class": `game ${entry.orientation}`,
+                            "data-id": entry.id,
+                        })
+                            .append($line)
+                            .append($("<span />", {
+                                "class": "meta",
+                                text: [ entry.year, entry.company ].filter(Boolean).join(' · '),
+                            }))
+                    );
                 });
+                if (currentGame) {
+                    $(`.game[data-id="${currentGame.id}"]`).addClass('selected');
+                }
                 initGames();
             }
         });
@@ -458,16 +567,6 @@ $(function() {
     const onKeyPressed = function(e) {
         const $search = $("#search");
         var handled = false;
-        if (e.keyCode == 27 && $("body").hasClass("filters-open")) {
-            closeFiltersDrawer();
-            handled = true;
-            return !handled;
-        }
-        if (e.keyCode == 27 && $("body").hasClass("volume-open")) {
-            closeVolumePanel();
-            handled = true;
-            return !handled;
-        }
         if ($search.is(":focus")) {
             if (e.keyCode == 27) {
                 // esc
@@ -561,101 +660,59 @@ $(function() {
         );
         updateSelection();
         fetchFilters();
-        // prevent shift-select - interferes with tag multiselect
-        document.onselectstart = function() {
-            return false;
-        }
-        // set up search handler
-        $("#search").on("input", function(e) {
+        applyNight($("html").hasClass("night"));
+        $("#search").on("input", function() {
             syncGameList();
         });
-        $("#filters-toggle").on("click", function() {
-            const shouldOpen = !$("body").hasClass("filters-open");
-            if (shouldOpen) {
-                closeVolumePanel();
+        $("#theme").on("click", function() {
+            const on = !$("html").hasClass("night");
+            applyNight(on);
+            if (on) {
+                cookies.set("night", "1");
+            } else {
+                cookies.remove("night");
             }
-            setFiltersDrawerOpen(shouldOpen);
         });
-        $(".replay a").on("click", function(e) {
+        $("#session-toggle, #session-bar-toggle").on("click", function() {
+            const open = !$("body").hasClass("session-open");
+            $("body").toggleClass("session-open", open);
+            $("#session-toggle").text(open ? "Collapse" : "Expand");
+        });
+        $(".replay button").on("click", function(e) {
             e.preventDefault();
+            $(".replay button").removeClass("on");
+            $(this).addClass("on");
             onReplayAction(this);
-        });
-        $("#filters-scrim").on("click", function() {
-            closeFiltersDrawer();
-        });
-        $("#volume-toggle").on("click", function(e) {
-            e.stopPropagation();
-            const shouldOpen = !$("body").hasClass("volume-open");
-            if (shouldOpen) {
-                closeFiltersDrawer();
-                $$menu.hideAll();
-            }
-            setVolumePanelOpen(shouldOpen);
         });
         $("#volume-mute").on("click", function() {
             toggleMute();
         });
-        $("#volume-scrim").on("click", function() {
-            closeVolumePanel();
-        });
-        $("#volume-panel").on("click", function(e) {
-            e.stopPropagation();
-        });
-        $(document).on("click", function() {
-            closeVolumePanel();
-        });
-        const onCompactLayoutChange = function() {
-            if (!isCompactLayout()) {
-                closeFiltersDrawer();
+        $("#active-filters").on("click", ".pill", function() {
+            if ($(this).attr("data-clear") === "orientation") {
+                $("#orientation .filter").removeClass("selected");
+            } else {
+                clearFamiliesExcept(null);
+                showFamily(null);
             }
-            positionVolumePanel();
-        };
-        if (compactLayoutQuery.addEventListener) {
-            compactLayoutQuery.addEventListener("change", onCompactLayoutChange);
-        } else {
-            compactLayoutQuery.addListener(onCompactLayoutChange);
-        }
-        $(window).on("resize", function() {
-            if ($("body").hasClass("volume-open")) {
-                positionVolumePanel();
-            }
+            syncGameList();
         });
-        // set up keyboard handler
         $(document).on("keyup", onKeyPressed);
-        // set up drag-and-drop upload handlers
-        $('#content')
-            .on('dragenter', function(e) {
-                $('#drop_target').addClass('hovering');
-                e.preventDefault();
-                e.stopPropagation();
-            });
-        $('#drop_target')
-            .on('dragover', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-            })
-            .on('dragleave', function(e) {
-                $(this).removeClass('hovering');
-                e.preventDefault();
-                e.stopPropagation();
-            })
-            .on('drop', function(e) {
-                $(this).removeClass('hovering');
-                if (e.originalEvent.dataTransfer) {
-                    upload(e.originalEvent.dataTransfer.files);
-                }
-                e.preventDefault();
-                e.stopPropagation();
-        });
-        // set up stop button handler
-        $("#stop").on("click", function() {
+        $(".stop-game").on("click", function(e) {
+            e.preventDefault();
             toggleScrim(true);
             stop();
         });
         $(window).on('hashchange', function() {
-            syncSidebar();
+            syncSidebar(true);
             syncGameList();
         });
+    };
+    const applyNight = function(on) {
+        $("html").toggleClass("night", !!on);
+        $("#theme")
+            .attr("aria-pressed", on ? "true" : "false")
+            .attr("aria-label", on ? "Switch to day" : "Switch to night")
+            .attr("title", on ? "Day" : "Night");
     };
     const upload = function(files) {
         if (files.length == 0) {

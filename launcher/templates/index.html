@@ -3,6 +3,11 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script>
+      if (/(?:^|; )night=1(?:;|$)/.test(document.cookie)) {
+        document.documentElement.classList.add("night");
+      }
+    </script>
     {% include 'fonts.html' %}
     <link rel="stylesheet" type="text/css" href="{{ url_for("static", filename="style/style.css") }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for("static", filename="style/menus.css") }}">
@@ -18,47 +23,72 @@
     <div id="scrim">
       <img src="{{ url_for("static", filename="spinner.gif") }}">
     </div>
-    <div id="status">
+    <header id="status">
       <a class="app-name" href="https://github.com/0xe1f/red" target="_blank">RED</a>
-      <div class="game-content">
-        <div class="title">No Game Selected</div>
-        <div class="replay">
-          <a href="#" id="replay-play" title="Replay playback">⏵</a>
-          <a href="#" id="replay-stop" title="Stop replay">⏹</a>
-          <a href="#" id="replay-record" title="Record replay">⏺</a>
-          <a href="#" id="replay-resume-record" title="Resume replay recording">⏭+⏺</a>
-        </div>
-      </div>
-      <button id="filters-toggle" type="button" aria-controls="filters" aria-expanded="false">Filters</button>
-      <svg id="stop" viewBox="0 -960 960 960" fill="#5f6368">
-        <title>Stop</title>
-        <path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/>
-      </svg>
-      <button id="volume-toggle" type="button" aria-controls="volume-panel" aria-expanded="false" title="Volume">
-        Volume
+      <input id="search" type="search" autocomplete="off" placeholder="Search" aria-label="Search titles" />
+      <button id="theme" type="button" aria-pressed="false" aria-label="Switch to night" title="Night">
+        <svg class="icon-sun" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58a.996.996 0 0 0-1.41 0c-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37a.996.996 0 0 0-1.41 0c-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96a.996.996 0 0 0 0-1.41c-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41a.996.996 0 0 0-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>
       </button>
-      <input id="search" type="text" autocomplete="off" placeholder="Search" />
-      <button class="user-options dropdown" data-dropdown="menu-user-options" title="{{ current_user.email_address }}">{{ current_user.email_address }}</button>
-    </div>
-    <div id="volume-panel">
-      <span id="volume-label">Volume</span>
-      <span id="volume-value">0%</span>
-      <input type="range" id="volume-slider" min="0" max="100" step="1" />
-      <button id="volume-mute" type="button">Mute</button>
-    </div>
-    <div id="content">
-      <div id="filters">
+      <button class="user-options dropdown" data-dropdown="menu-user-options" title="{{ current_user.email_address }}">
+        <span class="acct-long">{{ current_user.email_address }}</span>
+        <span class="acct-short">Account</span>
+      </button>
+    </header>
+    <div id="workspace">
+      <div id="primary">
+        <div id="filters"></div>
+        <div id="listhead">
+          <span id="list-count"></span>
+          <div id="active-filters"></div>
+        </div>
+        <div id="games"></div>
       </div>
-      <div id="games">
-      </div>
+      <section id="session" aria-label="Session">
+        <div id="session-bar">
+          <button id="session-bar-toggle" type="button">
+            <strong id="session-bar-title" title="No game">No game</strong>
+            <span id="session-bar-vol">0%</span>
+          </button>
+        </div>
+        <div class="card-actions">
+          <button id="session-toggle" type="button">Expand</button>
+          <button type="button" class="stop-game end-icon" aria-label="Stop game" title="Stop game">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+        </div>
+        <div class="session-body">
+          <div class="kicker" id="session-kicker">Idle</div>
+          <h2 id="session-title">No game running</h2>
+          <div class="meta" id="session-meta">Choose a title. The sensor can still set orientation.</div>
+          <div class="replay">
+            <button type="button" id="replay-play" title="Play replay" aria-label="Play replay">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+              <span>Play</span>
+            </button>
+            <button type="button" id="replay-stop" title="End replay" aria-label="End replay">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M6 6h12v12H6z"/></svg>
+              <span>End</span>
+            </button>
+            <button type="button" id="replay-record" title="Record replay" aria-label="Record replay">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="currentColor"/></svg>
+              <span>Record</span>
+            </button>
+            <button type="button" id="replay-resume-record" title="Resume recording" aria-label="Resume recording">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M2.5 11h8v2h-8zM11.5 6.5h2v11h-2z"/><circle cx="18.6" cy="12" r="3.15" fill="currentColor"/></svg>
+              <span>Resume</span>
+            </button>
+          </div>
+          <button type="button" class="stop-game end" id="stop">Stop game</button>
+          <div class="vol">
+            <input type="range" id="volume-slider" min="0" max="100" step="1" aria-label="Volume" />
+            <span id="volume-value">0%</span>
+            <button id="volume-mute" type="button">Mute</button>
+          </div>
+        </div>
+      </section>
     </div>
-    <div id="filters-scrim"></div>
-    <div id="volume-scrim"></div>
-    {% if uploads_supported %}
-      <div id="drop_target">
-        <span>Drop Here</span>
-      </div>
-    {% endif %}
+    <div class="keys">t search · n/p move · enter launch · m mute · −/= volume · esc close</div>
     <a id="sign-out" href="{{ url_for("logout") }}">sign out</a>
   </body>
 </html>
