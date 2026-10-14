@@ -37,7 +37,9 @@ CXXFLAGS=$(CFLAGS)
 LD_FLAGS=$(LIB) -lnats -llz4 -lprotobuf-c
 LD_LEDD_FLAGS=$(LD_FLAGS) -L$(RGB_LIBDIR) -lrgbmatrix
 LD_SERVER_FLAGS=$(LD_FLAGS) `sdl2-config --libs` -lz
+LD_AUDD_FLAGS=$(LD_FLAGS) `sdl2-config --libs`
 LEDD_EXE=ledd
+AUDD_EXE=audd
 SERVER_EXE=server
 PROTO_FILES = $(wildcard $(PROTO_ROOT)/*.proto)
 
@@ -52,7 +54,7 @@ PB_OBJECTS = $(patsubst $(PROTO_ROOT)/%.proto, $(GEN_ROOT)/%.pb-c.o, $(PROTO_FIL
 NANOPB_OBJECTS=$(NANOPB_ROOT)/pb_encode.o $(NANOPB_ROOT)/pb_decode.o \
 	$(NANOPB_ROOT)/pb_common.o
 
-all: $(LEDD_EXE) $(SERVER_EXE)
+all: $(LEDD_EXE) $(AUDD_EXE) $(SERVER_EXE)
 
 $(RGB_LIBDIR)/librgbmatrix.a:
 	@echo Building RGB matrix libraries...
@@ -63,10 +65,15 @@ $(LEDD_EXE): \
 	$(LEDD_EXE).o $(RGB_LIBDIR)/librgbmatrix.a
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LD_LEDD_FLAGS)
 
+$(AUDD_EXE): \
+	audd_xm.o log.o timing.o audd_args.o audio.o \
+	$(AUDD_EXE).o
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LD_AUDD_FLAGS)
+
 $(SERVER_EXE): \
 	$(PB_OBJECTS) \
 	$(MINIZIP_OBJECTS) $(Z7_OBJECTS) $(NANOPB_OBJECTS) \
-	core.o kv_store.o server_args.o files.o video.o filter.o input.o audio.o \
+	core.o kv_store.o server_args.o files.o video.o filter.o input.o \
 	replay.o log.o timing.o server_xm.o \
 	$(SERVER_EXE).o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LD_SERVER_FLAGS)
@@ -87,7 +94,7 @@ $(GEN_ROOT):
 	$(CXX) $(INCLUDE) $(DEFINE) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	@rm -rf *.o *.d $(LEDD_EXE) $(SERVER_EXE) `find $(TP_ROOT)/ -name '*.o'` `find $(TP_ROOT)/ -name '*.d'` $(GEN_ROOT)
+	@rm -rf *.o *.d $(LEDD_EXE) $(AUDD_EXE) $(SERVER_EXE) `find $(TP_ROOT)/ -name '*.o'` `find $(TP_ROOT)/ -name '*.d'` $(GEN_ROOT)
 	@cd $(RGB_LIBDIR); $(MAKE) clean
 
 -include $(wildcard *.d) $(wildcard $(GEN_ROOT)/*.d)

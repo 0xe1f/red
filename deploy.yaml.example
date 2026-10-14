@@ -18,6 +18,9 @@ game_server:
         --input-config 03001a0da30c00002400000011010000:x,a,b,y,_,_,l,r,select,start
 sensor:
   device: /dev/ttyACM0
+audio:
+  - hostname: red-pub.local
+    path: red/audd
 subscribers:
   - hostname: red-pub.local
     path: red/ledd

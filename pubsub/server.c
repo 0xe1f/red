@@ -22,7 +22,7 @@
 #include <unistd.h>
 #include "libretro.h"
 #include "core.h"
-#include "audio.h"
+// #include "audio.h"
 #include "server_args.h"
 #include "files.h"
 #include "video.h"
@@ -57,7 +57,7 @@ static unsigned int api_version = 0;
 static struct retro_controller_info *ports;
 static struct retro_core_options_v2_intl core_options_v2_intl;
 static const struct retro_subsystem_info *subsystem_info;
-static Audio audio;
+// static Audio audio;
 static VidFrameHeader geometry = {0};
 static AudFrameHeader audio_header = {0};
 static bool is_running = true;
@@ -182,14 +182,18 @@ static void callback_video_refresh(const void *data, unsigned width, unsigned he
 static void callback_audio_sample(int16_t left, int16_t right)
 {
     int16_t data[2] = { left, right };
-    audio_write(&audio, data, 2, true);
-    // xm_publish_aud_frame(&audio_header, data, sizeof(data));
+    // audio_write(&audio, data, 2, true);
+    if (audio_header.sample_rate != 0) {
+        xm_publish_aud_frame(&audio_header, data, sizeof(data));
+    }
 }
 
 static size_t callback_audio_sample_batch(const int16_t *data, size_t frames)
 {
-    audio_write(&audio, data, frames * 2, true);
-    // xm_publish_aud_frame(&audio_header, data, sizeof(int16_t) * frames * 2);
+    // audio_write(&audio, data, frames * 2, true);
+    if (audio_header.sample_rate != 0) {
+        xm_publish_aud_frame(&audio_header, data, sizeof(int16_t) * frames * 2);
+    }
     return frames;
 }
 
@@ -589,7 +593,7 @@ static void clean_up()
     kvstore_free(&kv_store);
     files_clean_up();
     input_clean_up();
-    audio_cleanup(&audio);
+    // audio_cleanup(&audio);
     args_free(&args);
     if (log_file) {
         fclose(log_file);
@@ -612,8 +616,8 @@ static void reset_audio()
     audio_header.channel_count = 2;
     audio_header.buffer_size = 2048;
 
-    audio_stop(&audio);
-    audio_start(&audio, av_info.timing.sample_rate, 2);
+    // audio_stop(&audio);
+    // audio_start(&audio, av_info.timing.sample_rate, 2);
 }
 
 static void set_variables(const struct retro_variable *vars, bool single)
@@ -859,7 +863,7 @@ int main(int argc, const char **argv)
         return 1;
     }
 
-    audio_init(&audio);
+    // audio_init(&audio);
     files_mkdirs(dirname((char *)args.so_path));
 
     api_version = core.retro_api_version();

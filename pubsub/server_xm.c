@@ -78,6 +78,7 @@ void xm_init(const char *server_url)
 
     log_i(LOG_TAG, "Connected to NATS server at %s\n", server_url);
     log_i(LOG_TAG, "Will publish video frames to '%s'\n", SUBJECT_VIDEO_FRAMES);
+    log_i(LOG_TAG, "Will publish audio frames to '%s'\n", SUBJECT_AUDIO_FRAMES);
 
     s = natsConnection_SubscribeSync(&sub, conn, SUBJECT_REQUESTS);
     if (s != NATS_OK) {
@@ -180,7 +181,7 @@ void xm_publish_aud_frame(const AudFrameHeader *header, const void *content, siz
 
     // Ensure message buffer is large enough for header + worst-case compressed content
     int max_compressed = LZ4_compressBound(size);
-    size_t needed = sizeof(header) + max_compressed;
+    size_t needed = sizeof(*header) + max_compressed;
     if (needed > audio_msg_buf_size) {
         free(audio_msg_buf);
         audio_msg_buf = malloc(needed);
@@ -192,7 +193,7 @@ void xm_publish_aud_frame(const AudFrameHeader *header, const void *content, siz
         audio_msg_buf_size = needed;
     }
 
-    // Write header, then compress pixel data directly into the remainder
+    // Write header, then compress sample data directly into the remainder
     memcpy(audio_msg_buf, header, sizeof(AudFrameHeader));
     int compressed_size = LZ4_compress_fast(
         (const char *)content,
