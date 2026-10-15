@@ -575,6 +575,15 @@ static bool callback_environment_set(unsigned cmd, void *data)
     return true;
 }
 
+static void publish_blank_frame()
+{
+    if (!video_buffer.data || geometry.width == 0) {
+        return;
+    }
+    buffer_clear(&video_buffer);
+    xm_publish_vid_frame(&geometry, video_buffer.data, video_buffer.size);
+}
+
 static void clean_up()
 {
     replay_destroy(replay);
@@ -958,6 +967,8 @@ int main(int argc, const char **argv)
             }
         }
     }
+
+    publish_blank_frame();
 
     if (args.rom_path) {
         // Save SRAM if available
