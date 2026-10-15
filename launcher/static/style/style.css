@@ -17,28 +17,30 @@
 
 html {
     color-scheme: light;
-    --bg: #f7f3f1;
-    --surface: #fff;
-    --ink: #2a1816;
-    --muted: #7a6560;
-    --line: #eadfdc;
-    --row: #f0e6e3;
-    --accent: #9f2b2b;
-    --wash: #fdf1ee;
-    --end-line: #f0c9c2;
+    --bg: #f8f3ef;
+    --surface: #fffdfb;
+    --ink: #5a4542;
+    --muted: #a8908a;
+    --line: #f0e2dc;
+    --row: #f7ebe7;
+    --accent: #845050;
+    --soft: #f4d2ce;
+    --wash: #fbf1ee;
+    --end-line: #efd0cb;
 }
 
 html.night {
     color-scheme: dark;
-    --bg: #140e0d;
-    --surface: #221716;
-    --ink: #f4ebe7;
-    --muted: #c0a8a2;
-    --line: #3d2c29;
-    --row: #4a3532;
-    --accent: #e15b4c;
-    --wash: #3a221f;
-    --end-line: #6e3a34;
+    --bg: #32282c;
+    --surface: #3e3438;
+    --ink: #f8f0ee;
+    --muted: #cbb8b6;
+    --line: #56484c;
+    --row: #4a3e42;
+    --accent: #f2b8b6;
+    --soft: #5a464a;
+    --wash: #4a3c40;
+    --end-line: #6e585c;
 }
 
 * { box-sizing: border-box; }
@@ -191,7 +193,7 @@ html:not(.night) #theme .icon-moon { display: none; }
 
 .fams { flex: 1; }
 
-.filter, .fam, .sensor {
+.filter, .fam {
     flex: none;
     cursor: pointer;
     border: 1px solid var(--line);
@@ -205,14 +207,13 @@ html:not(.night) #theme .icon-moon { display: none; }
 }
 
 .filter.selected, .fam.on {
-    background: var(--accent);
-    color: #fff;
+    background: var(--soft);
+    color: var(--accent);
     border-color: var(--accent);
 }
 
 .filter:hover:not(.selected),
-.fam:hover:not(.on),
-.sensor:hover { background: var(--wash); }
+.fam:hover:not(.on) { background: var(--wash); }
 
 .filter .count {
     font-size: 12px;
@@ -342,6 +343,14 @@ html:not(.night) #theme .icon-moon { display: none; }
     min-width: 0;
 }
 
+.session-body button:hover {
+    background: var(--row) !important;
+}
+
+.session-body button:active {
+    background: var(--wash) !important;
+}
+
 .kicker {
     font-size: 11px;
     letter-spacing: 0.08em;
@@ -396,8 +405,8 @@ body.running .replay {
 .replay svg { flex: none; }
 
 .replay button.on {
-    background: var(--accent);
-    color: #fff;
+    background: var(--soft);
+    color: var(--accent);
     border-color: var(--accent);
 }
 

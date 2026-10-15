@@ -246,29 +246,27 @@ $(function() {
                     contentType: "application/json; charset=utf-8",
                     dataType: "json",
                     success: function(response) {
-                        const map = hashMap(destructureFilters = true);
-                        const filterOrientation = (map.filters || {}).o;
                         const sensorOrientation = response.orientation.toLowerCase();
-
-                        if (orientations.includes(sensorOrientation)) {
-                            $('#sensor').attr(
-                                'title',
-                                `Sensor reads ${sensorOrientation}. Sets orientation and leaves the other filter alone.`
-                            );
+                        if (!orientations.includes(sensorOrientation)) {
+                            return;
                         }
-                        if (
-                            filterOrientation != sensorOrientation &&
-                            sensorOrientation != lastSensorOrientation &&
-                            orientations.includes(sensorOrientation)
-                        ) {
-                            // Auto-orient based on sensor reading
-                            $(`.filter.orientation`)
-                                .removeClass('selected');
-                            $(`.filter.orientation.${sensorOrientation}`)
-                                .addClass('selected');
-                            lastSensorOrientation = sensorOrientation;
-                            syncGameList();
+                        // Remember the reading even when the filter already matches.
+                        // Otherwise the next poll looks like a new reading and
+                        // overwrites a manual choice once.
+                        if (sensorOrientation === lastSensorOrientation) {
+                            return;
                         }
+                        const $match = $(`#orientation .filter.${CSS.escape(sensorOrientation)}`);
+                        if (!$match.length) {
+                            return;
+                        }
+                        lastSensorOrientation = sensorOrientation;
+                        if ($match.hasClass('selected')) {
+                            return;
+                        }
+                        $('#orientation .filter').removeClass('selected');
+                        $match.addClass('selected');
+                        syncGameList();
                     }
                 })
                 .always(function() {
@@ -283,14 +281,6 @@ $(function() {
         $("#search").trigger("blur");
         $("#search").val("");
         select(0);
-        syncGameList();
-    };
-    const applySensorOrientation = function() {
-        const ori = orientations.includes(lastSensorOrientation)
-            ? lastSensorOrientation
-            : 'landscape';
-        $('#orientation .filter').removeClass('selected');
-        $(`#orientation .filter.${CSS.escape(ori)}`).addClass('selected');
         syncGameList();
     };
     const initFilters = function() {
@@ -342,7 +332,6 @@ $(function() {
             }
             syncGameList();
         });
-        $('#sensor').on("click", applySensorOrientation);
         syncSidebar(true);
         syncGameList();
     };
@@ -478,13 +467,6 @@ $(function() {
                         .append($("<span />", { "class": "label", text: entry.label }))
                         .append($scroller);
                     if (entry.id === 'orientation') {
-                        $scroller.append($("<button />", {
-                            type: "button",
-                            id: "sensor",
-                            "class": "sensor",
-                            text: "Sensor",
-                            title: "Set orientation from the sensor. Leaves the other filter alone.",
-                        }));
                         $top.append($group);
                     } else {
                         $fams.append($("<button />", {
@@ -681,7 +663,6 @@ $(function() {
         $(".replay button").on("click", function(e) {
             e.preventDefault();
             $(".replay button").removeClass("on");
-            $(this).addClass("on");
             onReplayAction(this);
         });
         $("#volume-mute").on("click", function() {
