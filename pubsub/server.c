@@ -946,7 +946,9 @@ int main(int argc, const char **argv)
     double last_req_check = micros();
 
     while (is_running) {
-        // Run core for one frame
+        // One content frame. Count it before retro_run so a recording
+        // started from the request poll below begins on the next frame.
+        replay_note_frame(replay);
         core.retro_run();
 
         // Check for new requests

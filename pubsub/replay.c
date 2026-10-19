@@ -42,7 +42,9 @@ struct Replay {
     const char *tmp_path;
     uint64_t input_frame_offset;
     uint64_t input_frame_count;
-    double fps;
+    double duration_ms_accum;
+    uint64_t segment_frames;
+    double segment_fps;
     int file_fd;
     gzFile gz;
     uint8_t file_frame_type_count;
@@ -101,7 +103,7 @@ static gzFile attach_gz(int fd, const char *mode);
 static bool open_inputs(Replay *replay, const char *mode);
 static char *sibling_temp_path(const char *path);
 static void copy_core_field(char *dst, size_t dst_len, const char *src);
-static uint32_t duration_ms_from(uint64_t frames, double fps);
+static uint32_t current_duration_ms(const Replay *replay);
 static bool header_matches_runtime(const struct RecordingHeader *header,
     const uint8_t *file_sizes, bool for_resume);
 static bool frame_types_ready();
@@ -179,7 +181,6 @@ Replay* replay_start_recording(const char *path)
     replay->file_frame_type_count = frame_type_count;
     replay->input_frame_offset = (uint64_t)offset;
     replay->input_frame_count = 0;
-    replay->fps = av_info.timing.fps;
     for (int i = 0; i < replay->frame_type_count; i++) {
         replay->frame_primed[i] = true;
     }
@@ -303,7 +304,7 @@ Replay* replay_continue_recording(const char *path)
     replay->file_frame_type_count = frame_type_count;
     replay->input_frame_offset = footer.input_frame_offset + delta;
     replay->input_frame_count = footer.input_frame_count;
-    replay->fps = av_info.timing.fps;
+    replay->duration_ms_accum = footer.duration_ms;
 
     for (int i = 0; i < replay->frame_type_count; i++) {
         replay->type_frames[i] = footer.input_frame_count;
@@ -420,6 +421,25 @@ void replay_destroy(Replay *replay)
 ReplayMode replay_mode(const Replay *replay)
 {
     return replay ? replay->mode : MODE_NONE;
+}
+
+void replay_note_frame(Replay *replay)
+{
+    if (!replay || replay->mode != MODE_RECORD) {
+        return;
+    }
+
+    double fps = av_info.timing.fps;
+    if (replay->segment_frames > 0 && fps != replay->segment_fps) {
+        if (replay->segment_fps > 0.0) {
+            replay->duration_ms_accum +=
+                (double)replay->segment_frames * 1000.0 / replay->segment_fps;
+        }
+        replay->segment_frames = 0;
+    }
+
+    replay->segment_fps = fps;
+    replay->segment_frames++;
 }
 
 bool replay_set_frame_type_count(uint8_t count)
@@ -596,7 +616,7 @@ static bool write_footer(Replay *replay)
         .input_frame_offset = replay->input_frame_offset,
         .input_frame_count = replay->input_frame_count,
         .trailing_state_offset = (uint64_t)offset,
-        .duration_ms = duration_ms_from(replay->input_frame_count, replay->fps),
+        .duration_ms = current_duration_ms(replay),
     };
     if (!write_all(replay->file_fd, &footer, sizeof(footer))) {
         log_e(LOG_TAG, "Failed to write footer\n");
@@ -652,7 +672,9 @@ static void cleanup(Replay *replay)
 
     replay->input_frame_offset = 0;
     replay->input_frame_count = 0;
-    replay->fps = 0.0;
+    replay->duration_ms_accum = 0.0;
+    replay->segment_frames = 0;
+    replay->segment_fps = 0.0;
     replay->mode = MODE_NONE;
 }
 
@@ -857,16 +879,20 @@ static void copy_core_field(char *dst, size_t dst_len, const char *src)
     }
 }
 
-static uint32_t duration_ms_from(uint64_t frames, double fps)
+static uint32_t current_duration_ms(const Replay *replay)
 {
-    if (fps <= 0.0) {
+    double ms = replay->duration_ms_accum;
+    if (replay->segment_frames > 0 && replay->segment_fps > 0.0) {
+        ms += (double)replay->segment_frames * 1000.0 / replay->segment_fps;
+    }
+    if (ms <= 0.0) {
         return 0;
     }
-    double ms = (double)frames * 1000.0 / fps;
+    ms += 0.5;
     if (ms >= (double)UINT32_MAX) {
         return UINT32_MAX;
     }
-    return (uint32_t)(ms + 0.5);
+    return (uint32_t)ms;
 }
 
 static bool header_matches_runtime(const struct RecordingHeader *header,

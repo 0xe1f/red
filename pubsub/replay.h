@@ -37,6 +37,7 @@ Replay* replay_start_playback(const char *path);
 bool replay_stop(Replay *replay);
 void replay_destroy(Replay *replay);
 ReplayMode replay_mode(const Replay *replay);
+void replay_note_frame(Replay *replay);
 
 bool replay_read_frame(Replay *replay, uint8_t frame_ix, void *content, size_t size);
 bool replay_write_frame(Replay *replay, uint8_t frame_ix, const void *content, size_t size);
