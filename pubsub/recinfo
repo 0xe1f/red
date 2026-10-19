@@ -82,6 +82,12 @@ def main(argv):
         print(f"{path}: not a version {VERSION} recording", file=sys.stderr)
         return 1
 
+    file_size = len(data)
+    footer_off = file_size - FOOTER_SIZE
+    start_state_size = in_off - sizes_end
+    trailing_state_size = footer_off - trail_off
+    input_size = trail_off - in_off
+
     print(f"version: {version}")
     print(f"frame_type_count: {type_count}")
     print(f"frame_type_sizes: {sizes}")
@@ -89,6 +95,9 @@ def main(argv):
     print(f"core_name: {field_str(core_name)}")
     print(f"core_version: {field_str(core_version)}")
     print(f"duration: {fmt_duration(duration_ms)}")
+    print(f"file_size: {file_size}")
+    print(f"game_state_size: {start_state_size} + {trailing_state_size}")
+    print(f"input_size: {input_size}")
     return 0
 
 
