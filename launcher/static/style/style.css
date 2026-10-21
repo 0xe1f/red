@@ -138,6 +138,155 @@ a { color: var(--accent); }
     color: var(--accent);
 }
 
+#video-toggle {
+    flex: none;
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--accent);
+    font-size: 14px;
+}
+
+#video-toggle[aria-pressed="true"] {
+    background: var(--soft);
+    border-color: var(--accent);
+}
+
+#video-window {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    width: 480px;
+    min-width: 240px;
+    max-width: calc(100vw - 16px);
+    resize: horizontal;
+    overflow: hidden;
+    z-index: 10;
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    box-shadow: 0 6px 24px rgba(20, 14, 13, 0.3);
+    display: flex;
+    flex-direction: column;
+}
+
+#video-window[hidden] { display: none; }
+
+#video-titlebar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 4px 4px 10px;
+    border-bottom: 1px solid var(--line);
+    cursor: move;
+    user-select: none;
+    touch-action: none;
+}
+
+#video-titlebar .title {
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+}
+
+#video-titlebar .status {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+#video-titlebar .status.live { color: var(--accent); }
+#video-titlebar .status.error { color: #c0392b; }
+
+#video-close, #video-fullscreen {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    cursor: pointer;
+}
+
+#video-close:hover, #video-fullscreen:hover { background: var(--wash); }
+
+#video-fullscreen[hidden] { display: none; }
+
+#video-canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: #000;
+    image-rendering: pixelated;
+}
+
+/* Fit the whole picture on screen, letterboxed, instead of stretching it.
+   Separate rules: an unknown pseudo-class would void a combined selector. */
+#video-canvas:fullscreen {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+    cursor: none;
+}
+
+#video-canvas:-webkit-full-screen {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+    cursor: none;
+}
+
+/* Phones and other narrow or touch-only screens: the video always fills the
+   screen. Plain CSS, so it works where the Fullscreen API doesn't (iPhone).
+   !important beats the inline position set when the window was dragged. */
+@media only screen and (max-width: 800px), (hover: none) and (pointer: coarse) {
+    #video-window {
+        inset: 0 !important;
+        width: 100% !important;
+        max-width: none;
+        height: 100vh;
+        height: 100dvh;
+        resize: none;
+        border: 0;
+        box-shadow: none;
+        background: #000;
+    }
+
+    #video-titlebar {
+        cursor: default;
+        padding: 4px 4px 4px 12px;
+        background: var(--surface);
+    }
+
+    #video-close {
+        width: 44px;
+        height: 44px;
+    }
+
+    /* Already full screen */
+    #video-fullscreen { display: none; }
+
+    #video-canvas {
+        flex: 1 1 0;
+        min-height: 0;
+        width: 100%;
+        height: 0;
+        object-fit: contain;
+    }
+}
+
 html.night #theme .icon-sun,
 html:not(.night) #theme .icon-moon { display: none; }
 

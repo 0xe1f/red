@@ -19,6 +19,17 @@ if os.environ.get('PRODUCTION', False):
     import eventlet
     eventlet.monkey_patch()
 
+# A handle on real OS threads, for work that must not run as a greenlet (see
+# VideoSession). Don't key this off PRODUCTION: gunicorn's eventlet worker
+# patches threading itself, before this module is imported.
+import threading as os_threading
+try:
+    import eventlet.patcher
+    if eventlet.patcher.is_monkey_patched('thread'):
+        os_threading = eventlet.patcher.original('threading')
+except ImportError:
+    pass
+
 from collections import defaultdict
 from flask import session
 from generated.common_pb2 import LaunchId
@@ -34,14 +45,13 @@ import generated.requests_pb2 as requests
 import generated.replay_pb2 as replay
 import http
 import importlib
-import io
 import logging
-import lz4.block
 import nats
 import re
 import struct
 import subprocess
-from PIL import Image
+import threading
+import time
 
 app = flask.Flask(__name__)
 
@@ -429,89 +439,113 @@ def resume_record():
         'status': 'OK' if response is not None and response.error_code == 0 else 'ERR',
     }
 
-FRAME_SUBJECT = "red.frames"
-# Wire format: FrameHeader — pitch(u16), width(u16), height(u16), pixel_format(u8), attrs(u8)
-FRAME_HEADER_FMT  = "<HHHBB"
-FRAME_HEADER_SIZE = struct.calcsize(FRAME_HEADER_FMT)  # 8 bytes
+VIDEO_SUBJECT = "red.video.frames"
+VIDEO_KEEPALIVE_SECONDS = 1.0
+VIDEO_POLL_SECONDS = 0.01
 
-PF_RGB565   = 1
-PF_RGBA8888 = 2
-PF_RGBA5551 = 3
-PF_ARGB8888 = 4
+class VideoSession:
+    """One NATS subscription to the video feed, shared by all viewers.
 
+    Frames are written by the pump thread; viewers poll for the newest one, so
+    a slow viewer skips frames instead of building up a backlog.
+    """
 
-@app.route('/snapshot')
+    def __init__(self):
+        self.stop = os_threading.Event()
+        self.latest = None
+        self.seq = 0
+        self.error = None
+        self.viewers = 0
+
+    def start(self, nats_url):
+        # The pump runs asyncio in a real OS thread. A greenlet won't do: under
+        # eventlet, greenlets share one OS thread, so a long-lived event loop in
+        # one would make asyncio.run() fail everywhere else with "cannot be
+        # called from a running event loop".
+        os_threading.Thread(target=self._run, args=(nats_url,), daemon=True).start()
+
+    def _run(self, nats_url):
+        try:
+            asyncio.run(self._pump(nats_url))
+        except Exception as e:
+            logging.error(f"Video relay failed: {e}")
+            self.error = e
+
+    async def _pump(self, nats_url):
+        nc = await nats.connect(nats_url)
+
+        async def on_frame(msg):
+            self.latest = bytes(msg.data)
+            self.seq += 1
+
+        try:
+            sub = await nc.subscribe(VIDEO_SUBJECT, cb=on_frame)
+            while not self.stop.is_set():
+                await asyncio.sleep(0.1)
+            await sub.unsubscribe()
+        finally:
+            await nc.close()
+
+class VideoRelay:
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.session = None
+
+    def join(self):
+        with self.lock:
+            if self.session is None:
+                self.session = VideoSession()
+                self.session.start(konfig.game_server['nats_url'])
+            self.session.viewers += 1
+            return self.session
+
+    def leave(self, session):
+        with self.lock:
+            session.viewers -= 1
+            if session.viewers == 0:
+                session.stop.set()
+                if self.session is session:
+                    self.session = None
+
+video_relay = VideoRelay()
+
+@app.route('/video/stream')
 @flask_login.login_required
-def snapshot():
-    try:
-        raw = asyncio.run(grab_snapshot_async())
-    except asyncio.TimeoutError:
-        return {
-            'status': 'ERR',
-            'message': 'No frame available (server not running?)',
-        }, http.HTTPStatus.SERVICE_UNAVAILABLE
-    except Exception as e:
-        logging.error(f"Snapshot failed: {e}")
-        return {
-            'status': 'ERR',
-            'message': 'Failed to capture snapshot',
-        }, http.HTTPStatus.INTERNAL_SERVER_ERROR
+def video_stream():
+    """Relays published video frames to the browser in real time.
 
-    pitch, width, height, pixel_format, attrs = struct.unpack(FRAME_HEADER_FMT, raw[:FRAME_HEADER_SIZE])
-    pixels = lz4.block.decompress(raw[FRAME_HEADER_SIZE:], uncompressed_size=pitch * height)
-    img = decode_frame(pixels, width, height, pitch, pixel_format)
+    The body is a never-ending sequence of messages, each a little-endian u32
+    length followed by that many bytes of frame (header + LZ4 pixel data, exactly
+    as published on NATS). A zero length is a keepalive with no payload.
 
-    buf = io.BytesIO()
-    img.save(buf, format='PNG')
-    buf.seek(0)
-    return flask.send_file(buf, mimetype='image/png', download_name='snapshot.png')
+    The launcher is subscribed to NATS only while at least one viewer is
+    connected.
+    """
+    def generate():
+        feed = video_relay.join()
+        last_seq = 0
+        last_sent = time.monotonic()
+        try:
+            while feed.error is None:
+                seq, data = feed.seq, feed.latest
+                if seq != last_seq and data is not None:
+                    last_seq = seq
+                    last_sent = time.monotonic()
+                    yield struct.pack('<I', len(data)) + data
+                elif time.monotonic() - last_sent >= VIDEO_KEEPALIVE_SECONDS:
+                    # Also how a disconnected viewer is noticed when idle
+                    last_sent = time.monotonic()
+                    yield struct.pack('<I', 0)
+                else:
+                    time.sleep(VIDEO_POLL_SECONDS)
+        finally:
+            video_relay.leave(feed)
 
-
-async def grab_snapshot_async():
-    nc = await nats.connect(konfig.game_server['nats_url'])
-    loop = asyncio.get_event_loop()
-    fut = loop.create_future()
-
-    async def handler(msg):
-        if not fut.done():
-            fut.set_result(msg.data)
-
-    sub = await nc.subscribe(FRAME_SUBJECT, cb=handler)
-    try:
-        return await asyncio.wait_for(fut, timeout=2.0)
-    finally:
-        await sub.unsubscribe()
-        await nc.drain()
-
-
-def decode_frame(pixels, width, height, pitch, pixel_format):
-    if pixel_format == PF_ARGB8888:
-        # XRGB8888 in little-endian memory = [B, G, R, X] bytes per pixel
-        return Image.frombuffer('RGB', (width, height), pixels, 'raw', 'BGRX', pitch, 1)
-    elif pixel_format == PF_RGBA8888:
-        return Image.frombuffer('RGB', (width, height), pixels, 'raw', 'RGBX', pitch, 1)
-    elif pixel_format == PF_RGB565:
-        out = bytearray(width * height * 3)
-        for y in range(height):
-            for x in range(width):
-                c, = struct.unpack_from('<H', pixels, y * pitch + x * 2)
-                i = (y * width + x) * 3
-                out[i]   = ((c >> 11) & 0x1F) * 255 // 31
-                out[i+1] = ((c >>  5) & 0x3F) * 255 // 63
-                out[i+2] = ( c        & 0x1F) * 255 // 31
-        return Image.frombytes('RGB', (width, height), bytes(out))
-    elif pixel_format == PF_RGBA5551:
-        out = bytearray(width * height * 3)
-        for y in range(height):
-            for x in range(width):
-                c, = struct.unpack_from('<H', pixels, y * pitch + x * 2)
-                i = (y * width + x) * 3
-                out[i]   = ((c >> 11) & 0x1F) * 255 // 31
-                out[i+1] = ((c >>  6) & 0x1F) * 255 // 31
-                out[i+2] = ((c >>  1) & 0x1F) * 255 // 31
-        return Image.frombytes('RGB', (width, height), bytes(out))
-    raise ValueError(f"Unsupported pixel format: {pixel_format}")
-
+    return flask.Response(generate(), mimetype='application/octet-stream', headers={
+        'Cache-Control': 'no-store',
+        'X-Accel-Buffering': 'no',
+    })
 
 @app.before_request
 def check_configs_for_changes():

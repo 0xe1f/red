@@ -650,7 +650,147 @@ $(function() {
         e.preventDefault();
         return false;
     };
+    // Floating window that shows the game's video, relayed by the launcher.
+    // The stream (and the launcher's NATS subscription behind it) exists only
+    // while the window is visible.
+    const videoWindow = (function() {
+        const $win = $("#video-window");
+        const canvas = document.getElementById("video-canvas");
+        const ctx = canvas.getContext("2d");
+        var stream = null;
+        var visible = false;
+
+        const setStatus = function(state, detail) {
+            const $status = $("#video-status");
+            $status
+                .removeClass("live error")
+                .addClass(state === "live" || state === "error" ? state : "")
+                .text(detail ? `${state}: ${detail}` : state)
+                .attr("title", detail ? `${state}: ${detail}` : state);
+        };
+        const onFrame = function(frame) {
+            if (canvas.width !== frame.width || canvas.height !== frame.height) {
+                canvas.width = frame.width;
+                canvas.height = frame.height;
+            }
+            ctx.putImageData(new ImageData(frame.rgba, frame.width, frame.height), 0, 0);
+        };
+        const open = function() {
+            if (!stream) {
+                import($win.data("module")).then(function(mod) {
+                    stream = new mod.VideoStream({
+                        url: $win.data("url"),
+                        onFrame: onFrame,
+                        onStatus: setStatus,
+                    });
+                    if (visible) {
+                        stream.start();
+                    }
+                }).catch(function(e) {
+                    setStatus("error", e.message);
+                });
+            } else {
+                stream.start();
+            }
+        };
+        // Fullscreen applies to the canvas alone, so only the picture is shown.
+        // Safari needs the webkit-prefixed API; some browsers (iPhone) have none.
+        const fullscreenElement = function() {
+            return document.fullscreenElement || document.webkitFullscreenElement || null;
+        };
+        const canFullscreen = !!(canvas.requestFullscreen || canvas.webkitRequestFullscreen);
+        const toggleFullscreen = function() {
+            if (fullscreenElement()) {
+                (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+            } else if (canFullscreen) {
+                const result = (canvas.requestFullscreen || canvas.webkitRequestFullscreen).call(canvas);
+                if (result && result.catch) {
+                    result.catch(function(e) {
+                        setStatus("error", `fullscreen: ${e.message}`);
+                    });
+                }
+            }
+        };
+        const show = function(on) {
+            if (!on && fullscreenElement()) {
+                toggleFullscreen();
+            }
+            visible = on;
+            $win.prop("hidden", !on);
+            if (on && window.matchMedia("(pointer: coarse)").matches) {
+                // Touch devices: also hide the browser's own chrome where
+                // supported (the CSS already fills the screen). Must happen
+                // here, while the tap that opened the window is still fresh.
+                // The whole window goes fullscreen, so its close button stays.
+                const el = $win[0];
+                const request = el.requestFullscreen || el.webkitRequestFullscreen;
+                if (request) {
+                    const result = request.call(el);
+                    if (result && result.catch) {
+                        result.catch(function() {});
+                    }
+                }
+            }
+            $("#video-toggle")
+                .attr("aria-pressed", on ? "true" : "false")
+                .attr("title", on ? "Hide video" : "Show video");
+            if (on) {
+                setStatus("connecting");
+                open();
+            } else if (stream) {
+                stream.stop();
+            }
+        };
+        const initDrag = function() {
+            const win = $win[0];
+            $("#video-titlebar").on("pointerdown", function(e) {
+                if ($(e.target).closest("button").length) {
+                    return;
+                }
+                // On small/touch screens the window fills the screen; nothing to drag
+                if (window.matchMedia("(max-width: 800px), (hover: none) and (pointer: coarse)").matches) {
+                    return;
+                }
+                const rect = win.getBoundingClientRect();
+                const dx = e.clientX - rect.left;
+                const dy = e.clientY - rect.top;
+                // Switch from right/bottom anchoring to explicit coordinates
+                win.style.left = `${rect.left}px`;
+                win.style.top = `${rect.top}px`;
+                win.style.right = "auto";
+                win.style.bottom = "auto";
+                this.setPointerCapture(e.pointerId);
+                const onMove = function(ev) {
+                    const maxX = window.innerWidth - win.offsetWidth;
+                    const maxY = window.innerHeight - win.offsetHeight;
+                    win.style.left = `${Math.min(Math.max(0, ev.clientX - dx), Math.max(0, maxX))}px`;
+                    win.style.top = `${Math.min(Math.max(0, ev.clientY - dy), Math.max(0, maxY))}px`;
+                };
+                const onUp = function() {
+                    $(this).off("pointermove", onMove).off("pointerup pointercancel", onUp);
+                };
+                $(this).on("pointermove", onMove).on("pointerup pointercancel", onUp);
+                e.preventDefault();
+            });
+        };
+        return {
+            init: function() {
+                initDrag();
+                $("#video-toggle").on("click", function() {
+                    show(!visible);
+                });
+                if (canFullscreen) {
+                    $("#video-fullscreen").prop("hidden", false).on("click", toggleFullscreen);
+                    $(canvas).on("dblclick", toggleFullscreen);
+                }
+                $("#video-close").on("click", function() {
+                    show(false);
+                });
+            },
+        };
+    })();
     const initialize = function() {
+        videoWindow.init();
         // init volume control
         initMenus();
         $('#volume-slider').on('input', function() {
