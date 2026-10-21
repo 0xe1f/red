@@ -625,6 +625,31 @@ $(function() {
         }
         return !handled;
     };
+    // Replay shortcuts. Handled on keydown (not keyup) because Ctrl may
+    // already be released by the time the letter's keyup fires.
+    const replayShortcuts = {
+        // Ctrl+C: resume recording
+        67: 'replay-resume-record',
+        // Ctrl+V: end recording
+        86: 'replay-stop',
+    };
+    const onReplayShortcut = function(e) {
+        const id = replayShortcuts[e.keyCode];
+        if (!id || !e.ctrlKey || e.shiftKey || e.altKey || e.metaKey) {
+            return true;
+        }
+        // Leave copy/paste alone while typing in a field
+        if ($(e.target).is("input, textarea, select, [contenteditable]")) {
+            return true;
+        }
+        if (!e.originalEvent.repeat) {
+            const button = document.getElementById(id);
+            $(".replay button").removeClass("on");
+            onReplayAction(button);
+        }
+        e.preventDefault();
+        return false;
+    };
     const initialize = function() {
         // init volume control
         initMenus();
@@ -678,6 +703,7 @@ $(function() {
             syncGameList();
         });
         $(document).on("keyup", onKeyPressed);
+        $(document).on("keydown", onReplayShortcut);
         $(".stop-game").on("click", function(e) {
             e.preventDefault();
             toggleScrim(true);
